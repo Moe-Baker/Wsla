@@ -1,0 +1,83 @@
+using System;
+
+using UnityEngine;
+
+namespace Toolbox
+{
+    [Serializable]
+    public abstract class BaseAxisInput
+    {
+        public float Value { get; protected set; }
+
+        public float DeadZone { get; set; } = 0f;
+
+        public virtual void Process(float input)
+        {
+            Value = input;
+        }
+    }
+
+    [Serializable]
+    public class AxisInput : BaseAxisInput
+    {
+        public ButtonInput Positive { get; protected set; }
+        public ButtonInput Negative { get; protected set; }
+
+        public override void Process(float input)
+        {
+            base.Process(input);
+
+            Positive.Process(Value > DeadZone);
+            Negative.Process(Value < -DeadZone);
+        }
+
+        public AxisInput()
+        {
+            Positive = new ButtonInput();
+
+            Negative = new ButtonInput();
+        }
+    }
+
+    [Serializable]
+    public class SingleAxisInput : BaseAxisInput
+    {
+        public ButtonInput Button { get; protected set; }
+
+        public override void Process(float input)
+        {
+            base.Process(input);
+
+            Button.Process(Mathf.Abs(Value) > 0f);
+        }
+
+        public SingleAxisInput()
+        {
+            Button = new ButtonInput();
+        }
+    }
+
+    [Serializable]
+    public class AxesInput
+    {
+        public AxisInput X { get; protected set; }
+        public AxisInput Y { get; protected set; }
+
+        public Vector2 Value => new Vector2(X.Value, Y.Value);
+
+        public virtual void Process(Vector2 input) => Process(input.x, input.y);
+        public virtual void Process(float xInput, float yInput)
+        {
+            X.Process(xInput);
+
+            Y.Process(yInput);
+        }
+
+        public AxesInput()
+        {
+            X = new AxisInput();
+
+            Y = new AxisInput();
+        }
+    }
+}
