@@ -1,16 +1,20 @@
+using MemoryPack;
+
 using UnityEngine;
 
 public class Sandbox : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        
-    }
+        var v = new Data { Text = string.Empty };
 
-    // Update is called once per frame
-    void Update()
-    {
-        
+        var bin = MemoryPackSerializer.Serialize(v);
+        Debug.Log($"Binary Length: {bin.Length}");
     }
+}
+
+[MemoryPackable]
+public partial struct Data
+{
+    public string Text;
 }
