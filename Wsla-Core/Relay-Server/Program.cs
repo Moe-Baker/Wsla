@@ -1,10 +1,18 @@
-﻿namespace Wsla.Server.Relay
+﻿using Wsla.Shared;
+
+namespace Wsla.Server.Relay
 {
-    internal class Program
+    public class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            NetworkLog.UseConsole();
+
+            var room = new Room("Sample Room");
+            room.Start();
+
+            while (true)
+                Console.ReadKey();
         }
     }
 }

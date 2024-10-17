@@ -3,13 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34511.84
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared-Global", "Shared-Global\Shared-Global.csproj", "{73757BAE-AF74-4CD7-9D37-3B5C7103DEDD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared-Global", "Shared-Global\Shared-Global.csproj", "{73757BAE-AF74-4CD7-9D37-3B5C7103DEDD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Relay-Server", "Relay-Server\Relay-Server.csproj", "{E5100671-AE58-4719-B4B1-810DC3438B23}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Relay-Server", "Relay-Server\Relay-Server.csproj", "{E5100671-AE58-4719-B4B1-810DC3438B23}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coordinator-Server", "Coordinator-Server\Coordinator-Server.csproj", "{D2FFA35B-F978-455D-83E1-2A7EEC6E43D2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coordinator-Server", "Coordinator-Server\Coordinator-Server.csproj", "{D2FFA35B-F978-455D-83E1-2A7EEC6E43D2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared-Server", "Shared-Server\Shared-Server.csproj", "{22CDEC02-F3AD-4670-8C05-07C01F791EAB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared-Server", "Shared-Server\Shared-Server.csproj", "{22CDEC02-F3AD-4670-8C05-07C01F791EAB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

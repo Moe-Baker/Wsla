@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Threading;
 
 namespace LiteNetLib.Utils
 {
-    public class NetDataWriter
+    public class NetDataWriter : IBufferWriter<byte>
     {
         protected byte[] _data;
         protected int _position;
@@ -60,7 +61,7 @@ namespace LiteNetLib.Utils
                 netDataWriter.Put(bytes);
                 return netDataWriter;
             }
-            return new NetDataWriter(true, 0) {_data = bytes, _position = bytes.Length};
+            return new NetDataWriter(true, 0) { _data = bytes, _position = bytes.Length };
         }
 
         /// <summary>
@@ -267,7 +268,7 @@ namespace LiteNetLib.Utils
 
         public void PutArray(Array arr, int sz)
         {
-            ushort length = arr == null ? (ushort) 0 : (ushort)arr.Length;
+            ushort length = arr == null ? (ushort)0 : (ushort)arr.Length;
             sz *= length;
             if (_autoResize)
                 ResizeIfNeed(_position + sz + 2);
@@ -377,5 +378,50 @@ namespace LiteNetLib.Utils
         {
             obj.Serialize(this);
         }
+
+        #region IBuffer Writer Extensions
+        public void Put(Span<byte> span)
+        {
+            if (_autoResize)
+            {
+                ResizeIfNeed(_position + span.Length);
+            }
+            span.CopyTo(_data.AsSpan(_position, span.Length));
+            _position += span.Length;
+        }
+
+        public void Put(ReadOnlySpan<byte> span)
+        {
+            if (_autoResize)
+            {
+                ResizeIfNeed(_position + span.Length);
+            }
+            span.CopyTo(_data.AsSpan(_position, span.Length));
+            _position += span.Length;
+        }
+
+        public void Advance(int count)
+        {
+            _position += count;
+        }
+
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            if (_autoResize)
+            {
+                ResizeIfNeed(_position + sizeHint);
+            }
+            return _data.AsMemory(_position, sizeHint);
+        }
+
+        public Span<byte> GetSpan(int sizeHint = 0)
+        {
+            if (_autoResize)
+            {
+                ResizeIfNeed(_position + sizeHint);
+            }
+            return _data.AsSpan(_position, sizeHint);
+        }
+        #endregion
     }
 }
