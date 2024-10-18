@@ -1,4 +1,4 @@
-﻿using Wsla.Shared;
+﻿using Wsla.Shared.Global;
 
 namespace Wsla.Server.Relay
 {

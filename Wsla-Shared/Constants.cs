@@ -1,4 +1,4 @@
-﻿namespace Wsla.Shared
+﻿namespace Wsla.Shared.Global
 {
     public class Constants
     {

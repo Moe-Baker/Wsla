@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Wsla.Shared
+namespace Wsla.Shared.Global
 {
     public static class NetworkLog
     {

@@ -40,6 +40,7 @@ namespace LiteNetLib.Utils
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => _position;
+            set => SetPosition(value);
         }
         public bool EndOfData
         {
@@ -725,7 +726,8 @@ namespace LiteNetLib.Utils
 
         public bool TryGetStringArray(out string[] result)
         {
-            if (!TryGetUShort(out ushort strArrayLength)) {
+            if (!TryGetUShort(out ushort strArrayLength))
+            {
                 result = null;
                 return false;
             }

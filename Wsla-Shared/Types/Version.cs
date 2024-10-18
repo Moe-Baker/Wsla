@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Wsla.Shared
+namespace Wsla.Shared.Global
 {
     public struct Version : IEquatable<Version>
     {
@@ -48,7 +48,7 @@ namespace Wsla.Shared
             this.Patch = patch;
         }
 
-        public static bool operator ==(Version right, Version left) => right.Equals(left);
-        public static bool operator !=(Version right, Version left) => !right.Equals(left);
+        public static bool operator ==(Version left, Version right) => left.Equals(right);
+        public static bool operator !=(Version left, Version right) => !left.Equals(right);
     }
 }

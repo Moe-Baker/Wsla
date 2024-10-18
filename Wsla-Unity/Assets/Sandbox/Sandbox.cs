@@ -4,14 +4,11 @@ using System.Net;
 
 using Cysharp.Threading.Tasks;
 
-using LiteNetLib.Utils;
-
 using MemoryPack;
 
 using UnityEngine;
-using UnityEngine.UIElements;
 
-using Wsla.Shared;
+using Wsla.Shared.Global;
 using Wsla.Unity;
 
 public class Sandbox : MonoBehaviour
@@ -27,7 +24,7 @@ public class Sandbox : MonoBehaviour
 
     async UniTask Initialize()
     {
-        var request = new ClientConnectionRequest("SAMPLE-ID", "SAMPLE-USERNAME");
+        var request = new ClientConnectionRequest("SAMPLE-USERNAME");
 
         var response = await NetworkAPI.Room.Connect(IPAddress.Loopback, Constants.RelayManagementPort, request);
         if (response.IsError)
