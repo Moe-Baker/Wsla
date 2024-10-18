@@ -4,23 +4,11 @@ using MemoryPack;
 
 namespace Wsla.Shared.Global
 {
-    [MemoryPackable]
-    public partial struct NetworkClientData
-    {
-        public NetworkClientID ID { get; }
-        public string Username { get; }
-
-        public NetworkClientData(NetworkClientID id, string username)
-        {
-            this.ID = id;
-            this.Username = username;
-        }
-    }
-
+    [Serializable]
     [MemoryPackable]
     public partial struct NetworkClientID : IEquatable<NetworkClientID>
     {
-        public byte Value { get; }
+        public byte Value { get; private set; }
 
         public const byte MaxValue = byte.MaxValue;
 

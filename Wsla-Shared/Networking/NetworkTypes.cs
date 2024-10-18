@@ -10,7 +10,7 @@ namespace Wsla.Shared.Global
 
         public const byte Capacity = byte.MaxValue;
 
-        public const byte UserSpace = 100;
+        public const byte UserSpace = 50;
 
         public static bool TryGet<T>(out byte id) => TypeToID.TryGetValue(typeof(T), out id);
         public static bool TryGet(Type type, out byte id) => TypeToID.TryGetValue(type, out id);
@@ -58,11 +58,15 @@ namespace Wsla.Shared.Global
             //Sample
             Add<ClientConnectionResponse>(ref counter);
 
-            Add<ClientConnectEvent>(ref counter);
-            Add<ClientDisconnectEvent>(ref counter);
+            Add<ClientConnectMessage>(ref counter);
+            Add<ClientDisconnectMessage>(ref counter);
 
-            Add<NetworkPingEvent>(ref counter);
-            Add<NetworkPongEvent>(ref counter);
+            Add<NetworkPingRequest>(ref counter);
+            Add<NetworkPongResponse>(ref counter);
+
+            Add<SpawnEntityRequest>(ref counter);
+            Add<SpawnEntityResponse>(ref counter);
+            Add<SpawnEntityCommand>(ref counter);
         }
     }
 }

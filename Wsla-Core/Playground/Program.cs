@@ -1,13 +1,15 @@
 ﻿using Wsla.Shared.Global;
 
-var array = new AutoExpandArray<int>(0, 100, 10);
+var queue = new Queue<int>();
 
-array[4] = 0;
-array[14] = 0;
-array[41] = 0;
-array[56] = 0;
+queue.Enqueue(1);
+queue.Enqueue(2);
+queue.Enqueue(3);
 
-Console.WriteLine(array.Length);
+foreach (var item in queue)
+{
+    Console.WriteLine(item);
+}
 
 while (true)
     Console.ReadKey();

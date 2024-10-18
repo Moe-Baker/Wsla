@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection.Emit;
+using System.Security.Cryptography.X509Certificates;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -148,6 +150,15 @@ namespace Wsla.Server
                     Manager.SendToAll(writer, channel, delivery, except.Peer);
             }
 
+            public void Kick(NetworkClient client, WslaError error)
+            {
+                var writer = PacketWriter.Take();
+
+                MemoryPackSerializer.Serialize(in writer, in error);
+
+                client.Peer.Disconnect(writer);
+            }
+
             async void Poll(CancellationToken cancellation)
             {
                 while (true)
@@ -176,12 +187,14 @@ namespace Wsla.Server
             }
         }
 
-        public ClientsPropert Clients { get; private set; }
-        public class ClientsPropert
+        public ClientsProperty Clients { get; private set; }
+        public class ClientsProperty
         {
             IncrementingKeyGenerator<NetworkClientID> IDGenerator;
 
             AutoExpandArray<NetworkClient?> Collection;
+
+            public byte Count { get; private set; }
 
             public bool TryGet(NetworkClientID id, [MaybeNullWhen(returnValue: false)] out NetworkClient client)
             {
@@ -193,13 +206,13 @@ namespace Wsla.Server
 
             internal void Start()
             {
-                Transport.Listener.ConnectionRequestEvent += ConnectionRequestHandler;
+                Transport.Listener.ConnectionRequestEvent += RequestHandler;
 
                 Transport.Listener.PeerConnectedEvent += ConnectHandler;
                 Transport.Listener.PeerDisconnectedEvent += DisconnectHandler;
             }
 
-            void ConnectionRequestHandler(ConnectionRequest request)
+            void RequestHandler(ConnectionRequest request)
             {
                 NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
 
@@ -220,16 +233,34 @@ namespace Wsla.Server
 
                 NetworkLog.Trace($"Connection Request from {data}");
 
+                //Reserve Client ID
                 if (IDGenerator.TryReserve(out var id) is false)
                 {
                     NetworkLog.Error($"Room {Room} Client ID Generatror Overloaded, Connection Request Rejected");
                     RejectConnection(request, WslaErrorCode.ClientIDGeneratorOverloaded);
+
+                    return;
+                }
+
+                //Reserve Entitiy Spawn Tokens
+                if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[Room.Entities.ClientSpawnTokenAllowance], out var spawnTokens) is false)
+                {
+                    NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded, Connection Request Rejected");
+                    RejectConnection(request, WslaErrorCode.EntityIDGeneratorOverloaded);
+
+                    IDGenerator.Return(id);
+
                     return;
                 }
 
                 var peer = request.Accept();
 
-                peer.Tag = new NetworkClient(Room, peer, id, data.Username);
+                var client = new NetworkClient(Room, peer, id, data.Username, spawnTokens.Length);
+
+                for (int i = 0; i < spawnTokens.Length; i++)
+                    client.AddSpawnToken(spawnTokens[i]);
+
+                peer.Tag = client;
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
@@ -250,31 +281,48 @@ namespace Wsla.Server
 
                 NetworkLog.Info($"Client {client} Connected");
 
+                Count += 1;
+
                 Collection[client.ID.Value] = client;
 
                 //Broadcast To Others
                 {
-                    var data = client.GetData();
-                    var message = new ClientConnectEvent(data);
+                    var writer = Transport.PacketWriter.Take();
 
-                    Transport.Broadcast(in message, except: client);
+                    NetworkSerializer.WriteHeader<ClientConnectMessage>(in writer);
+                    client.WriteState(in writer);
+
+                    Transport.Broadcast(in writer, except: client);
                 }
 
                 //Unicast to Client
                 {
                     var writer = Transport.PacketWriter.Take();
 
-                    var message = new ClientConnectionResponse(client.ID);
+                    var message = new ClientConnectionResponse(client.ID, Count, client.SpawnAllowance, Room.Entities.Count);
                     NetworkSerializer.WriteHeader(in writer, in message);
 
-                    foreach (var other in Collection.AsSpan())
+                    //Sync Clients
                     {
-                        if (other is null)
-                            continue;
+                        foreach (var other in Collection.AsSpan())
+                        {
+                            if (other is null)
+                                continue;
 
-                        var data = other.GetData();
+                            other.WriteState(in writer);
+                        }
+                    }
 
-                        NetworkSerializer.WriteValue(in writer, in data);
+                    //Sync Spawn Tokens
+                    {
+                        foreach (var token in client.SpawnTokens)
+                            NetworkSerializer.WriteValue(in writer, token);
+                    }
+
+                    //Sync Entities
+                    {
+                        foreach (var (id, entity) in Room.Entities.Dictionary)
+                            entity.WriteState(in writer);
                     }
 
                     Transport.Send(client, in writer);
@@ -286,27 +334,110 @@ namespace Wsla.Server
                 if (client is null)
                     throw new Exception("No Client Assigned to Peer");
 
+                Count -= 1;
+
                 NetworkLog.Info($"Client {client} Disconnected");
 
                 Collection[client.ID.Value] = null;
 
+                //Free Client ID
                 IDGenerator.Return(client.ID);
+
+                //Free Entity Spawn Tokens
+                foreach (var token in client.SpawnTokens)
+                    Room.Entities.IDGenerator.Return(token);
 
                 //Broadcast To Others
                 {
-                    var message = new ClientDisconnectEvent(client.ID);
+                    var message = new ClientDisconnectMessage(client.ID);
                     Transport.Broadcast(in message, except: client);
                 }
             }
 
             readonly Room Room;
-            public ClientsPropert(Room room)
+            public ClientsProperty(Room room)
             {
                 this.Room = room;
 
-                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(10, TimeSpan.FromSeconds(30), NetworkClientID.Increment);
+                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(new NetworkClientID(1), 10, TimeSpan.FromSeconds(30), NetworkClientID.Increment);
 
                 Collection = new AutoExpandArray<NetworkClient?>(10, NetworkClientID.MaxValue, 10);
+            }
+        }
+
+        public EntitiesProperty Entities;
+        public class EntitiesProperty
+        {
+            internal IncrementingKeyGenerator<NetworkEntityID> IDGenerator;
+
+            internal Dictionary<NetworkEntityID, NetworkEntity> Dictionary;
+            public ushort Count => (ushort)Dictionary.Count;
+
+            public readonly ushort ClientSpawnTokenAllowance = 50;
+
+            TransportProperty Transport => Room.Transport;
+
+            void SpawnRequestHandler(NetworkClient sender, ref SpawnEntityRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                var id = sender.RemoveSpawnToken();
+
+                if (id != message.SpawnToken)
+                {
+                    NetworkLog.Warning($"Mismatched Spawn Tokens Received from {sender}, Excpected {id} Got {message.SpawnToken}");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.SpawnTokenContractBroken));
+                    return;
+                }
+
+                if (IDGenerator.TryReserve(out var replacement) is false)
+                {
+                    NetworkLog.Error($"Room {Room} ran out of Entity Spawn Tokens");
+                    Room.Shutdown();
+                    return;
+                }
+
+                var entity = new NetworkEntity(id, message.Resource);
+
+                entity.SetProperties(id, NetworkEntitySource.Prefab, message.Resource);
+
+                Register(entity);
+
+                //Respond to Sender
+                {
+                    var response = new SpawnEntityResponse(id, replacement);
+                    Transport.Send(sender, response);
+                }
+
+                //Broadcast to Others
+                {
+                    var writer = Transport.PacketWriter.Take();
+
+                    NetworkSerializer.WriteHeader<SpawnEntityCommand>(in writer);
+
+                    entity.WriteState(in writer);
+
+                    Transport.Broadcast(in writer, except: sender);
+                }
+            }
+
+            void Register(NetworkEntity entity)
+            {
+                Dictionary.Add(entity.ID, entity);
+            }
+            void Unregister(NetworkEntityID id)
+            {
+                Dictionary.Remove(id);
+            }
+
+            readonly Room Room;
+            public EntitiesProperty(Room room)
+            {
+                this.Room = room;
+
+                IDGenerator = new(new NetworkEntityID(1), 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
+
+                Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
+
+                Transport.Dispatcher.Register<SpawnEntityRequest>(SpawnRequestHandler);
             }
         }
 
@@ -314,6 +445,15 @@ namespace Wsla.Server
         {
             Transport.Start();
             Clients.Start();
+        }
+        public void Stop()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Shutdown()
+        {
+
         }
 
         public override string ToString() => $"({Name})";
@@ -323,12 +463,13 @@ namespace Wsla.Server
             this.Name = name;
 
             Transport = new TransportProperty(this);
-            Clients = new ClientsPropert(this);
+            Clients = new ClientsProperty(this);
+            Entities = new EntitiesProperty(this);
 
-            Transport.Dispatcher.Register((NetworkClient sender, ref NetworkPingEvent data, NetPacketReader reader, byte channel, DeliveryMethod delivery) =>
+            Transport.Dispatcher.Register((NetworkClient sender, ref NetworkPingRequest data, NetPacketReader reader, byte channel, DeliveryMethod delivery) =>
             {
                 NetworkLog.Trace($"Ping from {sender}");
-                Transport.Send(sender, new NetworkPongEvent());
+                Transport.Send(sender, new NetworkPongResponse());
             });
         }
     }
@@ -342,17 +483,64 @@ namespace Wsla.Server
 
         public string Username { get; private set; }
 
-        public NetworkClientData GetData() => new NetworkClientData(ID, Username);
+        #region Spawn Tokens
+        public Queue<NetworkEntityID> SpawnTokens { get; }
+        public byte SpawnAllowance => (byte)SpawnTokens.Count;
+
+        public void AddSpawnToken(NetworkEntityID id)
+        {
+            SpawnTokens.Enqueue(id);
+        }
+        public NetworkEntityID RemoveSpawnToken()
+        {
+            return SpawnTokens.Dequeue();
+        }
+        #endregion
+
+        public void WriteState(in NetDataWriter writer)
+        {
+            NetworkSerializer.WriteValue(writer, ID);
+            NetworkSerializer.WriteValue(writer, Username);
+        }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 
-        public NetworkClient(Room room, NetPeer peer, NetworkClientID id, string username)
+        public NetworkClient(Room room, NetPeer peer, NetworkClientID id, string username, int spawnTokenCapacity)
         {
             this.Room = room;
             this.Peer = peer;
 
             this.ID = id;
             this.Username = username;
+
+            SpawnTokens = new Queue<NetworkEntityID>(spawnTokenCapacity);
+        }
+    }
+
+    public class NetworkEntity
+    {
+        public NetworkEntityID ID { get; private set; }
+        public NetworkEntitySource Source { get; private set; }
+        public NetworkEntityResource Resource { get; private set; }
+
+        internal void SetProperties(NetworkEntityID ID, NetworkEntitySource Source, NetworkEntityResource Resource)
+        {
+            this.ID = ID;
+            this.Source = Source;
+            this.Resource = Resource;
+        }
+
+        public void WriteState(in NetDataWriter writer)
+        {
+            NetworkSerializer.WriteValue(in writer, Source);
+            NetworkSerializer.WriteValue(in writer, Resource);
+            NetworkSerializer.WriteValue(in writer, ID);
+        }
+
+        public NetworkEntity(NetworkEntityID id, NetworkEntityResource resource)
+        {
+            this.ID = id;
+            this.Resource = resource;
         }
     }
 }

@@ -17,46 +17,85 @@ namespace Wsla.Shared.Global
     [MemoryPackable]
     public partial struct ClientConnectionResponse
     {
-        public NetworkClientID LocalID { get; }
+        public NetworkClientID ID { get; }
 
-        public override string ToString() => $"(ClientID: {LocalID})";
+        public byte Clients { get; }
+        public byte SpawnTokens { get; }
+        public ushort Entities { get; }
 
-        public ClientConnectionResponse(NetworkClientID localID)
+        public override string ToString() => $"(ClientID: {ID})";
+
+        public ClientConnectionResponse(NetworkClientID id, byte clients, byte spawnTokens, ushort entities)
         {
-            this.LocalID = localID;
+            this.ID = id;
+
+            this.Clients = clients;
+            this.SpawnTokens = spawnTokens;
+            this.Entities = entities;
         }
     }
 
     [MemoryPackable]
-    public partial struct ClientConnectEvent
-    {
-        public NetworkClientData Data { get; }
-
-        public ClientConnectEvent(NetworkClientData data)
-        {
-            this.Data = data;
-        }
-    }
+    public partial struct ClientConnectMessage { }
     [MemoryPackable]
-    public partial struct ClientDisconnectEvent
+    public partial struct ClientDisconnectMessage
     {
         public NetworkClientID ID { get; }
 
-        public ClientDisconnectEvent(NetworkClientID id)
+        public ClientDisconnectMessage(NetworkClientID id)
         {
             this.ID = id;
         }
     }
 
     [MemoryPackable]
-    public partial struct NetworkPingEvent
+    public partial struct NetworkPingRequest
+    {
+
+    }
+    [MemoryPackable]
+    public partial struct NetworkPongResponse
     {
 
     }
 
     [MemoryPackable]
-    public partial struct NetworkPongEvent
+    public partial struct SpawnEntityRequest
     {
+        public NetworkEntityID SpawnToken { get; }
+        public NetworkEntityResource Resource { get; }
 
+        public SpawnEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource)
+        {
+            this.SpawnToken = SpawnToken;
+            this.Resource = Resource;
+        }
+    }
+
+    [MemoryPackable]
+    public partial struct SpawnEntityResponse
+    {
+        public NetworkEntityID SourceToken { get; }
+        public NetworkEntityID ReplacementToken { get; }
+
+        public SpawnEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
+        {
+            this.SourceToken = SourceToken;
+            this.ReplacementToken = ReplacementToken;
+        }
+    }
+
+    [MemoryPackable]
+    public partial struct SpawnEntityCommand { }
+
+    [MemoryPackable]
+    public partial struct DespawnEntityCommand
+    {
+        public NetworkEntityID ID { get; }
+
+        public DespawnEntityCommand(NetworkEntityID ID)
+        {
+            this.ID = ID;
+        }
     }
 }

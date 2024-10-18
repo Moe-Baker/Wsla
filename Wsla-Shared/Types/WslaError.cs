@@ -43,8 +43,12 @@ namespace Wsla.Shared.Global
 
     public enum WslaErrorCode : ushort
     {
-        TransportFailure,
-        RequestDeserializationFailure,
-        ClientIDGeneratorOverloaded,
+        TransportFailure = 1,
+        RequestDeserializationFailure = 2,
+        ClientIDGeneratorOverloaded = 3,
+        EntityIDGeneratorOverloaded = 4,
+        SpawnTokenContractBroken = 5,
+        SyncedPrefabNotFound = 6,
+        SyncedPrefabWithoutNetworkEntity = 7,
     }
 }

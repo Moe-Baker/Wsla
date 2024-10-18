@@ -35,6 +35,13 @@ namespace Wsla.Shared.Global
             WriteType<T>(in writer);
             WriteValue(in writer, in value);
         }
+
+        public static void WriteHeader<T>(in NetDataWriter writer)
+             where T : struct
+        {
+            WriteType<T>(in writer);
+            WriteValue(in writer, new T());
+        }
         #endregion
 
         #region Read

@@ -16,6 +16,9 @@ namespace Wsla.Unity
         [field: SerializeField]
         public RoomAPI Room { get; private set; }
 
+        [field: SerializeField]
+        public SyncedPrefabsAPI SyncedPrefabs { get; private set; }
+
         [Serializable]
         public class Property : ReferenceProperty<NetworkAPI>
         {
