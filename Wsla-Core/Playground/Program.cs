@@ -1,15 +1,21 @@
-﻿using Wsla.Shared.Global;
+﻿using System.Net;
 
-var queue = new Queue<int>();
+using Wsla.Shared.Global;
 
-queue.Enqueue(1);
-queue.Enqueue(2);
-queue.Enqueue(3);
+var array = new ExpandArray<IPAddress>(10, 256, 10);
 
-foreach (var item in queue)
+array.Add(0, IPAddress.Loopback);
+array.Add(5, IPAddress.Any);
+array.Add(20, IPAddress.Broadcast);
+
+array.Remove(0);
+
+foreach (var item in array)
 {
     Console.WriteLine(item);
 }
+
+Console.WriteLine("Done");
 
 while (true)
     Console.ReadKey();

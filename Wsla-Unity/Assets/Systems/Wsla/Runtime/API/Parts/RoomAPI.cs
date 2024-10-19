@@ -1,7 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 
 using Cysharp.Threading.Tasks;
@@ -11,15 +11,10 @@ using LiteNetLib.Utils;
 
 using MemoryPack;
 
-using NUnit.Framework;
-
 using Toolbox;
 
-using Unity.Hierarchy;
-
-using UnityEditor.PackageManager;
-
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 using Wsla.Shared.Global;
 
@@ -28,16 +23,20 @@ namespace Wsla.Unity
     [Serializable]
     public class RoomAPI : NetworkAPI.Property
     {
+        public RoomInstance Instance { get; private set; }
+
         public async UniTask<Response<RoomInstance, WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
         {
-            var room = new RoomInstance(address, port);
+            var target = new RoomInstance(address, port);
 
-            var response = await room.Start(request);
+            var response = await target.Start(request);
 
             if (response.IsError)
                 return response.Error;
 
-            return room;
+            Instance = target;
+
+            return target;
         }
     }
 
@@ -71,6 +70,8 @@ namespace Wsla.Unity
                     }
 
                     handler(reader, channel, delivery);
+
+                    reader.Recycle();
                 }
 
                 public delegate void TypeDelegate<T>(ref T message, NetPacketReader reader, byte channel, DeliveryMethod delivery);
@@ -94,7 +95,7 @@ namespace Wsla.Unity
 
                     Handlers = new ActionDelegate[NetworkTypes.Capacity];
 
-                    Transport.Listener.NetworkReceiveEvent += ReceiveCallback;
+                    Transport.Listener.OnNetworkReceive += ReceiveCallback;
                 }
             }
 
@@ -121,46 +122,181 @@ namespace Wsla.Unity
                 }
             }
 
-            NetManager Manager;
-            EventBasedNetListener Listener;
-            NetPeer Peer;
+            public NetManager Manager { get; }
+
+            public BufferListener Listener { get; }
+            public class BufferListener : INetEventListener, IDisposable
+            {
+                public bool Active { get; private set; }
+
+                public void Pause()
+                {
+                    Active = false;
+                }
+                public void Resume()
+                {
+                    Active = true;
+
+                    while (EventQueue.TryDequeue(out var type))
+                    {
+                        switch (type)
+                        {
+                            case EventType.PeerConnect:
+                            {
+                                var peer = PeerConnectedQueue.Dequeue();
+                                OnPeerConnected?.Invoke(peer);
+                            }
+                            break;
+
+                            case EventType.PeerDisconnect:
+                            {
+                                var (peer, info) = PeerDisconnectedQueue.Dequeue();
+                                OnPeerDisconnected?.Invoke(peer, info);
+                            }
+                            break;
+
+                            case EventType.NetworkReceive:
+                            {
+                                var (peer, reader, channel, delivery) = NetworkReceiveQueue.Dequeue();
+                                OnNetworkReceive?.Invoke(peer, reader, channel, delivery);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                Queue<EventType> EventQueue;
+                public enum EventType
+                {
+                    PeerConnect,
+                    PeerDisconnect,
+                    NetworkReceive,
+                }
+
+                #region Peer Connected
+                Queue<NetPeer> PeerConnectedQueue;
+
+                void INetEventListener.OnPeerConnected(NetPeer peer)
+                {
+                    if (Active is false)
+                    {
+                        EventQueue.Enqueue(EventType.PeerConnect);
+                        PeerConnectedQueue.Enqueue(peer);
+
+                        return;
+                    }
+
+                    OnPeerConnected?.Invoke(peer);
+                }
+
+                public event PeerConnectedDelegate OnPeerConnected;
+                public delegate void PeerConnectedDelegate(NetPeer peer);
+                #endregion
+
+                #region Peer Disconnected
+                Queue<(NetPeer Peer, DisconnectInfo Info)> PeerDisconnectedQueue;
+
+                void INetEventListener.OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
+                {
+                    if (Active is false)
+                    {
+                        EventQueue.Enqueue(EventType.PeerDisconnect);
+                        PeerDisconnectedQueue.Enqueue((peer, info));
+
+                        return;
+                    }
+
+                    OnPeerDisconnected?.Invoke(peer, info);
+                }
+
+                public event PeerDisconnectedDelegate OnPeerDisconnected;
+                public delegate void PeerDisconnectedDelegate(NetPeer peer, DisconnectInfo info);
+                #endregion
+
+                #region Network Receive
+                Queue<(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)> NetworkReceiveQueue;
+
+                void INetEventListener.OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+                {
+                    if (Active is false)
+                    {
+                        EventQueue.Enqueue(EventType.NetworkReceive);
+                        NetworkReceiveQueue.Enqueue((peer, reader, channel, delivery));
+
+                        return;
+                    }
+
+                    OnNetworkReceive?.Invoke(peer, reader, channel, delivery);
+                }
+
+                public delegate void NetworkReceiveDelegate(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery);
+                public event NetworkReceiveDelegate OnNetworkReceive;
+                #endregion
+
+                #region Unused
+                void INetEventListener.OnConnectionRequest(ConnectionRequest request) { }
+                void INetEventListener.OnNetworkError(IPEndPoint endPoint, SocketError socketError) { }
+                void INetEventListener.OnNetworkLatencyUpdate(NetPeer peer, int latency) { }
+                void INetEventListener.OnNetworkReceiveUnconnected(IPEndPoint remoteEndPoint, NetPacketReader reader, UnconnectedMessageType messageType) { }
+                #endregion
+
+                public void Dispose()
+                {
+                    foreach (var packet in NetworkReceiveQueue)
+                        packet.reader.Recycle();
+                }
+
+                public BufferListener()
+                {
+                    Active = true;
+
+                    EventQueue = new(50);
+                    PeerConnectedQueue = new(1);
+                    PeerDisconnectedQueue = new(50);
+                    NetworkReceiveQueue = new(1);
+                }
+            }
+
+            public NetPeer Peer { get; private set; }
 
             CancellationTokenSource CancellationSource;
 
             internal async UniTask<Response<WslaError>> Start(ClientConnectionRequest request)
             {
-                //Connect
+                Manager.Start();
+
+                var operation = new UniTaskCompletionSource<Response<WslaError>>();
+
+                //Register Hooks
+                Listener.OnPeerConnected += Connected;
+                void Connected(NetPeer peer) => operation.TrySetResult(true);
+
+                Listener.OnPeerDisconnected += Disconnect;
+                void Disconnect(NetPeer peer, DisconnectInfo info) => operation.TrySetResult(WslaError.From(info));
+
+                //Request
                 {
-                    Manager.Start();
+                    var packet = new NetDataWriter(true, 128);
+                    MemoryPackSerializer.Serialize(packet, request);
 
-                    var operation = new UniTaskCompletionSource<Response<WslaError>>();
+                    var endpoint = new IPEndPoint(Address, Port);
 
-                    Listener.PeerConnectedEvent += Connected;
-                    void Connected(NetPeer peer) => operation.TrySetResult(true);
+                    Peer = Manager.Connect(endpoint, packet);
+                }
 
-                    Listener.PeerDisconnectedEvent += Disconnect;
-                    void Disconnect(NetPeer peer, DisconnectInfo info) => operation.TrySetResult(WslaError.From(info));
+                CancellationSource = new CancellationTokenSource();
+                Poll(CancellationSource.Token).Forget();
 
-                    //Request
-                    {
-                        var packet = new NetDataWriter(true, 128);
-                        MemoryPackSerializer.Serialize(packet, request);
-                        Peer = Manager.Connect("127.0.0.1", Constants.RelayManagementPort, packet);
-                    }
+                var response = await operation.Task;
 
-                    CancellationSource = new CancellationTokenSource();
-                    Poll(CancellationSource.Token).Forget();
+                //Clear Hooks
+                Listener.OnPeerConnected -= Connected;
+                Listener.OnPeerDisconnected -= Disconnect;
 
-                    var response = await operation.Task;
-
-                    Listener.PeerConnectedEvent -= Connected;
-                    Listener.PeerDisconnectedEvent -= Disconnect;
-
-                    if (response.IsError)
-                    {
-                        Stop();
-                        return response.Error;
-                    }
+                if (response.IsError)
+                {
+                    Stop();
+                    return response.Error;
                 }
 
                 return true;
@@ -168,6 +304,7 @@ namespace Wsla.Unity
             internal void Stop()
             {
                 CancellationSource.Cancel();
+                Listener.Dispose();
             }
 
             async UniTask Poll(CancellationToken cancellation)
@@ -204,9 +341,10 @@ namespace Wsla.Unity
                 this.Address = address;
                 this.Port = port;
 
-                Listener = new EventBasedNetListener();
+                Listener = new BufferListener();
 
                 Manager = new NetManager(Listener);
+                Manager.AutoRecycle = false;
 
                 PacketWriter = PacketWriterProperty.Create(256);
 
@@ -219,13 +357,39 @@ namespace Wsla.Unity
         {
             public LocalNetworkClient Local { get; private set; }
 
-            AutoExpandArray<NetworkClient> Collection;
+            ExpandArray<NetworkClient> Collection;
 
             TransportProperty Transport => Room.Transport;
 
             void ConnectResponseHandler(ref ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                //Read Clients
+                Procedure(message, reader, channel, delivery).Forget();
+                async UniTask Procedure(ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+                {
+                    Transport.Listener.Pause();
+
+                    //Sync Clients
+                    ReadState(reader, message);
+
+                    //Check if we didn't recieve our local client
+                    if (Local is null)
+                        throw new InvalidOperationException("No Local Client Received in Response");
+
+                    //Sync Spawn Tokens
+                    Local.ReadSpawnTokens(reader, message);
+
+                    //Sync Scenes
+                    await Room.Scenes.ReadState(reader, message);
+
+                    //Sync Entities
+                    Room.Entities.ReadState(reader, message);
+
+                    Transport.Listener.Resume();
+                }
+            }
+
+            void ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            {
                 for (int i = 0; i < message.Clients; i++)
                 {
                     var id = NetworkClient.ReadID(reader);
@@ -243,29 +407,6 @@ namespace Wsla.Unity
 
                     Register(client);
                 }
-
-                //Check if we didn't recieve our local client
-                if (Local is null)
-                    throw new InvalidOperationException("No Local Client Received in Response");
-
-                //Spawn Tokens
-                {
-                    for (int i = 0; i < message.SpawnTokens; i++)
-                    {
-                        var token = NetworkSerializer.ReadValue<NetworkEntityID>(in reader);
-                        Local.AddSpawnToken(token);
-
-                        Debug.Log($"Spawn Token: {token}");
-                    }
-                }
-
-                //Entities
-                {
-                    for (int i = 0; i < message.Entities; i++)
-                        Room.Entities.SpawnBuffered(reader);
-                }
-
-                Transport.Send(new NetworkPingRequest());
             }
 
             void ClientConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -283,28 +424,13 @@ namespace Wsla.Unity
             {
                 Debug.Log($"Registerd Client {client}");
 
-#if DEBUG
-                if (Collection[client.ID.Value] is not null)
-                {
-                    NetworkLog.Error($"Client {client} Already Registered");
-                    return;
-                }
-#endif
-
-                Collection[client.ID.Value] = client;
+                Collection.Add(client.ID.Value, client);
             }
             void Unregister(NetworkClientID id)
             {
-                var client = Collection[id.Value];
-                if (client is null)
-                {
-                    NetworkLog.Error($"No Client with ID {id} Found");
-                    return;
-                }
+                Collection.Remove(id.Value, out var client);
 
                 Debug.Log($"Unregisterd Client {client}");
-
-                Collection[id.Value] = default;
             }
 
             readonly RoomInstance Room;
@@ -312,7 +438,7 @@ namespace Wsla.Unity
             {
                 this.Room = room;
 
-                Collection = new AutoExpandArray<NetworkClient>(10, NetworkClientID.MaxValue, 10);
+                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.MaxValue, 10);
 
                 Transport.Dispatcher.Register<ClientConnectionResponse>(ConnectResponseHandler);
                 Transport.Dispatcher.Register<ClientConnectMessage>(ClientConnectHandler);
@@ -329,6 +455,12 @@ namespace Wsla.Unity
             public bool TryGet(NetworkEntityID id, out NetworkEntity entity) => Dictionary.TryGetValue(id, out entity);
 
             TransportProperty Transport => Room.Transport;
+
+            internal void ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            {
+                for (int i = 0; i < message.Entities; i++)
+                    Room.Entities.SpawnBuffered(reader);
+            }
 
             public SpawnOptions Spawn() => new SpawnOptions(Room);
             public ref struct SpawnOptions
@@ -376,7 +508,7 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                public bool Finish()
+                public bool Send()
                 {
                     if (Validate() is false)
                         return false;
@@ -547,6 +679,185 @@ namespace Wsla.Unity
             }
         }
 
+        public ScenesProperty Scenes { get; }
+        public class ScenesProperty
+        {
+            public List<Constructor> Collection { get; }
+            public class Constructor
+            {
+                public NetworkSceneID ID { get; }
+                public int BuildIndex => ID.Value;
+
+                public NetworkScene Component { get; private set; }
+
+                public AsyncOperation Operation { get; private set; }
+
+                internal async UniTask Load(LoadSceneMode mode)
+                {
+                    Operation = SceneManager.LoadSceneAsync(BuildIndex, mode);
+                    await Operation;
+                }
+
+                internal void Unload()
+                {
+                    throw new NotImplementedException();
+                }
+
+                public bool IsRegistered => Component != null;
+                public void Register(NetworkScene Component)
+                {
+                    this.Component = Component;
+
+                    OnRegister?.Invoke();
+                }
+                public event Action OnRegister;
+
+                public Constructor(NetworkSceneID ID)
+                {
+                    this.ID = ID;
+                }
+            }
+            public bool TryFind(NetworkSceneID id, out Constructor target)
+            {
+                for (int i = 0; i < Collection.Count; i++)
+                {
+                    target = Collection[i];
+                    if (target.ID == id)
+                        return true;
+                }
+
+                target = default;
+                return false;
+            }
+
+            internal UniTask ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            {
+                var list = ChangeOptions.List;
+
+                list.Clear();
+
+                for (int i = 0; i < message.Scenes; i++)
+                {
+                    var id = NetworkSerializer.ReadValue<NetworkSceneID>(in reader);
+                    list.Add(id);
+                }
+
+                return ChangeProcedure(NetworkSceneLoadMode.Single, list);
+            }
+
+            public ChangeOptions Load(NetworkSceneID scene, NetworkSceneLoadMode mode) => new ChangeOptions(Room, mode, scene);
+            public ref struct ChangeOptions
+            {
+                readonly RoomInstance Room;
+                internal readonly NetworkSceneLoadMode LoadMode;
+
+                internal static List<NetworkSceneID> List = new List<NetworkSceneID>(Capacity);
+                public int Count => List.Count;
+                public const int Capacity = ChangeScenesRequest.Capacity;
+
+                public NetworkSceneID this[int index]
+                {
+                    get
+                    {
+                        if (index >= Capacity || index < 0)
+                            throw new ArgumentOutOfRangeException(nameof(index), index, $"Range is (0 to {Capacity})");
+
+                        return List[index];
+                    }
+                }
+
+                public ChangeOptions Add(NetworkSceneID scene)
+                {
+                    if (Count >= Capacity)
+                        throw new InvalidOperationException($"Can Only Load upto {Capacity} Scenes in One Request");
+
+                    List.Add(scene);
+
+                    return this;
+                }
+
+                public UniTask Send()
+                {
+                    //Replicate
+                    {
+                        var message = new ChangeScenesRequest(LoadMode, List);
+                        Room.Transport.Send(message);
+                    }
+
+                    //Local
+                    {
+                        return Room.Scenes.ChangeProcedure(LoadMode, List);
+                    }
+                }
+
+                public ChangeOptions(RoomInstance Room, NetworkSceneLoadMode LoadMode, NetworkSceneID Scene)
+                {
+                    this.Room = Room;
+                    this.LoadMode = LoadMode;
+
+                    List.Clear();
+
+                    List.Add(Scene);
+                }
+            }
+
+            void ChangeCommandHandler(ref ChangeScenesCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                Procedure(message).Forget();
+                async UniTask Procedure(ChangeScenesCommand message)
+                {
+                    Room.Transport.Listener.Pause();
+                    await ChangeProcedure(message.LoadMode, message.Scenes);
+                    Room.Transport.Listener.Resume();
+                }
+            }
+
+            public async UniTask ChangeProcedure(NetworkSceneLoadMode mode, List<NetworkSceneID> ids)
+            {
+                if (mode is NetworkSceneLoadMode.Single)
+                {
+                    for (int i = 0; i < Collection.Count; i++)
+                        Collection[i].Unload();
+
+                    Collection.Clear();
+                }
+
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    var instance = new Constructor(ids[i]);
+
+                    Collection.Add(instance);
+
+                    var choice = (i is 0) ? ConvertLoadMode(mode) : LoadSceneMode.Additive;
+                    await instance.Load(choice);
+                }
+            }
+
+            internal void Register(NetworkScene scene)
+            {
+                if (TryFind(scene.ID, out var constructor) is false)
+                {
+                    Debug.LogError($"NetworkScene Registered Without a Loading Operation");
+                    return;
+                }
+
+                constructor.Register(scene);
+            }
+
+            readonly RoomInstance Room;
+            public ScenesProperty(RoomInstance Room)
+            {
+                this.Room = Room;
+
+                Collection = new List<Constructor>(1);
+
+                Room.Transport.Dispatcher.Register<ChangeScenesCommand>(ChangeCommandHandler);
+            }
+
+            static LoadSceneMode ConvertLoadMode(NetworkSceneLoadMode mode) => (LoadSceneMode)mode;
+            static NetworkSceneLoadMode ConvertLoadMode(LoadSceneMode mode) => (NetworkSceneLoadMode)mode;
+        }
+
         public async UniTask<Response<WslaError>> Start(ClientConnectionRequest request)
         {
             //Start Transport
@@ -574,15 +885,7 @@ namespace Wsla.Unity
             Transport = new TransportProperty(this, address, port);
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
-
-            Transport.Dispatcher.Register((ref NetworkPongResponse data, NetPacketReader reader, byte channel, DeliveryMethod delivery) =>
-            {
-                NetworkLog.Trace($"Pong from Server");
-
-                Entities.Spawn()
-                .SetResource(new NetworkEntityResource(0))
-                .Finish();
-            });
+            Scenes = new ScenesProperty(this);
         }
     }
 
@@ -597,7 +900,7 @@ namespace Wsla.Unity
         {
             return NetworkSerializer.ReadValue<NetworkClientID>(reader);
         }
-        public void ReadState(NetPacketReader reader)
+        public virtual void ReadState(NetPacketReader reader)
         {
             Username = NetworkSerializer.ReadValue<string>(reader);
         }
@@ -638,6 +941,15 @@ namespace Wsla.Unity
         public NetworkEntityID RemoveSpawnToken()
         {
             return SpawnTokens.Dequeue();
+        }
+
+        internal void ReadSpawnTokens(NetPacketReader reader, ClientConnectionResponse message)
+        {
+            for (int i = 0; i < message.SpawnTokens; i++)
+            {
+                var token = NetworkSerializer.ReadValue<NetworkEntityID>(in reader);
+                AddSpawnToken(token);
+            }
         }
         #endregion
 

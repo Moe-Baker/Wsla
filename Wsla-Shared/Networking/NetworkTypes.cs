@@ -61,12 +61,12 @@ namespace Wsla.Shared.Global
             Add<ClientConnectMessage>(ref counter);
             Add<ClientDisconnectMessage>(ref counter);
 
-            Add<NetworkPingRequest>(ref counter);
-            Add<NetworkPongResponse>(ref counter);
-
             Add<SpawnEntityRequest>(ref counter);
             Add<SpawnEntityResponse>(ref counter);
             Add<SpawnEntityCommand>(ref counter);
+
+            Add<ChangeScenesRequest>(ref counter);
+            Add<ChangeScenesCommand>(ref counter);
         }
     }
 }

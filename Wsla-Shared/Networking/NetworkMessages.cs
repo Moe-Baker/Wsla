@@ -1,4 +1,6 @@
-﻿using MemoryPack;
+﻿using System.Collections.Generic;
+
+using MemoryPack;
 
 namespace Wsla.Shared.Global
 {
@@ -21,16 +23,18 @@ namespace Wsla.Shared.Global
 
         public byte Clients { get; }
         public byte SpawnTokens { get; }
+        public byte Scenes { get; }
         public ushort Entities { get; }
 
         public override string ToString() => $"(ClientID: {ID})";
 
-        public ClientConnectionResponse(NetworkClientID id, byte clients, byte spawnTokens, ushort entities)
+        public ClientConnectionResponse(NetworkClientID id, byte clients, byte spawnTokens, byte Scenes, ushort entities)
         {
             this.ID = id;
 
             this.Clients = clients;
             this.SpawnTokens = spawnTokens;
+            this.Scenes = Scenes;
             this.Entities = entities;
         }
     }
@@ -46,17 +50,6 @@ namespace Wsla.Shared.Global
         {
             this.ID = id;
         }
-    }
-
-    [MemoryPackable]
-    public partial struct NetworkPingRequest
-    {
-
-    }
-    [MemoryPackable]
-    public partial struct NetworkPongResponse
-    {
-
     }
 
     [MemoryPackable]
@@ -97,5 +90,37 @@ namespace Wsla.Shared.Global
         {
             this.ID = ID;
         }
+    }
+
+    [MemoryPackable]
+    public partial struct ChangeScenesRequest
+    {
+        public NetworkSceneLoadMode LoadMode { get; }
+        public List<NetworkSceneID> Scenes { get; }
+
+        public const int Capacity = 10;
+
+        public ChangeScenesRequest(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
+        {
+            this.LoadMode = LoadMode;
+            this.Scenes = Scenes;
+        }
+    }
+
+    [MemoryPackable]
+    public partial struct ChangeScenesCommand
+    {
+        public NetworkSceneLoadMode LoadMode { get; }
+        public List<NetworkSceneID> Scenes { get; }
+
+        public const int Capacity = ChangeScenesRequest.Capacity;
+
+        public ChangeScenesCommand(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
+        {
+            this.LoadMode = LoadMode;
+            this.Scenes = Scenes;
+        }
+
+        public static ChangeScenesCommand From(ChangeScenesRequest request) => new ChangeScenesCommand(request.LoadMode, request.Scenes);
     }
 }

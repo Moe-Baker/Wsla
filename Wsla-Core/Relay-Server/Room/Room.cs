@@ -1,6 +1,4 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection.Emit;
-using System.Security.Cryptography.X509Certificates;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -8,8 +6,6 @@ using LiteNetLib.Utils;
 using MemoryPack;
 
 using Wsla.Shared.Global;
-
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Wsla.Server
 {
@@ -192,15 +188,9 @@ namespace Wsla.Server
         {
             IncrementingKeyGenerator<NetworkClientID> IDGenerator;
 
-            AutoExpandArray<NetworkClient?> Collection;
+            ExpandArray<NetworkClient> Collection;
 
             public byte Count { get; private set; }
-
-            public bool TryGet(NetworkClientID id, [MaybeNullWhen(returnValue: false)] out NetworkClient client)
-            {
-                client = Collection[id.Value];
-                return client is not null;
-            }
 
             TransportProperty Transport => Room.Transport;
 
@@ -283,7 +273,7 @@ namespace Wsla.Server
 
                 Count += 1;
 
-                Collection[client.ID.Value] = client;
+                Collection.Add(client.ID.Value, client);
 
                 //Broadcast To Others
                 {
@@ -299,31 +289,20 @@ namespace Wsla.Server
                 {
                     var writer = Transport.PacketWriter.Take();
 
-                    var message = new ClientConnectionResponse(client.ID, Count, client.SpawnAllowance, Room.Entities.Count);
+                    var message = new ClientConnectionResponse(client.ID, Count, client.SpawnAllowance, Room.Scenes.Count, Room.Entities.Count);
                     NetworkSerializer.WriteHeader(in writer, in message);
 
                     //Sync Clients
-                    {
-                        foreach (var other in Collection.AsSpan())
-                        {
-                            if (other is null)
-                                continue;
-
-                            other.WriteState(in writer);
-                        }
-                    }
+                    WriteState(in writer);
 
                     //Sync Spawn Tokens
-                    {
-                        foreach (var token in client.SpawnTokens)
-                            NetworkSerializer.WriteValue(in writer, token);
-                    }
+                    client.WriteSpawnTokens(in writer);
+
+                    //Sync Scenes
+                    Room.Scenes.WriteState(in writer);
 
                     //Sync Entities
-                    {
-                        foreach (var (id, entity) in Room.Entities.Dictionary)
-                            entity.WriteState(in writer);
-                    }
+                    Room.Entities.WriteState(in writer);
 
                     Transport.Send(client, in writer);
                 }
@@ -338,7 +317,7 @@ namespace Wsla.Server
 
                 NetworkLog.Info($"Client {client} Disconnected");
 
-                Collection[client.ID.Value] = null;
+                Collection.Remove(client.ID.Value);
 
                 //Free Client ID
                 IDGenerator.Return(client.ID);
@@ -354,14 +333,20 @@ namespace Wsla.Server
                 }
             }
 
+            void WriteState(in NetDataWriter writer)
+            {
+                foreach (var other in Collection)
+                    other.WriteState(in writer);
+            }
+
             readonly Room Room;
             public ClientsProperty(Room room)
             {
                 this.Room = room;
 
-                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(new NetworkClientID(1), 10, TimeSpan.FromSeconds(30), NetworkClientID.Increment);
+                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(new NetworkClientID(1), 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
 
-                Collection = new AutoExpandArray<NetworkClient?>(10, NetworkClientID.MaxValue, 10);
+                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.MaxValue, 10);
             }
         }
 
@@ -428,6 +413,12 @@ namespace Wsla.Server
                 Dictionary.Remove(id);
             }
 
+            internal void WriteState(in NetDataWriter writer)
+            {
+                foreach (var (id, entity) in Dictionary)
+                    entity.WriteState(in writer);
+            }
+
             readonly Room Room;
             public EntitiesProperty(Room room)
             {
@@ -438,6 +429,76 @@ namespace Wsla.Server
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
 
                 Transport.Dispatcher.Register<SpawnEntityRequest>(SpawnRequestHandler);
+            }
+        }
+
+        public ScenesProperty Scenes { get; }
+        public class ScenesProperty
+        {
+            public List<NetworkScene> Collection { get; }
+            public bool TryFind(NetworkSceneID id, [MaybeNullWhen(returnValue: false)] out NetworkScene target)
+            {
+                for (int i = 0; i < Collection.Count; i++)
+                {
+                    target = Collection[i];
+                    if (target.ID == id)
+                        return true;
+                }
+
+                target = default;
+                return false;
+            }
+
+            public byte Count => (byte)Collection.Count;
+
+            public TransportProperty Transport => Room.Transport;
+
+            void ChangeRequestHandler(NetworkClient sender, ref ChangeScenesRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                ChangeProcedure(message.LoadMode, message.Scenes);
+
+                //Broadcast to Others
+                {
+                    //TODO: investigate replicating the request as the command since they have the same fields
+                    var command = ChangeScenesCommand.From(message);
+                    Transport.Broadcast(in command, except: sender);
+                }
+            }
+
+            void ChangeProcedure(NetworkSceneLoadMode mode, List<NetworkSceneID> ids)
+            {
+                if (mode is NetworkSceneLoadMode.Single)
+                {
+                    for (int i = 0; i < Collection.Count; i++)
+                        Collection[i].Unload();
+
+                    Collection.Clear();
+                }
+
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    var instance = new NetworkScene(ids[i]);
+
+                    Collection.Add(instance);
+
+                    instance.Load();
+                }
+            }
+
+            internal void WriteState(in NetDataWriter writer)
+            {
+                foreach (var scene in Collection)
+                    scene.WriteState(in writer);
+            }
+
+            readonly Room Room;
+            public ScenesProperty(Room Room)
+            {
+                this.Room = Room;
+
+                Collection = new List<NetworkScene>(1);
+
+                Transport.Dispatcher.Register<ChangeScenesRequest>(ChangeRequestHandler);
             }
         }
 
@@ -465,12 +526,7 @@ namespace Wsla.Server
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
-
-            Transport.Dispatcher.Register((NetworkClient sender, ref NetworkPingRequest data, NetPacketReader reader, byte channel, DeliveryMethod delivery) =>
-            {
-                NetworkLog.Trace($"Ping from {sender}");
-                Transport.Send(sender, new NetworkPongResponse());
-            });
+            Scenes = new ScenesProperty(this);
         }
     }
 
@@ -494,6 +550,12 @@ namespace Wsla.Server
         public NetworkEntityID RemoveSpawnToken()
         {
             return SpawnTokens.Dequeue();
+        }
+
+        public void WriteSpawnTokens(in NetDataWriter writer)
+        {
+            foreach (var token in SpawnTokens)
+                NetworkSerializer.WriteValue(in writer, token);
         }
         #endregion
 
@@ -541,6 +603,30 @@ namespace Wsla.Server
         {
             this.ID = id;
             this.Resource = resource;
+        }
+    }
+
+    public class NetworkScene
+    {
+        public NetworkSceneID ID { get; }
+
+        public void Load()
+        {
+
+        }
+        public void Unload()
+        {
+
+        }
+
+        internal void WriteState(in NetDataWriter writer)
+        {
+            NetworkSerializer.WriteValue(in writer, ID);
+        }
+
+        public NetworkScene(NetworkSceneID ID)
+        {
+            this.ID = ID;
         }
     }
 }

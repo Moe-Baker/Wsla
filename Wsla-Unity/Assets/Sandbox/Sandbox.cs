@@ -33,7 +33,28 @@ public class Sandbox : MonoBehaviour
             return;
         }
 
-        Debug.Log($"Connected to Room {response.Value}");
+        var room = response.Value;
+        Debug.Log($"Connected to Room {room}");
+
+        await UniTask.Delay(TimeSpan.FromSeconds(1));
+
+        //Load Scene
+        {
+            await room.Scenes.Load(new NetworkSceneID(1), NetworkSceneLoadMode.Single)
+                .Add(new NetworkSceneID(2))
+                .Send();
+
+            Debug.Log("Scene Load Finished");
+        }
+
+        return;
+
+        //Create Entity
+        {
+            room.Entities.Spawn()
+                .SetResource(new NetworkEntityResource(0))
+                .Send();
+        }
     }
 }
 

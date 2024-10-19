@@ -5,17 +5,6 @@ using MemoryPack;
 namespace Wsla.Shared.Global
 {
     [MemoryPackable]
-    public partial struct NetworkBehaviourData
-    {
-        public NetworkBehaviourID ID { get; }
-
-        public NetworkBehaviourData(NetworkBehaviourID id)
-        {
-            this.ID = id;
-        }
-    }
-
-    [MemoryPackable]
     public partial struct NetworkBehaviourID : IEquatable<NetworkBehaviourID>
     {
         public byte Value { get; }

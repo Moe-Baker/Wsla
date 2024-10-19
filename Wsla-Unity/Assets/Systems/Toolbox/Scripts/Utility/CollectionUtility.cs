@@ -34,5 +34,7 @@ namespace Toolbox
 
         public static ArraySegment<T> Segment<T>(this T[] array, int count) => new(array, 0, count);
         public static ArraySegment<T> Segment<T>(this T[] array, int offset, int count) => new(array, offset, count);
+
+        public static bool IsValidIndex<T>(this IList<T> list, int index) => index < list.Count && index > 0;
     }
 }
