@@ -243,4 +243,19 @@ namespace Wsla.Serialization
 
     [AttributeUsage(AttributeTargets.GenericParameter, Inherited = true, AllowMultiple = false)]
     public sealed class NetworkSerializationMarkerAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Assembly, Inherited = false, AllowMultiple = true)]
+    public sealed class NetworkSerializationResolverRegisterationAttribute : Attribute
+    {
+        public Type Type { get; }
+        public int Order { get; }
+        public string Entrypoint { get; }
+
+        public NetworkSerializationResolverRegisterationAttribute(Type Type, int Order, string Entrypoint)
+        {
+            this.Type = Type;
+            this.Order = Order;
+            this.Entrypoint = Entrypoint;
+        }
+    }
 }

@@ -1,21 +1,41 @@
-﻿using System.Net;
+﻿using Wsla.Generator;
 
-using Wsla.Shared.Global;
+var builder = new CodeStringBuilder();
 
-var array = new ExpandArray<IPAddress>(10, 256, 10);
+builder.Write("public class Example");
 
-array.Add(0, IPAddress.Loopback);
-array.Add(5, IPAddress.Any);
-array.Add(20, IPAddress.Broadcast);
-
-array.Remove(0);
-
-foreach (var item in array)
+using (builder.CodeBlock())
 {
-    Console.WriteLine(item);
+    builder.Write("public const string Text = ");
+    using (builder.StringDeclaration())
+    {
+        builder.Write("Hello World");
+    }
+    builder.EndLine();
+
+    builder.Newline();
+
+    builder.Write("public static int[] Array = new int[]");
+    using (builder.ArrayBlock())
+    {
+        builder.Write("1");
+        builder.EndLine(",");
+
+        builder.Write("2");
+        builder.EndLine(",");
+    }
+
+    builder.Newline();
+
+    builder.Write("public static void Write()");
+    using (builder.CodeBlock())
+    {
+        builder.Write("return Text");
+        builder.EndLine();
+    }
 }
 
-Console.WriteLine("Done");
+Console.Write(builder.ToString());
 
 while (true)
     Console.ReadKey();

@@ -18,7 +18,6 @@ public class Sandbox : MonoBehaviour
 
     public ButtonField Execute = ButtonField.Create<Sandbox>(x =>
     {
-        Debug.Log(NetworkGeneratedCode.Text);
         return ButtonFieldOperation.None;
     });
 
@@ -65,19 +64,58 @@ public class Sandbox : MonoBehaviour
     }
 }
 
-class Base<V>
+class Sample
 {
-    class Sample<T>
+    void Use()
     {
-        void Usage()
-        {
-            var sample = new Sample<IPAddress>();
-            Definition(sample);
-        }
+        Definition(new Example1());
+        Definition(new Example2());
+        Definition(new Example3());
+        Definition(new Example4());
+        Definition(new Example5());
+        Definition(new Example6.Example7());
+    }
 
-        static void Definition<[NetworkSerializationMarker] T>(T value)
-        {
+    void Definition<[NetworkSerializationMarker] TValue>(TValue value)
+    {
 
-        }
+    }
+}
+
+[NetworkBlittable]
+public struct Example1
+{
+    public int X, Y, Z;
+}
+
+public class Example2 : IManualNetworkSerialization
+{
+    public void Read<TStream>(ref TStream stream) where TStream : INetworkStream
+    {
+        throw new NotImplementedException();
+    }
+    public void Write<TStream>(ref TStream stream) where TStream : INetworkStream
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class Example3 : Example2 { }
+
+public class Example4 : IAutoNetworkSerialization
+{
+    public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context) where TStream : INetworkStream
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class Example5 : Example4 { }
+
+public class Example6 : Example5
+{
+    public class Example7 : Example5
+    {
+
     }
 }

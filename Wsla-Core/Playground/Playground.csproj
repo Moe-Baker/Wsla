@@ -9,6 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Network-Generator\Network-Generator.csproj" />
 		<ProjectReference Include="..\Shared-Global\Shared-Global.csproj" />
 	</ItemGroup>
 
