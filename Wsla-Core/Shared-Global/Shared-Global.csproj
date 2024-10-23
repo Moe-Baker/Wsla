@@ -1,19 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<RootNamespace>Wsla.Shared.Global</RootNamespace>
 		<Nullable>disable</Nullable>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Remove="Source\Networking\NetworkEntityResource.cs.meta" />
-	  <None Remove="Source\Networking\NetworkPrefab.cs.meta" />
+		<None Remove="..\\**\*.meta" />
+		<None Remove="..\\**\*.asmdef" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="MemoryPack" Version="1.21.3" />
 	</ItemGroup>
-
 </Project>

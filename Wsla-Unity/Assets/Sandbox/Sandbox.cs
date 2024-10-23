@@ -4,16 +4,23 @@ using System.Net;
 
 using Cysharp.Threading.Tasks;
 
-using MemoryPack;
+using Toolbox;
 
 using UnityEngine;
 
+using Wsla.Serialization;
 using Wsla.Shared.Global;
 using Wsla.Unity;
 
 public class Sandbox : MonoBehaviour
 {
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
+
+    public ButtonField Execute = ButtonField.Create<Sandbox>(x =>
+    {
+        Debug.Log(NetworkGeneratedCode.Text);
+        return ButtonFieldOperation.None;
+    });
 
     void Start()
     {
@@ -58,22 +65,19 @@ public class Sandbox : MonoBehaviour
     }
 }
 
-public class SpanBufferWriter : IBufferWriter<byte>
+class Base<V>
 {
-    public static Span<byte> Serialize<T>(in T value, Span<byte> buffer, MemoryPackSerializerOptions options = null)
+    class Sample<T>
     {
-        var state = MemoryPackWriterOptionalStatePool.Rent(options);
+        void Usage()
+        {
+            var sample = new Sample<IPAddress>();
+            Definition(sample);
+        }
 
-        SpanBufferWriter instance = default;
+        static void Definition<[NetworkSerializationMarker] T>(T value)
+        {
 
-        var writer = new MemoryPackWriter<SpanBufferWriter>(ref instance, buffer, state);
-
-        writer.WriteValue(in value);
-
-        return buffer.Slice(0, writer.WrittenCount);
+        }
     }
-
-    public void Advance(int count) => throw new NotImplementedException();
-    public Memory<byte> GetMemory(int sizeHint = 0) => throw new NotSupportedException();
-    public Span<byte> GetSpan(int sizeHint = 0) => throw new NotSupportedException();
 }

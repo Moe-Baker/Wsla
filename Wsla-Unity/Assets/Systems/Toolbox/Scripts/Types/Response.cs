@@ -102,7 +102,7 @@ namespace Toolbox
             }
         }
 
-        public static async Task<Response<TValue, Exception>> ToResponse<TValue>(this UniTask<TValue> task)
+        public static async UniTask<Response<TValue, Exception>> ToResponse<TValue>(this UniTask<TValue> task)
         {
             try
             {

@@ -1,0 +1,16 @@
+{
+    "name": "Wsla-Shared-Global",
+    "rootNamespace": "",
+    "references": [
+        "GUID:883642feda06fb3478d41d10475fa7ff"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
