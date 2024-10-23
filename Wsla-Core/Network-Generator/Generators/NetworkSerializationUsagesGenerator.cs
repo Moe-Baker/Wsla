@@ -55,6 +55,8 @@ namespace Wsla.Generator
             public INamedTypeSymbol BlittableResolver;
             public INamedTypeSymbol BlittableAttribute;
 
+            public INamedTypeSymbol EnumResolver;
+
             (IAssemblySymbol, INamedTypeSymbol) GetComparableFields() => (Assembly, MarkerAttribute);
 
             public override bool Equals(object obj)
@@ -91,6 +93,8 @@ namespace Wsla.Generator
 
                     BlittableResolver = compilation.GetGenericTypeByMetadataName(Constants.BlittableNetworkSerializationResolver, 1),
                     BlittableAttribute = compilation.GetTypeByMetadataName(Constants.NetworkBlittableAttribute),
+
+                    EnumResolver = compilation.GetGenericTypeByMetadataName(Constants.EnumNetworkSerializationResolver, 2),
                 };
 
                 return data;
@@ -248,6 +252,8 @@ namespace Wsla.Generator
 
             public static readonly string BlittableNetworkSerializationResolver = $"{Namespace}.{nameof(BlittableNetworkSerializationResolver)}";
             public static readonly string NetworkBlittableAttribute = $"{Namespace}.{nameof(NetworkBlittableAttribute)}";
+
+            public static readonly string EnumNetworkSerializationResolver = $"{Namespace}.{nameof(EnumNetworkSerializationResolver)}";
         }
 
         public class Resolvers
@@ -280,6 +286,10 @@ namespace Wsla.Generator
 
                 //List
                 if (ResolveList(compilation, usage, resolvers))
+                    return true;
+
+                //Enum
+                if (ResolveEnum(compilation, usage, resolvers))
                     return true;
 
                 return false;
@@ -369,6 +379,18 @@ namespace Wsla.Generator
                     return false;
 
                 resolvers[usage] = compilation.BlittableResolver.Construct(usage);
+
+                return true;
+            }
+
+            static bool ResolveEnum(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                if (usage.TypeKind != TypeKind.Enum)
+                    return false;
+
+                var type = usage as INamedTypeSymbol;
+
+                resolvers[usage] = compilation.EnumResolver.Construct(type, type.EnumUnderlyingType);
 
                 return true;
             }

@@ -5,8 +5,6 @@ using Toolbox;
 
 using UnityEngine;
 
-using Wsla.Shared.Global;
-
 namespace Wsla.Unity
 {
     [Serializable]

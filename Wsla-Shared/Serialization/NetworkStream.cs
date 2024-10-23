@@ -13,11 +13,11 @@ namespace Wsla.Serialization
         Span<byte> GetRemaining();
 
         /// <summary>
-        /// Returns the a span with the specified size & andvances the stream
+        /// Returns the a span with the specified size & advances the stream
         /// </summary>
         /// <param name="size"></param>
         /// <returns></returns>
-        Span<byte> Take(int size);
+        Span<byte> Take(int count);
     }
 
     public class NetworkStream : INetworkStream

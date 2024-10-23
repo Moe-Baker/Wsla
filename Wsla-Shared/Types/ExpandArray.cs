@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
     public class ExpandArray<T>
         where T : class

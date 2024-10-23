@@ -5,9 +5,11 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 
+using Wsla.Serialization;
+
 namespace LiteNetLib.Utils
 {
-    public class NetDataWriter : IBufferWriter<byte>
+    public class NetDataWriter : INetworkStream
     {
         protected byte[] _data;
         protected int _position;
@@ -379,48 +381,23 @@ namespace LiteNetLib.Utils
             obj.Serialize(this);
         }
 
-        #region IBuffer Writer Extensions
-        public void Put(Span<byte> span)
-        {
-            if (_autoResize)
-            {
-                ResizeIfNeed(_position + span.Length);
-            }
-            span.CopyTo(_data.AsSpan(_position, span.Length));
-            _position += span.Length;
-        }
-
-        public void Put(ReadOnlySpan<byte> span)
-        {
-            if (_autoResize)
-            {
-                ResizeIfNeed(_position + span.Length);
-            }
-            span.CopyTo(_data.AsSpan(_position, span.Length));
-            _position += span.Length;
-        }
-
-        public void Advance(int count)
+        #region Network Stream Implementation
+        void INetworkStream.Advance(int count)
         {
             _position += count;
         }
 
-        public Memory<byte> GetMemory(int sizeHint = 0)
-        {
-            if (_autoResize)
-            {
-                ResizeIfNeed(_position + sizeHint);
-            }
-            return _data.AsMemory(_position, sizeHint);
-        }
+        Span<byte> INetworkStream.GetRemaining() => Data.AsSpan(_position);
 
-        public Span<byte> GetSpan(int sizeHint = 0)
+        Span<byte> INetworkStream.Take(int count)
         {
-            if (_autoResize)
-            {
-                ResizeIfNeed(_position + sizeHint);
-            }
-            return _data.AsSpan(_position, sizeHint);
+            ResizeIfNeed(count);
+
+            var span = _data.AsSpan(_position, count);
+
+            _position += count;
+
+            return span;
         }
         #endregion
     }

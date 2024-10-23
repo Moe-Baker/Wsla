@@ -4,7 +4,7 @@ using LiteNetLib;
 
 using UnityEngine;
 
-using Wsla.Shared.Global;
+using Wsla.Serialization;
 
 namespace Wsla.Unity
 {
@@ -39,11 +39,11 @@ namespace Wsla.Unity
         }
         public event Action OnReplicated;
 
-        public void ReadState(in NetPacketReader reader)
+        public void ReadState(ref NetPacketReader reader)
         {
-            ID = NetworkSerializer.ReadValue<NetworkEntityID>(in reader);
-            Source = NetworkSerializer.ReadValue<NetworkEntitySource>(in reader);
-            Resource = NetworkSerializer.ReadValue<NetworkEntityResource>(in reader);
+            ID = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
+            Source = NetworkSerializer.ReadValue<NetworkEntitySource, NetPacketReader>(ref reader);
+            Resource = NetworkSerializer.ReadValue<NetworkEntityResource, NetPacketReader>(ref reader);
         }
 
         public class Behaviour
@@ -54,9 +54,9 @@ namespace Wsla.Unity
         //Static Utility
         public static void ReadProperties(NetPacketReader reader, out NetworkEntitySource source, out NetworkEntityResource resource, out NetworkEntityID id)
         {
-            source = NetworkSerializer.ReadValue<NetworkEntitySource>(in reader);
-            resource = NetworkSerializer.ReadValue<NetworkEntityResource>(in reader);
-            id = NetworkSerializer.ReadValue<NetworkEntityID>(in reader);
+            source = NetworkSerializer.ReadValue<NetworkEntitySource, NetPacketReader>(ref reader);
+            resource = NetworkSerializer.ReadValue<NetworkEntityResource, NetPacketReader>(ref reader);
+            id = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
         }
     }
 }

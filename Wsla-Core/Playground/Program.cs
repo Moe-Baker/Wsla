@@ -1,9 +1,9 @@
 ﻿using Wsla.Serialization;
 
-INetworkStream stream = default;
+var stream = new NetworkStream(512);
 
-NetworkSerializer.Write(new Data(), ref stream);
-NetworkSerializer.Write(new Data[0], ref stream);
+NetworkSerializer.WriteValue(new Data(), ref stream);
+NetworkSerializer.WriteValue(new Data[0], ref stream);
 
 while (true)
     Console.ReadKey();

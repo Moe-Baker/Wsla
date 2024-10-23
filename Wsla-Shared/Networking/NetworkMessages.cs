@@ -1,62 +1,94 @@
 ﻿using System.Collections.Generic;
 
-using MemoryPack;
+using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
-    [MemoryPackable]
-    public partial struct ClientConnectionRequest
+    public partial struct ClientConnectionRequest : IAutoNetworkSerialization
     {
-        public string Username { get; }
+        public string Username;
 
         public override string ToString() => $"(Username: {Username})";
 
-        public ClientConnectionRequest(string username)
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
         {
-            this.Username = username;
+            context.Select(ref Username, ref stream);
+        }
+
+        public ClientConnectionRequest(string Username)
+        {
+            this.Username = Username;
         }
     }
-    [MemoryPackable]
-    public partial struct ClientConnectionResponse
+    public partial struct ClientConnectionResponse : IAutoNetworkSerialization
     {
-        public NetworkClientID ID { get; }
+        public NetworkClientID ID;
 
-        public byte Clients { get; }
-        public byte SpawnTokens { get; }
-        public byte Scenes { get; }
-        public ushort Entities { get; }
+        public byte Clients;
+        public byte SpawnTokens;
+        public byte Scenes;
+        public ushort Entities;
 
         public override string ToString() => $"(ClientID: {ID})";
 
-        public ClientConnectionResponse(NetworkClientID id, byte clients, byte spawnTokens, byte Scenes, ushort entities)
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
         {
-            this.ID = id;
+            context.Select(ref ID, ref stream);
 
-            this.Clients = clients;
-            this.SpawnTokens = spawnTokens;
+            context.Select(ref Clients, ref stream);
+            context.Select(ref SpawnTokens, ref stream);
+            context.Select(ref Scenes, ref stream);
+            context.Select(ref Entities, ref stream);
+        }
+
+        public ClientConnectionResponse(NetworkClientID ID, byte Clients, byte SpawnTokens, byte Scenes, ushort Entities)
+        {
+            this.ID = ID;
+
+            this.Clients = Clients;
+            this.SpawnTokens = SpawnTokens;
             this.Scenes = Scenes;
-            this.Entities = entities;
+            this.Entities = Entities;
         }
     }
 
-    [MemoryPackable]
-    public partial struct ClientConnectMessage { }
-    [MemoryPackable]
-    public partial struct ClientDisconnectMessage
+    public partial struct ClientConnectMessage : IAutoNetworkSerialization
     {
-        public NetworkClientID ID { get; }
-
-        public ClientDisconnectMessage(NetworkClientID id)
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
         {
-            this.ID = id;
+
+        }
+    }
+    public partial struct ClientDisconnectMessage : IAutoNetworkSerialization
+    {
+        public NetworkClientID ID;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref ID, ref stream);
+        }
+
+        public ClientDisconnectMessage(NetworkClientID ID)
+        {
+            this.ID = ID;
         }
     }
 
-    [MemoryPackable]
-    public partial struct SpawnEntityRequest
+    public partial struct SpawnEntityRequest : IAutoNetworkSerialization
     {
-        public NetworkEntityID SpawnToken { get; }
-        public NetworkEntityResource Resource { get; }
+        public NetworkEntityID SpawnToken;
+        public NetworkEntityResource Resource;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref SpawnToken, ref stream);
+            context.Select(ref Resource, ref stream);
+        }
 
         public SpawnEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource)
         {
@@ -65,11 +97,17 @@ namespace Wsla.Shared.Global
         }
     }
 
-    [MemoryPackable]
-    public partial struct SpawnEntityResponse
+    public partial struct SpawnEntityResponse : IAutoNetworkSerialization
     {
-        public NetworkEntityID SourceToken { get; }
-        public NetworkEntityID ReplacementToken { get; }
+        public NetworkEntityID SourceToken;
+        public NetworkEntityID ReplacementToken;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref SourceToken, ref stream);
+            context.Select(ref ReplacementToken, ref stream);
+        }
 
         public SpawnEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
         {
@@ -78,13 +116,24 @@ namespace Wsla.Shared.Global
         }
     }
 
-    [MemoryPackable]
-    public partial struct SpawnEntityCommand { }
-
-    [MemoryPackable]
-    public partial struct DespawnEntityCommand
+    public partial struct SpawnEntityCommand : IAutoNetworkSerialization
     {
-        public NetworkEntityID ID { get; }
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+
+        }
+    }
+
+    public partial struct DespawnEntityCommand : IAutoNetworkSerialization
+    {
+        public NetworkEntityID ID;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref ID, ref stream);
+        }
 
         public DespawnEntityCommand(NetworkEntityID ID)
         {
@@ -92,13 +141,19 @@ namespace Wsla.Shared.Global
         }
     }
 
-    [MemoryPackable]
-    public partial struct ChangeScenesRequest
+    public partial struct ChangeScenesRequest : IAutoNetworkSerialization
     {
-        public NetworkSceneLoadMode LoadMode { get; }
-        public List<NetworkSceneID> Scenes { get; }
+        public NetworkSceneLoadMode LoadMode;
+        public List<NetworkSceneID> Scenes;
 
         public const int Capacity = 10;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref LoadMode, ref stream);
+            context.Select(ref Scenes, ref stream);
+        }
 
         public ChangeScenesRequest(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
         {
@@ -107,13 +162,19 @@ namespace Wsla.Shared.Global
         }
     }
 
-    [MemoryPackable]
-    public partial struct ChangeScenesCommand
+    public partial struct ChangeScenesCommand : IAutoNetworkSerialization
     {
-        public NetworkSceneLoadMode LoadMode { get; }
-        public List<NetworkSceneID> Scenes { get; }
+        public NetworkSceneLoadMode LoadMode;
+        public List<NetworkSceneID> Scenes;
 
         public const int Capacity = ChangeScenesRequest.Capacity;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
+            where TStream : INetworkStream
+        {
+            context.Select(ref LoadMode, ref stream);
+            context.Select(ref Scenes, ref stream);
+        }
 
         public ChangeScenesCommand(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
         {

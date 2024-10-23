@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net8.0</TargetFramework>
-		<RootNamespace>Wsla.Server.Relay</RootNamespace>
+		<RootNamespace>Wsla.Server</RootNamespace>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>

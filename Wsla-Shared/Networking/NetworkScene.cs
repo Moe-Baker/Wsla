@@ -1,10 +1,10 @@
 ﻿using System;
 
-using MemoryPack;
+using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
-    [MemoryPackable]
+    [NetworkBlittable]
     public partial struct NetworkSceneID : IEquatable<NetworkSceneID>
     {
         public byte Value { get; }

@@ -3,9 +3,7 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
 
-using MemoryPack;
-
-using Wsla.Shared.Global;
+using Wsla.Serialization;
 
 namespace Wsla.Server
 {
@@ -58,13 +56,12 @@ namespace Wsla.Server
                     if (client is null)
                         throw new Exception("No Client Assigned to Peer");
 
-                    var type = NetworkSerializer.ReadType(in reader);
-                    var id = NetworkTypes.Get(type);
+                    var id = NetworkTypeSerializationResolver.ReadValue(ref reader);
 
                     var handler = Handlers[id];
                     if (handler is null)
                     {
-                        NetworkLog.Error($"No Dispatch Handler Provided for {type} Message");
+                        NetworkLog.Error($"No Dispatch Handler Provided for {NetworkTypes.Get(id)} Message");
                         return;
                     }
 
@@ -72,7 +69,7 @@ namespace Wsla.Server
                 }
 
                 public delegate void TypeDelegate<T>(NetworkClient sender, ref T message, NetPacketReader reader, byte channel, DeliveryMethod delivery);
-                public void Register<T>(TypeDelegate<T> handler)
+                public void Register<[NetworkSerializationMarker] T>(TypeDelegate<T> handler)
                 {
                     var id = NetworkTypes.Get<T>();
 
@@ -80,7 +77,7 @@ namespace Wsla.Server
 
                     void Surrogate(NetworkClient sender, NetPacketReader reader, byte channel, DeliveryMethod delivery)
                     {
-                        var data = NetworkSerializer.ReadValue<T>(in reader);
+                        NetworkSerializer.ReadValue(ref reader, out T data);
                         handler(sender, ref data, reader, channel, delivery);
                     }
                 }
@@ -114,11 +111,11 @@ namespace Wsla.Server
                 CancellationSource?.Cancel();
             }
 
-            public void Send<T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
+            public void Send<[NetworkSerializationMarker] T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
                 var writer = PacketWriter.Take();
 
-                NetworkSerializer.WriteHeader(in writer, data);
+                NetworkSerializer.WriteHeader(data, ref writer);
 
                 Send(client, writer, channel, delivery);
             }
@@ -127,11 +124,11 @@ namespace Wsla.Server
                 client.Peer.Send(writer, channel, delivery);
             }
 
-            public void Broadcast<T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient? except = null)
+            public void Broadcast<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient? except = null)
             {
                 var writer = PacketWriter.Take();
 
-                NetworkSerializer.WriteHeader(in writer, data);
+                NetworkSerializer.WriteHeader(data, ref writer);
 
                 if (except is null)
                     Manager.SendToAll(writer, channel, delivery);
@@ -150,7 +147,7 @@ namespace Wsla.Server
             {
                 var writer = PacketWriter.Take();
 
-                MemoryPackSerializer.Serialize(in writer, in error);
+                NetworkSerializer.WriteValue(in error, ref writer);
 
                 client.Peer.Disconnect(writer);
             }
@@ -206,13 +203,13 @@ namespace Wsla.Server
             {
                 NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
 
-                var segment = request.Data.GetRemainingBytesSegment();
+                var reader = request.Data;
 
                 ClientConnectionRequest data;
 
                 try
                 {
-                    data = MemoryPackSerializer.Deserialize<ClientConnectionRequest>(segment);
+                    NetworkSerializer.ReadValue(ref reader, out data);
                 }
                 catch (Exception)
                 {
@@ -258,7 +255,7 @@ namespace Wsla.Server
 
                 var error = WslaError.From(code);
 
-                MemoryPackSerializer.Serialize(in writer, in error);
+                NetworkSerializer.WriteValue(in error, ref writer);
 
                 request.Reject(writer);
             }
@@ -279,8 +276,11 @@ namespace Wsla.Server
                 {
                     var writer = Transport.PacketWriter.Take();
 
-                    NetworkSerializer.WriteHeader<ClientConnectMessage>(in writer);
-                    client.WriteState(in writer);
+                    var message = new ClientConnectMessage();
+
+                    NetworkSerializer.WriteHeader(in message, ref writer);
+
+                    client.WriteState(ref writer);
 
                     Transport.Broadcast(in writer, except: client);
                 }
@@ -290,19 +290,19 @@ namespace Wsla.Server
                     var writer = Transport.PacketWriter.Take();
 
                     var message = new ClientConnectionResponse(client.ID, Count, client.SpawnAllowance, Room.Scenes.Count, Room.Entities.Count);
-                    NetworkSerializer.WriteHeader(in writer, in message);
+                    NetworkSerializer.WriteHeader(in message, ref writer);
 
                     //Sync Clients
-                    WriteState(in writer);
+                    WriteState(ref writer);
 
                     //Sync Spawn Tokens
-                    client.WriteSpawnTokens(in writer);
+                    client.WriteSpawnTokens(ref writer);
 
                     //Sync Scenes
-                    Room.Scenes.WriteState(in writer);
+                    Room.Scenes.WriteState(ref writer);
 
                     //Sync Entities
-                    Room.Entities.WriteState(in writer);
+                    Room.Entities.WriteState(ref writer);
 
                     Transport.Send(client, in writer);
                 }
@@ -333,10 +333,10 @@ namespace Wsla.Server
                 }
             }
 
-            void WriteState(in NetDataWriter writer)
+            void WriteState(ref NetDataWriter writer)
             {
                 foreach (var other in Collection)
-                    other.WriteState(in writer);
+                    other.WriteState(ref writer);
             }
 
             readonly Room Room;
@@ -396,9 +396,11 @@ namespace Wsla.Server
                 {
                     var writer = Transport.PacketWriter.Take();
 
-                    NetworkSerializer.WriteHeader<SpawnEntityCommand>(in writer);
+                    var command = new SpawnEntityCommand();
 
-                    entity.WriteState(in writer);
+                    NetworkSerializer.WriteHeader(in command, ref writer);
+
+                    entity.WriteState(ref writer);
 
                     Transport.Broadcast(in writer, except: sender);
                 }
@@ -413,10 +415,10 @@ namespace Wsla.Server
                 Dictionary.Remove(id);
             }
 
-            internal void WriteState(in NetDataWriter writer)
+            internal void WriteState(ref NetDataWriter writer)
             {
                 foreach (var (id, entity) in Dictionary)
-                    entity.WriteState(in writer);
+                    entity.WriteState(ref writer);
             }
 
             readonly Room Room;
@@ -485,10 +487,10 @@ namespace Wsla.Server
                 }
             }
 
-            internal void WriteState(in NetDataWriter writer)
+            internal void WriteState(ref NetDataWriter writer)
             {
                 foreach (var scene in Collection)
-                    scene.WriteState(in writer);
+                    scene.WriteState(ref writer);
             }
 
             readonly Room Room;
@@ -552,17 +554,17 @@ namespace Wsla.Server
             return SpawnTokens.Dequeue();
         }
 
-        public void WriteSpawnTokens(in NetDataWriter writer)
+        public void WriteSpawnTokens(ref NetDataWriter writer)
         {
             foreach (var token in SpawnTokens)
-                NetworkSerializer.WriteValue(in writer, token);
+                NetworkSerializer.WriteValue(token, ref writer);
         }
         #endregion
 
-        public void WriteState(in NetDataWriter writer)
+        public void WriteState(ref NetDataWriter writer)
         {
-            NetworkSerializer.WriteValue(writer, ID);
-            NetworkSerializer.WriteValue(writer, Username);
+            NetworkSerializer.WriteValue(ID, ref writer);
+            NetworkSerializer.WriteValue(Username, ref writer);
         }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
@@ -592,11 +594,11 @@ namespace Wsla.Server
             this.Resource = Resource;
         }
 
-        public void WriteState(in NetDataWriter writer)
+        public void WriteState(ref NetDataWriter writer)
         {
-            NetworkSerializer.WriteValue(in writer, Source);
-            NetworkSerializer.WriteValue(in writer, Resource);
-            NetworkSerializer.WriteValue(in writer, ID);
+            NetworkSerializer.WriteValue(Source, ref writer);
+            NetworkSerializer.WriteValue(Resource, ref writer);
+            NetworkSerializer.WriteValue(ID, ref writer);
         }
 
         public NetworkEntity(NetworkEntityID id, NetworkEntityResource resource)
@@ -619,9 +621,9 @@ namespace Wsla.Server
 
         }
 
-        internal void WriteState(in NetDataWriter writer)
+        internal void WriteState(ref NetDataWriter writer)
         {
-            NetworkSerializer.WriteValue(in writer, ID);
+            NetworkSerializer.WriteValue(ID, ref writer);
         }
 
         public NetworkScene(NetworkSceneID ID)

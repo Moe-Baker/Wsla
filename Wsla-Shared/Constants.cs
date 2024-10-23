@@ -1,6 +1,6 @@
 ﻿using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
     public class Constants
     {
@@ -8,16 +8,5 @@ namespace Wsla.Shared.Global
 
         public const ushort RelayManagementPort = 4785;
         public const ushort CoordinatorServicePort = 4724;
-
-        void Call()
-        {
-            Wsla.Serialization.NetworkSerializer.Clone(new A());
-        }
-    }
-
-    [NetworkBlittable]
-    struct A
-    {
-
     }
 }

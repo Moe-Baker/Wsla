@@ -1,11 +1,11 @@
 ﻿using System;
 
-using MemoryPack;
+using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
     [Serializable]
-    [MemoryPackable]
+    [NetworkBlittable]
     public partial struct NetworkEntityID : IEquatable<NetworkEntityID>
     {
         public ushort Value { get; private set; }
@@ -52,7 +52,7 @@ namespace Wsla.Shared.Global
     }
 
     [Serializable]
-    [MemoryPackable]
+    [NetworkBlittable]
     public partial struct NetworkEntityResource : IEquatable<NetworkEntityResource>
     {
         public ushort Value { get; }

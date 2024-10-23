@@ -1,14 +1,19 @@
 ﻿using LiteNetLib;
 
-using MemoryPack;
+using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
-    [MemoryPackable]
-    public partial struct WslaError
+    public partial struct WslaError : IAutoNetworkSerialization
     {
-        public WslaErrorCode Code { get; }
-        public string Description { get; }
+        public WslaErrorCode Code;
+        public string Description;
+
+        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context) where TStream : INetworkStream
+        {
+            context.Select(ref Code, ref stream);
+            context.Select(ref Description, ref stream);
+        }
 
         public override string ToString()
         {
@@ -34,7 +39,7 @@ namespace Wsla.Shared.Global
             {
                 case DisconnectReason.ConnectionRejected:
                 case DisconnectReason.RemoteConnectionClose:
-                    return MemoryPackSerializer.Deserialize<WslaError>(info.AdditionalData.GetRemainingBytesSpan());
+                    return NetworkSerializer.ReadValue<WslaError, NetPacketReader>(ref info.AdditionalData);
             }
 
             return From(WslaErrorCode.TransportFailure);

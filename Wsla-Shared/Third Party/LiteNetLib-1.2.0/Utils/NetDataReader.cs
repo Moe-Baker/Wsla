@@ -2,9 +2,11 @@
 using System.Net;
 using System.Runtime.CompilerServices;
 
+using Wsla.Serialization;
+
 namespace LiteNetLib.Utils
 {
-    public class NetDataReader
+    public class NetDataReader : INetworkStream
     {
         protected byte[] _data;
         protected int _position;
@@ -767,5 +769,33 @@ namespace LiteNetLib.Utils
             _dataSize = 0;
             _data = null;
         }
+
+        #region Network Stream Implementation
+        void INetworkStream.Advance(int count)
+        {
+#if DEBUG
+            if (count > AvailableBytes)
+                throw new ArgumentOutOfRangeException($"Count of {count} Bigger Than Available Bytes of {AvailableBytes}");
+#endif
+
+            Position += count;
+        }
+
+        Span<byte> INetworkStream.GetRemaining() => _data.AsSpan(_position, AvailableBytes);
+
+        Span<byte> INetworkStream.Take(int count)
+        {
+#if DEBUG
+            if (count > AvailableBytes)
+                throw new ArgumentOutOfRangeException($"Count of {count} Bigger Than Available Bytes of {AvailableBytes}");
+#endif
+
+            var span = _data.AsSpan(_position, count);
+
+            Position += count;
+
+            return span;
+        }
+        #endregion
     }
 }

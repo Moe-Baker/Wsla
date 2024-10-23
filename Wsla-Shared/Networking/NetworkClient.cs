@@ -1,11 +1,11 @@
 ﻿using System;
 
-using MemoryPack;
+using Wsla.Serialization;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
     [Serializable]
-    [MemoryPackable]
+    [NetworkBlittable]
     public partial struct NetworkClientID : IEquatable<NetworkClientID>
     {
         public byte Value { get; private set; }

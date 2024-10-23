@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
-		<RootNamespace>Wsla.Shared.Server</RootNamespace>
+		<RootNamespace>Wsla</RootNamespace>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>

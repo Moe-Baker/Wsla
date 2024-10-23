@@ -1,6 +1,4 @@
 using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.Net;
 
 using Cysharp.Threading.Tasks;
@@ -8,21 +6,9 @@ using Cysharp.Threading.Tasks;
 using Toolbox;
 
 using UnityEngine;
-using UnityEngine.Rendering.VirtualTexturing;
 
-using Wsla.Serialization;
-using Wsla.Shared.Global;
+using Wsla;
 using Wsla.Unity;
-
-[assembly: NetworkSerializationResolverRegisteration(typeof(Sample), 0, "Register")]
-
-public static class Sample
-{
-    public static void Register()
-    {
-        Debug.Log("hello world");
-    }
-}
 
 public class Sandbox : MonoBehaviour
 {
@@ -36,11 +22,6 @@ public class Sandbox : MonoBehaviour
     void Start()
     {
         Application.runInBackground = true;
-
-        Wsla.Serialization.NetworkSerializer.Clone(new Data());
-
-
-        return;
 
         Initialize().Forget();
     }
@@ -62,15 +43,13 @@ public class Sandbox : MonoBehaviour
         await UniTask.Delay(TimeSpan.FromSeconds(1));
 
         //Load Scene
-        {
-            await room.Scenes.Load(new NetworkSceneID(1), NetworkSceneLoadMode.Single)
-                .Add(new NetworkSceneID(2))
-                .Send();
-
-            Debug.Log("Scene Load Finished");
-        }
-
-        return;
+        //{
+        //    await room.Scenes.Load(new NetworkSceneID(1), NetworkSceneLoadMode.Single)
+        //        .Add(new NetworkSceneID(2))
+        //        .Send();
+        //
+        //    Debug.Log("Scene Load Finished");
+        //}
 
         //Create Entity
         {
@@ -79,10 +58,4 @@ public class Sandbox : MonoBehaviour
                 .Send();
         }
     }
-}
-
-[NetworkBlittable]
-struct Data
-{
-    public float X, Y, Z;
 }

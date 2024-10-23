@@ -1,6 +1,4 @@
-﻿using Wsla.Shared.Global;
-
-namespace Wsla.Server.Relay
+﻿namespace Wsla.Server.Relay
 {
     public class Program
     {

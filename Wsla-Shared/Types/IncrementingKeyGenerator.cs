@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Wsla.Shared.Global
+namespace Wsla
 {
     public class IncrementingKeyGenerator<TKey>
         where TKey : struct

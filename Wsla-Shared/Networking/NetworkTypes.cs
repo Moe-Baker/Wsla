@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 
-namespace Wsla.Shared.Global
+using Wsla.Serialization;
+
+[assembly: NetworkSerializationResolverRegisteration(typeof(Wsla.NetworkTypeSerializationResolver), 0, "Register")]
+
+namespace Wsla
 {
     public static class NetworkTypes
     {
@@ -67,6 +71,35 @@ namespace Wsla.Shared.Global
 
             Add<ChangeScenesRequest>(ref counter);
             Add<ChangeScenesCommand>(ref counter);
+        }
+    }
+
+    public class NetworkTypeSerializationResolver : NetworkSerializationResolver<Type>
+    {
+        public override void Write<TStream>(in Type value, ref TStream stream)
+        {
+            if (NetworkTypes.TryGet(value, out var id) is false)
+                throw new ArgumentException($"Type ({value}) not Registered as NetworkType");
+
+            NetworkSerializer.WriteValue(in id, ref stream);
+        }
+
+        public override void Read<TStream>(ref Type value, ref TStream stream)
+        {
+            var id = ReadValue(ref stream);
+
+            if (NetworkTypes.TryGet(id, out var type) is false)
+                throw new ArgumentException($"No NetworkType with ID {id} Registered");
+
+            value = type;
+        }
+
+        public static byte ReadValue<TStream>(ref TStream stream) where TStream : INetworkStream
+            => NetworkSerializer.ReadValue<byte, TStream>(ref stream);
+
+        static void Register()
+        {
+            NetworkSerializationResolver.Register<Type, NetworkTypeSerializationResolver>();
         }
     }
 }

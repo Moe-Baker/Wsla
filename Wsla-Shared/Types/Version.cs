@@ -1,7 +1,10 @@
 ﻿using System;
 
-namespace Wsla.Shared.Global
+using Wsla.Serialization;
+
+namespace Wsla
 {
+    [NetworkBlittable]
     public struct Version : IEquatable<Version>
     {
         public byte Major { get; }

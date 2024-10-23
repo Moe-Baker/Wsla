@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Wsla.Serialization
 {
@@ -53,9 +55,19 @@ namespace Wsla.Serialization
 
         static NetworkSerializationResolver()
         {
-            Register<byte, ByteNetworkSerializationResolver>();
-            Register<int, IntNetworkSerializationResolver>();
-            Register<float, FloatNetworkSerializationResolver>();
+            Register<byte, BlittableNetworkSerializationResolver<byte>>();
+            Register<sbyte, BlittableNetworkSerializationResolver<sbyte>>();
+
+            Register<short, BlittableNetworkSerializationResolver<short>>();
+            Register<ushort, BlittableNetworkSerializationResolver<ushort>>();
+
+            Register<int, BlittableNetworkSerializationResolver<int>>();
+            Register<uint, BlittableNetworkSerializationResolver<uint>>();
+
+            Register<float, BlittableNetworkSerializationResolver<float>>();
+            Register<double, BlittableNetworkSerializationResolver<double>>();
+
+            Register<string, StringNetworkSerializationResolver>();
 
             Registeration.LoadAll();
         }
@@ -71,35 +83,77 @@ namespace Wsla.Serialization
     }
 
     #region Poco
-    public class ByteNetworkSerializationResolver : NetworkSerializationResolver<byte>
+    public class StringNetworkSerializationResolver : NetworkSerializationResolver<string>
     {
-        public override void Write<TStream>(in byte value, ref TStream stream)
+        static Encoding Encoder => Encoding.UTF8;
+
+        public override void Write<TStream>(in string value, ref TStream stream)
         {
-            var span = stream.Take(1);
-            span[0] = value;
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in value, value.Length, ref stream))
+                return;
+
+            if (value.Length <= 1024)
+            {
+                //Small strings optimization
+
+                Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
+
+                var written = Encoder.GetBytes(value, buffer);
+
+                var destination = stream.Take(written);
+
+                buffer.Slice(0, written).CopyTo(destination);
+            }
+            else
+            {
+                var buffer = stream.Take(Encoder.GetByteCount(value));
+
+                Encoder.GetBytes(value, buffer);
+            }
+
+            var count = Encoder.GetByteCount(value);
         }
-        public override void Read<TStream>(ref byte value, ref TStream stream)
+
+        public override void Read<TStream>(ref string value, ref TStream stream)
         {
-            var span = stream.Take(1);
-            value = span[0];
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            {
+                value = null;
+                return;
+            }
+
+            var span = stream.Take(length);
+
+            value = Encoder.GetString(span);
         }
     }
 
-    public class IntNetworkSerializationResolver : NetworkSerializationResolver<int>
+    public unsafe class EnumNetworkSerializationResolver<TEnum, TBacking> : NetworkSerializationResolver<TEnum>
+        where TEnum : unmanaged, Enum
+        where TBacking : unmanaged
     {
-        public override void Write<TStream>(in int value, ref TStream stream)
-            => NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
-        public override void Read<TStream>(ref int value, ref TStream stream)
-            => NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
-    }
+        readonly int Size = sizeof(TBacking);
 
-    public class FloatNetworkSerializationResolver : NetworkSerializationResolver<float>
-    {
-        public override void Write<TStream>(in float value, ref TStream stream)
-            => NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
+        public override void Write<TStream>(in TEnum value, ref TStream stream)
+        {
+            var buffer = stream.Take(Size);
 
-        public override void Read<TStream>(ref float value, ref TStream stream)
-            => NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
+            fixed (void* source = &value)
+            fixed (void* destination = buffer)
+            {
+                Buffer.MemoryCopy(source, destination, Size, Size);
+            }
+        }
+        public override void Read<TStream>(ref TEnum value, ref TStream stream)
+        {
+            var buffer = stream.Take(Size);
+
+            fixed (void* source = buffer)
+            fixed (void* destination = &value)
+            {
+                Buffer.MemoryCopy(source, destination, Size, Size);
+            }
+        }
     }
     #endregion
 
@@ -113,7 +167,7 @@ namespace Wsla.Serialization
                 return;
 
             for (int i = 0; i < array.Length; i++)
-                NetworkSerializer.Write(array[i], ref stream);
+                NetworkSerializer.WriteValue(array[i], ref stream);
         }
 
         public override void Read<TStream>(ref TValue[] array, ref TStream stream)
@@ -134,7 +188,7 @@ namespace Wsla.Serialization
                 array = new TValue[length];
 
             for (int i = 0; i < length; i++)
-                array[i] = NetworkSerializer.Read<TValue, TStream>(ref stream);
+                array[i] = NetworkSerializer.ReadValue<TValue, TStream>(ref stream);
         }
     }
 
@@ -146,7 +200,7 @@ namespace Wsla.Serialization
             NetworkSerializer.Helper.Length.Write(segment.Count, ref stream);
 
             for (int i = 0; i < segment.Count; i++)
-                NetworkSerializer.Write(segment[i], ref stream);
+                NetworkSerializer.WriteValue(segment[i], ref stream);
         }
 
         public override void Read<TStream>(ref ArraySegment<TValue> segment, ref TStream stream)
@@ -165,7 +219,7 @@ namespace Wsla.Serialization
                 segment = new ArraySegment<TValue>(segment.Array, 0, length);
 
             for (int i = 0; i < length; i++)
-                segment[i] = NetworkSerializer.Read<TValue, TStream>(ref stream);
+                segment[i] = NetworkSerializer.ReadValue<TValue, TStream>(ref stream);
         }
     }
 
@@ -178,7 +232,7 @@ namespace Wsla.Serialization
                 return;
 
             for (int i = 0; i < list.Count; i++)
-                NetworkSerializer.Write(list[i], ref stream);
+                NetworkSerializer.WriteValue(list[i], ref stream);
         }
 
         public override void Read<TStream>(ref List<TValue> list, ref TStream stream)
@@ -201,7 +255,7 @@ namespace Wsla.Serialization
 
             for (int i = 0; i < length; i++)
             {
-                var item = NetworkSerializer.Read<TValue, TStream>(ref stream);
+                var item = NetworkSerializer.ReadValue<TValue, TStream>(ref stream);
                 list.Add(item);
             }
         }
@@ -286,11 +340,11 @@ namespace Wsla.Serialization
             switch (Mode)
             {
                 case AutoSerializationMode.Write:
-                    NetworkSerializer.Write(in value, ref stream);
+                    NetworkSerializer.WriteValue(in value, ref stream);
                     break;
 
                 case AutoSerializationMode.Read:
-                    NetworkSerializer.Read(ref value, ref stream);
+                    NetworkSerializer.ReadValue(ref value, ref stream);
                     break;
 
                 default: throw new NotImplementedException();

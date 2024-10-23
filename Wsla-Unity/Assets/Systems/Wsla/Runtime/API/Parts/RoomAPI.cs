@@ -16,7 +16,7 @@ using Toolbox;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-using Wsla.Shared.Global;
+using Wsla.Serialization;
 
 namespace Wsla.Unity
 {
@@ -59,13 +59,12 @@ namespace Wsla.Unity
 
                 void ReceiveCallback(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
                 {
-                    var type = NetworkSerializer.ReadType(in reader);
-                    var id = NetworkTypes.Get(type);
+                    var id = NetworkTypeSerializationResolver.ReadValue(ref reader);
 
                     var handler = Handlers[id];
                     if (handler is null)
                     {
-                        NetworkLog.Error($"No Dispatch Handler Provided for {type} Message");
+                        NetworkLog.Error($"No Dispatch Handler Provided for {NetworkTypes.Get(id)} Message");
                         return;
                     }
 
@@ -75,7 +74,7 @@ namespace Wsla.Unity
                 }
 
                 public delegate void TypeDelegate<T>(ref T message, NetPacketReader reader, byte channel, DeliveryMethod delivery);
-                public void Register<T>(TypeDelegate<T> handler)
+                public void Register<[NetworkSerializationMarker] T>(TypeDelegate<T> handler)
                 {
                     var id = NetworkTypes.Get<T>();
 
@@ -83,7 +82,7 @@ namespace Wsla.Unity
 
                     void Surrogate(NetPacketReader reader, byte channel, DeliveryMethod delivery)
                     {
-                        var data = NetworkSerializer.ReadValue<T>(in reader);
+                        NetworkSerializer.ReadValue(ref reader, out T data);
                         handler(ref data, reader, channel, delivery);
                     }
                 }
@@ -276,8 +275,9 @@ namespace Wsla.Unity
 
                 //Request
                 {
-                    var packet = new NetDataWriter(true, 128);
-                    MemoryPackSerializer.Serialize(packet, request);
+                    var packet = Room.Transport.PacketWriter.Take();
+
+                    NetworkSerializer.WriteValue(in request, ref packet);
 
                     var endpoint = new IPEndPoint(Address, Port);
 
@@ -320,11 +320,11 @@ namespace Wsla.Unity
                 }
             }
 
-            public void Send<T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
+            public void Send<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
                 var writer = PacketWriter.Take();
 
-                NetworkSerializer.WriteHeader(in writer, data);
+                NetworkSerializer.WriteHeader(data, ref writer);
 
                 Send(writer, channel, delivery);
             }
@@ -376,7 +376,7 @@ namespace Wsla.Unity
                         throw new InvalidOperationException("No Local Client Received in Response");
 
                     //Sync Spawn Tokens
-                    Local.ReadSpawnTokens(reader, message);
+                    Local.ReadSpawnTokens(ref reader, message);
 
                     //Sync Scenes
                     await Room.Scenes.ReadState(reader, message);
@@ -392,7 +392,7 @@ namespace Wsla.Unity
             {
                 for (int i = 0; i < message.Clients; i++)
                 {
-                    var id = NetworkClient.ReadID(reader);
+                    var id = NetworkClient.ReadID(ref reader);
 
                     var isLocal = id == message.ID;
 
@@ -403,7 +403,7 @@ namespace Wsla.Unity
                     else
                         client = new RemoteNetworkClient(id);
 
-                    client.ReadState(reader);
+                    client.ReadState(ref reader);
 
                     Register(client);
                 }
@@ -411,7 +411,7 @@ namespace Wsla.Unity
 
             void ClientConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var client = RemoteNetworkClient.ReadInstance(in reader);
+                var client = RemoteNetworkClient.ReadInstance(ref reader);
 
                 Register(client);
             }
@@ -738,7 +738,7 @@ namespace Wsla.Unity
 
                 for (int i = 0; i < message.Scenes; i++)
                 {
-                    var id = NetworkSerializer.ReadValue<NetworkSceneID>(in reader);
+                    var id = NetworkSerializer.ReadValue<NetworkSceneID, NetPacketReader>(ref reader);
                     list.Add(id);
                 }
 
@@ -896,13 +896,13 @@ namespace Wsla.Unity
 
         public bool IsLocal => this is LocalNetworkClient;
 
-        public static NetworkClientID ReadID(NetPacketReader reader)
+        public static NetworkClientID ReadID(ref NetPacketReader reader)
         {
-            return NetworkSerializer.ReadValue<NetworkClientID>(reader);
+            return NetworkSerializer.ReadValue<NetworkClientID, NetPacketReader>(ref reader);
         }
-        public virtual void ReadState(NetPacketReader reader)
+        public virtual void ReadState(ref NetPacketReader reader)
         {
-            Username = NetworkSerializer.ReadValue<string>(reader);
+            Username = NetworkSerializer.ReadValue<string, NetPacketReader>(ref reader);
         }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
@@ -915,13 +915,13 @@ namespace Wsla.Unity
 
     public class RemoteNetworkClient : NetworkClient
     {
-        public static RemoteNetworkClient ReadInstance(in NetPacketReader reader)
+        public static RemoteNetworkClient ReadInstance(ref NetPacketReader reader)
         {
-            var id = ReadID(reader);
+            var id = ReadID(ref reader);
 
             var client = new RemoteNetworkClient(id);
 
-            client.ReadState(reader);
+            client.ReadState(ref reader);
 
             return client;
         }
@@ -943,11 +943,11 @@ namespace Wsla.Unity
             return SpawnTokens.Dequeue();
         }
 
-        internal void ReadSpawnTokens(NetPacketReader reader, ClientConnectionResponse message)
+        internal void ReadSpawnTokens(ref NetPacketReader reader, ClientConnectionResponse message)
         {
             for (int i = 0; i < message.SpawnTokens; i++)
             {
-                var token = NetworkSerializer.ReadValue<NetworkEntityID>(in reader);
+                var token = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
                 AddSpawnToken(token);
             }
         }
