@@ -1,8 +1,10 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
@@ -36,6 +38,14 @@ namespace Wsla.Generator
             public IAssemblySymbol Assembly;
             public INamedTypeSymbol MarkerAttribute;
 
+            public INamedTypeSymbol ArrayResolver;
+
+            public INamedTypeSymbol ListResolver;
+            public INamedTypeSymbol ListType;
+
+            public INamedTypeSymbol ArraySegmentResolver;
+            public INamedTypeSymbol ArraySegmentType;
+
             public INamedTypeSymbol ManualResolver;
             public INamedTypeSymbol ManualContract;
 
@@ -65,6 +75,14 @@ namespace Wsla.Generator
                     Assembly = compilation.Assembly,
                     MarkerAttribute = compilation.GetTypeByMetadataName(Constants.NetworkSerializationMarkerAttribute),
 
+                    ArrayResolver = compilation.GetGenericTypeByMetadataName(Constants.ArrayNetworkSerializationResolver, 1),
+
+                    ArraySegmentResolver = compilation.GetGenericTypeByMetadataName(Constants.ArraySegmentNetworkSerializationResolver, 1),
+                    ArraySegmentType = compilation.GetGenericTypeByMetadataName("System.ArraySegment", 1),
+
+                    ListResolver = compilation.GetGenericTypeByMetadataName(Constants.ListNetworkSerializationResolver, 1),
+                    ListType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.List", 1),
+
                     ManualResolver = compilation.GetGenericTypeByMetadataName(Constants.ManualNetworkSerializationResolver, 1),
                     ManualContract = compilation.GetTypeByMetadataName(Constants.IManualNetworkSerialization),
 
@@ -87,7 +105,7 @@ namespace Wsla.Generator
             return info.Symbol as IMethodSymbol;
         }
 
-        static INamedTypeSymbol GetGeneratorUsageType((IMethodSymbol Method, CompilationData Compilation) input, CancellationToken token)
+        static ITypeSymbol GetGeneratorUsageType((IMethodSymbol Method, CompilationData Compilation) input, CancellationToken token)
         {
             var parameters = input.Method.TypeParameters;
             var arguments = input.Method.TypeArguments;
@@ -96,8 +114,10 @@ namespace Wsla.Generator
             {
                 if (CodeUtility.HasAttribute(parameters[i], input.Compilation.MarkerAttribute))
                 {
-                    if (arguments[i] is INamedTypeSymbol type)
-                        return type;
+                    if (arguments[i].TypeKind is TypeKind.TypeParameter)
+                        continue;
+
+                    return arguments[i];
                 }
             }
 
@@ -106,7 +126,7 @@ namespace Wsla.Generator
 
         static bool IsNotNull<T>(T item) where T : class => ReferenceEquals(item, null) is false;
 
-        static void WriteUsages(SourceProductionContext context, (ImmutableArray<INamedTypeSymbol> Usages, CompilationData Compilation) source)
+        static void WriteUsages(SourceProductionContext context, (ImmutableArray<ITypeSymbol> Usages, CompilationData Compilation) source)
         {
             try
             {
@@ -126,8 +146,12 @@ namespace Wsla.Generator
             CodeUtility.Log("DONE");
         }
 
-        public static void WriteResolverRegisteration(CodeStringBuilder builder, CompilationData compilation, string prefix, ImmutableArray<INamedTypeSymbol> usages)
+        public static bool WriteResolverRegisteration(CodeStringBuilder builder, CompilationData compilation, string prefix, ImmutableArray<ITypeSymbol> usages)
         {
+            var resolvers = ResolveUsages(compilation, usages);
+            if (resolvers.Count is 0)
+                return false;
+
             //Assembly attribute
             builder.Write("[assembly: ");
             builder.Write(Constants.NetworkSerializationResolverRegisterationAttribute);
@@ -155,37 +179,29 @@ namespace Wsla.Generator
                     builder.Write("public static void Register()");
                     using (builder.CodeBlock())
                     {
-                        foreach (var usage in usages)
+                        foreach (var pair in resolvers)
                         {
-                            if (Resolvers.TryCreate(compilation, usage, out var resolver))
+                            builder.Write(Constants.NetworkSerializationResolver);
+                            builder.Write(".Register");
+
+                            using (builder.GenericArguments())
                             {
-                                builder.Write(Constants.NetworkSerializationResolver);
-                                builder.Write(".Register");
-
-                                using (builder.GenericArguments())
-                                {
-                                    builder.Write(usage);
-                                    builder.Write(", ");
-                                    builder.Write(resolver);
-                                }
-
-                                using (builder.Parameters()) { }
-
-                                builder.EndLine();
+                                builder.Write(pair.Key);
+                                builder.Write(", ");
+                                builder.Write(pair.Value);
                             }
-                            else
-                            {
-                                builder.Write("//");
-                                builder.Write(usage);
-                                builder.Write(" -- > ");
-                                builder.Write("// No Resolver found for Type");
-                            }
+
+                            using (builder.Parameters()) { }
+
+                            builder.EndLine();
 
                             builder.Newline();
                         }
                     }
                 }
             }
+
+            return true;
 
             void WriteClassName()
             {
@@ -200,12 +216,23 @@ namespace Wsla.Generator
                 builder.Write(".Generated");
             }
         }
+        static Dictionary<ITypeSymbol, INamedTypeSymbol> ResolveUsages(CompilationData compilation, ImmutableArray<ITypeSymbol> usages)
+        {
+            var resolvers = new Dictionary<ITypeSymbol, INamedTypeSymbol>(usages.Length * 2, SymbolEqualityComparer.Default);
+
+            foreach (var usage in usages)
+                Resolvers.Resolve(compilation, usage, resolvers);
+
+            return resolvers;
+        }
 
         public class Constants : GlobalNetworkGenerator.Constants
         {
             public static readonly string Namespace = $"{Name}.Serialization";
 
             public static readonly string NetworkSerializationResolver = $"{Namespace}.{nameof(NetworkSerializationResolver)}";
+
+            public static readonly string NetworkSerializationResolverRegisterationAttribute = $"{Namespace}.{nameof(NetworkSerializationResolverRegisterationAttribute)}";
 
             public static readonly string NetworkSerializationMarkerAttribute = $"{Namespace}.{nameof(NetworkSerializationMarkerAttribute)}";
 
@@ -221,60 +248,128 @@ namespace Wsla.Generator
 
             public static readonly string BlittableNetworkSerializationResolver = $"{Namespace}.{nameof(BlittableNetworkSerializationResolver)}";
             public static readonly string NetworkBlittableAttribute = $"{Namespace}.{nameof(NetworkBlittableAttribute)}";
-
-            public static readonly string NetworkSerializationResolverRegisterationAttribute = $"{Namespace}.{nameof(NetworkSerializationResolverRegisterationAttribute)}";
         }
 
         public class Resolvers
         {
-            public static bool TryCreate(CompilationData compilation, INamedTypeSymbol usage, out INamedTypeSymbol resolver)
+            public static bool Resolve(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
-                if (TryResolveBlittable(compilation, usage, out resolver))
+                //Early exit for duplicates
+                if (resolvers.ContainsKey(usage))
                     return true;
 
-                if (TryResolveManual(compilation, usage, out resolver))
+                //Blittable
+                if (ResolveBlittable(compilation, usage, resolvers))
                     return true;
 
-                if (TryResolveAuto(compilation, usage, out resolver))
+                //Manual
+                if (ResolveManual(compilation, usage, resolvers))
                     return true;
 
-                resolver = default;
+                //Auto
+                if (ResolveAuto(compilation, usage, resolvers))
+                    return true;
+
+                //Array
+                if (ResolveArray(compilation, usage, resolvers))
+                    return true;
+
+                //Array Segment
+                if (ResolveArraySegment(compilation, usage, resolvers))
+                    return true;
+
+                //List
+                if (ResolveList(compilation, usage, resolvers))
+                    return true;
+
                 return false;
             }
 
-            static bool TryResolveManual(CompilationData compilation, INamedTypeSymbol usage, out INamedTypeSymbol resolver)
+            static bool ResolveArray(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                var array = usage as IArrayTypeSymbol;
+
+                if (array is null)
+                    return false;
+
+                var element = array.ElementType;
+
+                resolvers[usage] = compilation.ArrayResolver.Construct(element);
+
+                Resolve(compilation, element, resolvers);
+
+                return true;
+            }
+            static bool ResolveArraySegment(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                var segment = usage as INamedTypeSymbol;
+
+                if (segment is null)
+                    return false;
+
+                if (segment.IsGenericType is false)
+                    return false;
+
+                if (CodeUtility.SymbolEquality.Equals(segment.ConstructedFrom, compilation.ArraySegmentType) is false)
+                    return false;
+
+                var element = segment.TypeArguments[0];
+
+                resolvers[usage] = compilation.ArraySegmentResolver.Construct(element);
+
+                Resolve(compilation, element, resolvers);
+
+                return true;
+            }
+            static bool ResolveList(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                var list = usage as INamedTypeSymbol;
+
+                if (list is null)
+                    return false;
+
+                if (list.IsGenericType is false)
+                    return false;
+
+                if (CodeUtility.SymbolEquality.Equals(list.ConstructedFrom, compilation.ListType) is false)
+                    return false;
+
+                var element = list.TypeArguments[0];
+
+                resolvers[usage] = compilation.ListResolver.Construct(element);
+
+                Resolve(compilation, element, resolvers);
+
+                return true;
+            }
+
+            static bool ResolveManual(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.ImplementsInterface(compilation.ManualContract) is false)
-                {
-                    resolver = default;
                     return false;
-                }
 
-                resolver = compilation.ManualResolver.Construct(usage);
+                resolvers[usage] = compilation.ManualResolver.Construct(usage);
+
                 return true;
             }
 
-            static bool TryResolveAuto(CompilationData compilation, INamedTypeSymbol usage, out INamedTypeSymbol resolver)
+            static bool ResolveAuto(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.ImplementsInterface(compilation.AutoContract) is false)
-                {
-                    resolver = default;
                     return false;
-                }
 
-                resolver = compilation.AutoResolver.Construct(usage);
+                resolvers[usage] = compilation.AutoResolver.Construct(usage);
+
                 return true;
             }
 
-            static bool TryResolveBlittable(CompilationData compilation, INamedTypeSymbol usage, out INamedTypeSymbol resolver)
+            static bool ResolveBlittable(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (CodeUtility.HasAttribute(usage, compilation.BlittableAttribute) is false)
-                {
-                    resolver = default;
                     return false;
-                }
 
-                resolver = compilation.BlittableResolver.Construct(usage);
+                resolvers[usage] = compilation.BlittableResolver.Construct(usage);
+
                 return true;
             }
         }

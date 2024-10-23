@@ -13,4 +13,8 @@
 		<ProjectReference Include="..\Shared-Server\Shared-Server.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Analyzer Include="..\Network-Generator\publish\Wsla-Network-Generator.dll" />
+	</ItemGroup>
+
 </Project>

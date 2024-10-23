@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Net;
 
 using Cysharp.Threading.Tasks;
@@ -7,10 +8,21 @@ using Cysharp.Threading.Tasks;
 using Toolbox;
 
 using UnityEngine;
+using UnityEngine.Rendering.VirtualTexturing;
 
 using Wsla.Serialization;
 using Wsla.Shared.Global;
 using Wsla.Unity;
+
+[assembly: NetworkSerializationResolverRegisteration(typeof(Sample), 0, "Register")]
+
+public static class Sample
+{
+    public static void Register()
+    {
+        Debug.Log("hello world");
+    }
+}
 
 public class Sandbox : MonoBehaviour
 {
@@ -24,6 +36,11 @@ public class Sandbox : MonoBehaviour
     void Start()
     {
         Application.runInBackground = true;
+
+        Wsla.Serialization.NetworkSerializer.Clone(new Data());
+
+
+        return;
 
         Initialize().Forget();
     }
@@ -64,58 +81,8 @@ public class Sandbox : MonoBehaviour
     }
 }
 
-class Sample
-{
-    void Use()
-    {
-        Definition(new Example1());
-        Definition(new Example2());
-        Definition(new Example3());
-        Definition(new Example4());
-        Definition(new Example5());
-        Definition(new Example6.Example7());
-    }
-
-    void Definition<[NetworkSerializationMarker] TValue>(TValue value)
-    {
-
-    }
-}
-
 [NetworkBlittable]
-public struct Example1
+struct Data
 {
-    public int X, Y, Z;
-}
-
-public class Example2 : IManualNetworkSerialization
-{
-    public void Read<TStream>(ref TStream stream) where TStream : INetworkStream
-    {
-        throw new NotImplementedException();
-    }
-    public void Write<TStream>(ref TStream stream) where TStream : INetworkStream
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public class Example3 : Example2 { }
-
-public class Example4 : IAutoNetworkSerialization
-{
-    public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context) where TStream : INetworkStream
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public class Example5 : Example4 { }
-
-public class Example6 : Example5
-{
-    public class Example7 : Example5
-    {
-
-    }
+    public float X, Y, Z;
 }

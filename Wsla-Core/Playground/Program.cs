@@ -1,41 +1,15 @@
-﻿using Wsla.Generator;
+﻿using Wsla.Serialization;
 
-var builder = new CodeStringBuilder();
+INetworkStream stream = default;
 
-builder.Write("public class Example");
-
-using (builder.CodeBlock())
-{
-    builder.Write("public const string Text = ");
-    using (builder.StringDeclaration())
-    {
-        builder.Write("Hello World");
-    }
-    builder.EndLine();
-
-    builder.Newline();
-
-    builder.Write("public static int[] Array = new int[]");
-    using (builder.ArrayBlock())
-    {
-        builder.Write("1");
-        builder.EndLine(",");
-
-        builder.Write("2");
-        builder.EndLine(",");
-    }
-
-    builder.Newline();
-
-    builder.Write("public static void Write()");
-    using (builder.CodeBlock())
-    {
-        builder.Write("return Text");
-        builder.EndLine();
-    }
-}
-
-Console.Write(builder.ToString());
+NetworkSerializer.Write(new Data(), ref stream);
+NetworkSerializer.Write(new Data[0], ref stream);
 
 while (true)
     Console.ReadKey();
+
+[NetworkBlittable]
+struct Data
+{
+    public float X, Y, Z;
+}

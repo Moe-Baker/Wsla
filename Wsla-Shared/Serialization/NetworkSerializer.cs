@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Wsla.Serialization
@@ -250,6 +251,15 @@ namespace Wsla.Serialization
         public Type Type { get; }
         public int Order { get; }
         public string Entrypoint { get; }
+
+        public void Invoke()
+        {
+            const BindingFlags Binding = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+            var method = Type.GetMethod(Entrypoint, Binding);
+
+            method.Invoke(null, null);
+        }
 
         public NetworkSerializationResolverRegisterationAttribute(Type Type, int Order, string Entrypoint)
         {

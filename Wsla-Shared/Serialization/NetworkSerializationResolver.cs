@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Wsla.Serialization
 {
@@ -33,11 +34,30 @@ namespace Wsla.Serialization
             internal static NetworkSerializationResolver<TValue> Instance;
         }
 
+        public static class Registeration
+        {
+            public static void LoadAll()
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                    Load(assembly);
+            }
+
+            public static void Load(Assembly assembly)
+            {
+                var attributes = assembly.GetCustomAttributes<NetworkSerializationResolverRegisterationAttribute>();
+
+                foreach (var attribute in attributes)
+                    attribute.Invoke();
+            }
+        }
+
         static NetworkSerializationResolver()
         {
             Register<byte, ByteNetworkSerializationResolver>();
             Register<int, IntNetworkSerializationResolver>();
             Register<float, FloatNetworkSerializationResolver>();
+
+            Registeration.LoadAll();
         }
     }
 

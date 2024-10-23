@@ -21,6 +21,8 @@ namespace Wsla.Generator
             }
         }
 
+        public static bool DefaultEquality(this ISymbol right, ISymbol left) => SymbolEquality.Equals(right, left);
+
         public static bool HasAttribute(this ISymbol parameter, INamedTypeSymbol attribute)
         {
             var collection = parameter.GetAttributes();
@@ -48,7 +50,7 @@ namespace Wsla.Generator
             return compilation.GetTypeByMetadataName($"{name}`{generics}");
         }
 
-        public static bool ImplementsInterface(this INamedTypeSymbol type, INamedTypeSymbol target)
+        public static bool ImplementsInterface(this ITypeSymbol type, INamedTypeSymbol target)
         {
             return type.AllInterfaces.Contains(target);
         }

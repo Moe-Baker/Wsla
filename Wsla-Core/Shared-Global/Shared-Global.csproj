@@ -13,6 +13,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Analyzer Include="..\Network-Generator\publish\Wsla-Network-Generator.dll" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="MemoryPack" Version="1.21.3" />
 	</ItemGroup>
 </Project>
