@@ -71,6 +71,12 @@ namespace Wsla
 
             Add<ChangeScenesRequest>(ref counter);
             Add<ChangeScenesCommand>(ref counter);
+
+            Add<BroadcastNetworkRpcRequest>(ref counter);
+            Add<BufferNetworkRpcRequest>(ref counter);
+            Add<TargetNetworkRpcRequest>(ref counter);
+
+            Add<NetworkRpcCommand>(ref counter);
         }
     }
 

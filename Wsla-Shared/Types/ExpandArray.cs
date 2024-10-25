@@ -40,11 +40,6 @@ namespace Wsla
 
                 return item;
             }
-            set
-            {
-                Fit(index);
-                Collection[index] = value;
-            }
         }
 
         public bool TryGet(int index, out T value)
@@ -80,6 +75,7 @@ namespace Wsla
                 return false;
 
             element = item;
+            Count += 1;
             return true;
         }
 
@@ -96,6 +92,7 @@ namespace Wsla
                 return false;
 
             element = null;
+            Count -= 1;
             return true;
         }
 

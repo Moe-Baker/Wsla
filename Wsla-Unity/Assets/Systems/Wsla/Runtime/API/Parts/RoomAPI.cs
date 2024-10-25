@@ -9,13 +9,12 @@ using Cysharp.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
-using MemoryPack;
-
 using Toolbox;
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+using Wsla;
 using Wsla.Serialization;
 
 namespace Wsla.Unity
@@ -98,28 +97,7 @@ namespace Wsla.Unity
                 }
             }
 
-            public readonly PacketWriterProperty PacketWriter;
-            public struct PacketWriterProperty
-            {
-                NetDataWriter Instance;
-
-                public NetDataWriter Take()
-                {
-                    Instance.SetPosition(0);
-                    return Instance;
-                }
-
-                public PacketWriterProperty(NetDataWriter instance)
-                {
-                    this.Instance = instance;
-                }
-
-                public static PacketWriterProperty Create(int capacity)
-                {
-                    var instance = new NetDataWriter(true, capacity);
-                    return new PacketWriterProperty(instance);
-                }
-            }
+            public readonly SinglePacketWriter PacketWriter;
 
             public NetManager Manager { get; }
 
@@ -346,7 +324,7 @@ namespace Wsla.Unity
                 Manager = new NetManager(Listener);
                 Manager.AutoRecycle = false;
 
-                PacketWriter = PacketWriterProperty.Create(256);
+                PacketWriter = SinglePacketWriter.Create(256);
 
                 Dispatcher = new DispatcherProperty(this);
             }
@@ -358,6 +336,8 @@ namespace Wsla.Unity
             public LocalNetworkClient Local { get; private set; }
 
             ExpandArray<NetworkClient> Collection;
+            public byte Count => (byte)Collection.Count;
+            public bool TryGet(NetworkClientID id, out NetworkClient client) => Collection.TryGet(id.Value, out client);
 
             TransportProperty Transport => Room.Transport;
 
@@ -508,19 +488,17 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                public bool Send()
+                public NetworkEntity Send()
                 {
                     if (Validate() is false)
-                        return false;
+                        return default;
 
                     Token = Room.Clients.Local.RemoveSpawnToken();
-
-                    Room.Entities.SpawnLocal(this);
 
                     var request = new SpawnEntityRequest(Token, Resource);
                     Room.Transport.Send(in request);
 
-                    return true;
+                    return Room.Entities.SpawnLocal(this);
                 }
 
                 public SpawnOptions(RoomInstance Room)
@@ -560,6 +538,7 @@ namespace Wsla.Unity
 
                 var instance = response.Value;
 
+                instance.Set(Room);
                 instance.SetProperties(id, source, resource);
 
                 instance.Spawn();
@@ -582,6 +561,7 @@ namespace Wsla.Unity
 
                 var instance = response.Value;
 
+                instance.Set(Room);
                 instance.SetProperties(id, source, resource);
 
                 instance.Spawn();
@@ -590,23 +570,26 @@ namespace Wsla.Unity
                 Register(instance);
             }
 
-            void SpawnLocal(SpawnOptions options)
+            NetworkEntity SpawnLocal(SpawnOptions options)
             {
                 var response = InstantiatePrefab(options.Resource);
                 if (response.IsError)
                 {
                     NetworkLog.Error(response.Error);
                     Room.Shutdown();
-                    return;
+                    return default;
                 }
 
                 var instance = response.Value;
 
+                instance.Set(Room);
                 instance.SetProperties(options.Token, NetworkEntitySource.Prefab, options.Resource);
 
                 instance.Spawn();
 
                 Register(instance);
+
+                return instance;
             }
 
             Response<NetworkEntity, WslaError> RetrieveInstance(NetworkEntitySource source, NetworkEntityResource resource)

@@ -382,14 +382,14 @@ namespace LiteNetLib.Utils
         }
 
         #region Network Stream Implementation
-        void INetworkStream.Advance(int count)
+        public void Advance(int count)
         {
             _position += count;
         }
 
-        Span<byte> INetworkStream.GetRemaining() => Data.AsSpan(_position);
+        public Span<byte> GetRemaining() => Data.AsSpan(_position);
 
-        Span<byte> INetworkStream.Take(int count)
+        public Span<byte> Take(int count)
         {
             ResizeIfNeed(count);
 
@@ -399,6 +399,8 @@ namespace LiteNetLib.Utils
 
             return span;
         }
+
+        public void CopyTo(Span<byte> destination) => Data.AsSpan(0, _position).CopyTo(destination);
         #endregion
     }
 }

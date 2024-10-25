@@ -7,13 +7,15 @@ using Wsla.Serialization;
 
 namespace Wsla.Server
 {
-    public class Room : ThreadDispatcher.IJob
+    public class Room
     {
         public string Name { get; }
 
-        ThreadDispatcher.Processor? ThreadProcessor;
-        ThreadDispatcher.IJob? ThreadDispatcher.IJob.Next { get; set; }
-        ThreadDispatcher.IJob? ThreadDispatcher.IJob.Previous { get; set; }
+        RoomThreadDispatcher.Processor? ThreadProcessor;
+        public Room? Next { get; internal set; }
+        public Room? Previous { get; internal set; }
+
+        public GenericPool<NetDataWriter> PackerWriterPool => ThreadProcessor.PacketWritersPool;
 
         public TransportProperty Transport { get; }
         public class TransportProperty
@@ -23,28 +25,7 @@ namespace Wsla.Server
 
             public EventBasedNetListener Listener { get; }
 
-            public readonly PacketWriterProperty PacketWriter;
-            public struct PacketWriterProperty
-            {
-                NetDataWriter Instance;
-
-                public NetDataWriter Take()
-                {
-                    Instance.SetPosition(0);
-                    return Instance;
-                }
-
-                public PacketWriterProperty(NetDataWriter instance)
-                {
-                    this.Instance = instance;
-                }
-
-                public static PacketWriterProperty Create(int capacity)
-                {
-                    var instance = new NetDataWriter(true, capacity);
-                    return new PacketWriterProperty(instance);
-                }
-            }
+            public readonly SinglePacketWriter PacketWriter;
 
             public DispatcherProperty Dispatcher { get; }
             public class DispatcherProperty
@@ -168,7 +149,7 @@ namespace Wsla.Server
                 Manager = new NetManager(Listener);
                 Manager.IPv6Enabled = false;
 
-                PacketWriter = PacketWriterProperty.Create(256);
+                PacketWriter = SinglePacketWriter.Create(256);
 
                 Dispatcher = new DispatcherProperty(this);
             }
@@ -180,8 +161,8 @@ namespace Wsla.Server
             IncrementingKeyGenerator<NetworkClientID> IDGenerator;
 
             ExpandArray<NetworkClient> Collection;
-
-            public byte Count { get; private set; }
+            public byte Count => (byte)Collection.Count;
+            public bool TryGet(NetworkClientID id, out NetworkClient client) => Collection.TryGet(id.Value, out client);
 
             TransportProperty Transport => Room.Transport;
 
@@ -262,8 +243,6 @@ namespace Wsla.Server
 
                 NetworkLog.Info($"Client {client} Connected");
 
-                Count += 1;
-
                 Collection.Add(client.ID.Value, client);
 
                 //Broadcast To Others
@@ -307,8 +286,6 @@ namespace Wsla.Server
                 if (client is null)
                     throw new Exception("No Client Assigned to Peer");
 
-                Count -= 1;
-
                 NetworkLog.Info($"Client {client} Disconnected");
 
                 Collection.Remove(client.ID.Value);
@@ -351,6 +328,8 @@ namespace Wsla.Server
 
             internal Dictionary<NetworkEntityID, NetworkEntity> Dictionary;
             public ushort Count => (ushort)Dictionary.Count;
+
+            internal bool TryGet(NetworkEntityID id, [NotNullWhen(true)] out NetworkEntity entity) => Dictionary.TryGetValue(id, out entity);
 
             public readonly ushort ClientSpawnTokenAllowance = 50;
 
@@ -428,8 +407,79 @@ namespace Wsla.Server
             }
         }
 
-        public ScenesProperty Scenes { get; }
+        public RpcProperty RPCs { get; private set; }
+        public class RpcProperty
+        {
+            TransportProperty Transport => Room.Transport;
 
+            void BroadcastRequestHandler(NetworkClient sender, ref BroadcastNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} for Non-Existing Entity");
+                    return;
+                }
+
+                var writer = (message.Buffer is RemoteBufferMode.None) ? Transport.PacketWriter.Take() : Room.PackerWriterPool.Retrieve();
+
+                Transport.Broadcast(in writer, channel: channel, delivery: delivery, except: sender);
+            }
+
+            void BufferRequestHandler(NetworkClient sender, ref BufferNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} for Non-Existing Entity");
+                    return;
+                }
+
+                var writer = Room.PackerWriterPool.Retrieve();
+
+                Transport.Broadcast(in writer, channel: channel, delivery: delivery, except: sender);
+            }
+
+            void TargetRequestHandler(NetworkClient sender, ref TargetNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} for Non-Existing Entity");
+                    return;
+                }
+
+                var writer = Transport.PacketWriter.Take();
+
+                WriteCommand(sender, message.Parameters, reader, writer);
+
+                Transport.Send(sender, writer);
+            }
+
+            void WriteCommand(NetworkClient sender, NetworkRpcParameters parameters, NetPacketReader arguments, NetDataWriter destination)
+            {
+                var command = new NetworkRpcCommand(sender.ID, parameters);
+
+                NetworkSerializer.WriteHeader(in command, ref destination);
+
+                //Write Arguments
+                {
+                    var source = arguments.GetRemainingBytesSpan();
+                    var buffer = destination.Take(source.Length);
+
+                    source.CopyTo(buffer);
+                }
+            }
+
+            readonly Room Room;
+            public RpcProperty(Room Room)
+            {
+                this.Room = Room;
+
+                Transport.Dispatcher.Register<BroadcastNetworkRpcRequest>(BroadcastRequestHandler);
+                Transport.Dispatcher.Register<BufferNetworkRpcRequest>(BufferRequestHandler);
+                Transport.Dispatcher.Register<TargetNetworkRpcRequest>(TargetRequestHandler);
+            }
+        }
+
+        public ScenesProperty Scenes { get; }
         public class ScenesProperty
         {
             public List<NetworkScene> Collection { get; }
@@ -499,7 +549,7 @@ namespace Wsla.Server
             }
         }
 
-        public void Start(ThreadDispatcher Dispatcher)
+        public void Start(RoomThreadDispatcher Dispatcher)
         {
             Transport.Start();
             Clients.Start();
@@ -538,6 +588,7 @@ namespace Wsla.Server
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
             Scenes = new ScenesProperty(this);
+            RPCs = new RpcProperty(this);
         }
     }
 

@@ -1,9 +1,13 @@
-﻿using System.Collections.Concurrent;
+﻿using LiteNetLib.Utils;
+
+using System.Collections.Concurrent;
 using System.Diagnostics;
+
+using Wsla.Server;
 
 namespace Wsla
 {
-    public class ThreadDispatcher
+    public class RoomThreadDispatcher
     {
         Processor[] Processors;
         public class Processor
@@ -14,19 +18,21 @@ namespace Wsla
 
             internal volatile int Allocations;
 
-            readonly ConcurrentBag<IJob> Registerations;
+            readonly ConcurrentBag<Room> Registerations;
 
             readonly TimeSpan TickDuration;
 
-            IJob? First;
-            IJob? Last;
+            Room? First;
+            Room? Last;
 
             Stopwatch Stopwatch;
+
+            internal readonly GenericPool<NetDataWriter> PacketWritersPool;
 
             /// <summary>
             /// Thread safe registeration
             /// </summary>
-            public void Register(IJob item)
+            public void Register(Room item)
             {
                 Registerations.Add(item);
 
@@ -36,7 +42,7 @@ namespace Wsla
             /// <summary>
             /// Not thread safe unregisteration 
             /// </summary>
-            public void Unregister(IJob item)
+            public void Unregister(Room item)
             {
                 Remove(item);
 
@@ -105,7 +111,7 @@ namespace Wsla
                 }
             }
 
-            void Add(IJob item)
+            void Add(Room item)
             {
                 if (First is null)
                 {
@@ -118,7 +124,7 @@ namespace Wsla
                     Last = item;
                 }
             }
-            void Remove(IJob item)
+            void Remove(Room item)
             {
                 if (item == First)
                 {
@@ -156,7 +162,9 @@ namespace Wsla
                 this.ID = ID;
                 this.TickDuration = TickDuration;
 
-                Registerations = new ConcurrentBag<IJob>();
+                PacketWritersPool = new GenericPool<NetDataWriter>(() => new NetDataWriter(true, 128));
+
+                Registerations = new ConcurrentBag<Room>();
 
                 Stopwatch = new Stopwatch();
 
@@ -180,23 +188,13 @@ namespace Wsla
             return Processors[Marker.Index];
         }
 
-        public ThreadDispatcher(TimeSpan TickDuration) : this(Environment.ProcessorCount, TickDuration) { }
-        public ThreadDispatcher(int Count, TimeSpan TickDuration)
+        public RoomThreadDispatcher(TimeSpan TickDuration) : this(Environment.ProcessorCount, TickDuration) { }
+        public RoomThreadDispatcher(int Count, TimeSpan TickDuration)
         {
             Processors = new Processor[Count];
 
             for (int i = 0; i < Processors.Length; i++)
                 Processors[i] = new Processor(i, TickDuration);
-        }
-
-        public interface IJob
-        {
-            IJob? Next { get; set; }
-            IJob? Previous { get; set; }
-
-            void Receive();
-
-            void Send(TimeSpan elapsed);
         }
     }
 }

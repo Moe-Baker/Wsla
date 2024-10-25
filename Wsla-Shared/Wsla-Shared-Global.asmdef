@@ -1,6 +1,6 @@
 {
     "name": "Wsla-Shared-Global",
-    "rootNamespace": "",
+    "rootNamespace": "Wsla",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
