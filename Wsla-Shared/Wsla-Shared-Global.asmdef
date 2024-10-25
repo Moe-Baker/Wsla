@@ -1,9 +1,7 @@
 {
     "name": "Wsla-Shared-Global",
     "rootNamespace": "",
-    "references": [
-        "GUID:883642feda06fb3478d41d10475fa7ff"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
@@ -11,6 +9,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "Unity",
+            "expression": "2020",
+            "define": "WSLA_UNITY"
+        }
+    ],
     "noEngineReferences": false
 }

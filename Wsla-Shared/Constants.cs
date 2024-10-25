@@ -1,6 +1,4 @@
-﻿using Wsla.Serialization;
-
-namespace Wsla
+﻿namespace Wsla
 {
     public class Constants
     {

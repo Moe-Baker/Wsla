@@ -56,6 +56,18 @@ namespace Wsla.Serialization
         {
             public unsafe static class Blittable
             {
+                public static bool UseMemCopy
+                {
+                    get
+                    {
+#if WSLA_UNITY && UNITY_ANDROID || true
+                        return Environment.Is64BitOperatingSystem;
+#else
+                        return false;
+#endif
+                    }
+                }
+
                 public static void Write<TValue, TStream>(in TValue value, ref TStream stream)
                     where TValue : unmanaged
                     where TStream : INetworkStream
@@ -64,13 +76,18 @@ namespace Wsla.Serialization
 
                     fixed (byte* destination = span)
                     {
-#if UNITY_ANDROID
-                        var source = &instance;
-                        Buffer.MemoryCopy(source, destination, writer.Remaining, sizeof(T));
-#else
-                        ref var reference = ref Unsafe.AsRef<TValue>(destination);
-                        reference = value;
-#endif
+                        if (UseMemCopy)
+                        {
+                            fixed (void* source = &value)
+                            {
+                                Buffer.MemoryCopy(source, destination, span.Length, span.Length);
+                            }
+                        }
+                        else
+                        {
+                            ref var reference = ref Unsafe.AsRef<TValue>(destination);
+                            reference = value;
+                        }
                     }
                 }
                 public static void Read<TValue, TStream>(ref TValue value, ref TStream stream)
@@ -81,12 +98,17 @@ namespace Wsla.Serialization
 
                     fixed (byte* source = span)
                     {
-#if UNITY_ANDROID
-                        var destination = &value;
-                        Buffer.MemoryCopy(source, destination, reader.Remaining, sizeof(T));
-#else
-                        value = Unsafe.AsRef<TValue>(source);
-#endif
+                        if (UseMemCopy)
+                        {
+                            fixed (void* destination = &value)
+                            {
+                                Buffer.MemoryCopy(source, destination, span.Length, span.Length);
+                            }
+                        }
+                        else
+                        {
+                            value = Unsafe.AsRef<TValue>(source);
+                        }
                     }
                 }
             }

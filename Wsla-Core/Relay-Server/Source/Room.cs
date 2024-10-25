@@ -7,9 +7,13 @@ using Wsla.Serialization;
 
 namespace Wsla.Server
 {
-    public class Room
+    public class Room : ThreadDispatcher.IJob
     {
         public string Name { get; }
+
+        ThreadDispatcher.Processor? ThreadProcessor;
+        ThreadDispatcher.IJob? ThreadDispatcher.IJob.Next { get; set; }
+        ThreadDispatcher.IJob? ThreadDispatcher.IJob.Previous { get; set; }
 
         public TransportProperty Transport { get; }
         public class TransportProperty
@@ -18,8 +22,6 @@ namespace Wsla.Server
             public ushort Port => (ushort)Manager.LocalPort;
 
             public EventBasedNetListener Listener { get; }
-
-            CancellationTokenSource? CancellationSource;
 
             public readonly PacketWriterProperty PacketWriter;
             public struct PacketWriterProperty
@@ -95,21 +97,12 @@ namespace Wsla.Server
 
             public void Start()
             {
-                if (Manager.Start(Constants.RelayManagementPort) is false)
+                if (Manager.StartInManualMode(Constants.RelayManagementPort) is false)
                     throw new InvalidOperationException($"Can't Start Relay Server on Port {Constants.RelayManagementPort}");
 
-                NetworkLog.Trace($"Starting Room {Room} on Port {Port}");
-
-                CancellationSource = new CancellationTokenSource();
-
-                Poll(CancellationSource.Token);
+                NetworkLog.Info($"Starting Room {Room} on Port {Port}");
             }
-            public void Stop()
-            {
-                NetworkLog.Trace($"Stopping Room {Room}");
-
-                CancellationSource?.Cancel();
-            }
+            public void Stop() { }
 
             public void Send<[NetworkSerializationMarker] T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
@@ -152,17 +145,17 @@ namespace Wsla.Server
                 client.Peer.Disconnect(writer);
             }
 
-            async void Poll(CancellationToken cancellation)
+            internal void Receive()
             {
-                while (true)
-                {
-                    Manager.PollEvents();
+                Manager.PollEvents();
+            }
 
-                    await Task.Delay(5);
+            internal void Send(TimeSpan elapsed)
+            {
+                var tick = Convert.ToInt32(elapsed.TotalMilliseconds);
+                if (tick <= 0) tick = 1;
 
-                    if (cancellation.IsCancellationRequested)
-                        break;
-                }
+                Manager.ManualUpdate(tick);
             }
 
             readonly Room Room;
@@ -173,6 +166,7 @@ namespace Wsla.Server
                 Listener = new EventBasedNetListener();
 
                 Manager = new NetManager(Listener);
+                Manager.IPv6Enabled = false;
 
                 PacketWriter = PacketWriterProperty.Create(256);
 
@@ -218,7 +212,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                NetworkLog.Trace($"Connection Request from {data}");
+                NetworkLog.Info($"Connection Request from {data}");
 
                 //Reserve Client ID
                 if (IDGenerator.TryReserve(out var id) is false)
@@ -240,14 +234,12 @@ namespace Wsla.Server
                     return;
                 }
 
-                var peer = request.Accept();
-
-                var client = new NetworkClient(Room, peer, id, data.Username, spawnTokens.Length);
+                var client = new NetworkClient(Room, id, data.Username, spawnTokens.Length);
 
                 for (int i = 0; i < spawnTokens.Length; i++)
                     client.AddSpawnToken(spawnTokens[i]);
 
-                peer.Tag = client;
+                var peer = request.Accept(client);
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
@@ -265,6 +257,8 @@ namespace Wsla.Server
                 var client = peer.Tag as NetworkClient;
                 if (client is null)
                     throw new Exception("No Client Assigned to Peer");
+
+                client.AssignPeer(peer);
 
                 NetworkLog.Info($"Client {client} Connected");
 
@@ -435,6 +429,7 @@ namespace Wsla.Server
         }
 
         public ScenesProperty Scenes { get; }
+
         public class ScenesProperty
         {
             public List<NetworkScene> Collection { get; }
@@ -504,14 +499,28 @@ namespace Wsla.Server
             }
         }
 
-        public void Start()
+        public void Start(ThreadDispatcher Dispatcher)
         {
             Transport.Start();
             Clients.Start();
+
+            ThreadProcessor = Dispatcher.Retrieve();
+            ThreadProcessor.Register(this);
         }
         public void Stop()
         {
-            throw new NotImplementedException();
+            NetworkLog.Info($"Stopping Room {this}");
+
+            Transport.Stop();
+        }
+
+        public void Receive()
+        {
+            Transport.Receive();
+        }
+        public void Send(TimeSpan elapsed)
+        {
+            Transport.Send(elapsed);
         }
 
         public void Shutdown()
@@ -521,9 +530,9 @@ namespace Wsla.Server
 
         public override string ToString() => $"({Name})";
 
-        public Room(string name)
+        public Room(string Name)
         {
-            this.Name = name;
+            this.Name = Name;
 
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);
@@ -535,7 +544,12 @@ namespace Wsla.Server
     public class NetworkClient
     {
         public Room Room { get; }
-        public NetPeer Peer { get; }
+
+        public NetPeer? Peer { get; private set; }
+        internal void AssignPeer(NetPeer value)
+        {
+            this.Peer = value;
+        }
 
         public NetworkClientID ID { get; }
 
@@ -569,15 +583,14 @@ namespace Wsla.Server
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 
-        public NetworkClient(Room room, NetPeer peer, NetworkClientID id, string username, int spawnTokenCapacity)
+        public NetworkClient(Room Room, NetworkClientID ID, string Username, int SpawnTokenCapacity)
         {
-            this.Room = room;
-            this.Peer = peer;
+            this.Room = Room;
 
-            this.ID = id;
-            this.Username = username;
+            this.ID = ID;
+            this.Username = Username;
 
-            SpawnTokens = new Queue<NetworkEntityID>(spawnTokenCapacity);
+            SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
         }
     }
 

@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Threading;
+
 using LiteNetLib.Utils;
 
 namespace LiteNetLib
@@ -74,12 +75,12 @@ namespace LiteNetLib
         /// Accept connection and get new NetPeer as result
         /// </summary>
         /// <returns>Connected NetPeer</returns>
-        public NetPeer Accept()
+        public NetPeer Accept(object tag = null)
         {
             if (!TryActivate())
                 return null;
             Result = ConnectionRequestResult.Accept;
-            return _listener.OnConnectionSolved(this, null, 0, 0);
+            return _listener.OnConnectionSolved(this, null, 0, 0, tag);
         }
 
         public void Reject(byte[] rejectData, int start, int length, bool force)

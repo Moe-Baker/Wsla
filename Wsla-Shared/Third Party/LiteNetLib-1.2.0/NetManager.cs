@@ -670,7 +670,7 @@ namespace LiteNetLib
             ProcessNtpRequests(elapsedMilliseconds);
         }
 
-        internal NetPeer OnConnectionSolved(ConnectionRequest request, byte[] rejectData, int start, int length)
+        internal NetPeer OnConnectionSolved(ConnectionRequest request, byte[] rejectData, int start, int length, object tag = null)
         {
             NetPeer netPeer = null;
 
@@ -707,6 +707,7 @@ namespace LiteNetLib
                     else //Accept
                     {
                         netPeer = new NetPeer(this, request, GetNextPeerId());
+                        netPeer.Tag = tag;
                         AddPeer(netPeer);
                         CreateEvent(NetEvent.EType.Connect, netPeer);
                         NetDebug.Write(NetLogLevel.Trace, $"[NM] Received peer connection Id: {netPeer.ConnectTime}, EP: {netPeer}");

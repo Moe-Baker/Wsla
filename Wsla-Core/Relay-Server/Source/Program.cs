@@ -6,8 +6,12 @@
         {
             NetworkLog.UseConsole();
 
+            NetworkLog.Info($"System Processor Count: {Environment.ProcessorCount}");
+
+            var dispatcher = new ThreadDispatcher(TimeSpan.FromMilliseconds(10));
+
             var room = new Room("Sample Room");
-            room.Start();
+            room.Start(dispatcher);
 
             while (true)
                 Console.ReadKey();

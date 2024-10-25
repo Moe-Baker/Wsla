@@ -1,4 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<RootNamespace>Wsla</RootNamespace>
@@ -13,6 +14,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Analyzer Include="..\Network-Generator\publish\Wsla-Network-Generator.dll" />
+		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+			<OutputItemType>Analyzer</OutputItemType>
+		</ProjectReference>
 	</ItemGroup>
+	
 </Project>

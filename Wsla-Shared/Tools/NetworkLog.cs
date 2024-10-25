@@ -7,20 +7,27 @@ namespace Wsla
         public static HandlerDelegate Handler;
         public delegate void HandlerDelegate(NetworkLogType type, object item);
 
+        static object ThreadLock = new object();
+
         public static void UseConsole()
         {
             Handler = (type, item) =>
             {
-                Console.ForegroundColor = type switch
+                lock (ThreadLock)
                 {
-                    NetworkLogType.Trace => ConsoleColor.White,
-                    NetworkLogType.Info => ConsoleColor.DarkGreen,
-                    NetworkLogType.Warning => ConsoleColor.DarkYellow,
-                    NetworkLogType.Error => ConsoleColor.DarkRed,
-                    _ => throw new NotImplementedException(),
-                };
+                    Console.ForegroundColor = type switch
+                    {
+                        NetworkLogType.Trace => ConsoleColor.White,
+                        NetworkLogType.Info => ConsoleColor.DarkGreen,
+                        NetworkLogType.Warning => ConsoleColor.DarkYellow,
+                        NetworkLogType.Error => ConsoleColor.DarkRed,
+                        _ => throw new NotImplementedException(),
+                    };
 
-                Console.WriteLine($"[{type}] [{DateTime.Now}]: {item}");
+                    Console.WriteLine($"[{type}] [{DateTime.Now}]: {item}");
+
+                    Console.ResetColor();
+                }
             };
         }
 

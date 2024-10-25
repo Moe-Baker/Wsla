@@ -12,9 +12,12 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Shared-Server\Shared-Server.csproj" />
 	</ItemGroup>
-
+	
 	<ItemGroup>
-		<Analyzer Include="..\Network-Generator\publish\Wsla-Network-Generator.dll" />
+		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+			<OutputItemType>Analyzer</OutputItemType>
+		</ProjectReference>
 	</ItemGroup>
-
+	
 </Project>
