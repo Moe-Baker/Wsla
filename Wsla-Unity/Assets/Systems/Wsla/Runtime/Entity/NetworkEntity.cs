@@ -14,22 +14,60 @@ namespace Wsla.Unity
     public sealed class NetworkEntity : MonoBehaviour, IPreCache
     {
         public NetworkEntityID ID { get; private set; }
-        public NetworkEntitySource Source { get; private set; }
+        public NetworkEntityOrigin Origin { get; private set; }
         public NetworkEntityResource Resource { get; private set; }
-        internal void SetProperties(NetworkEntityID ID, NetworkEntitySource Source, NetworkEntityResource Resource)
+
+        public NetworkClient Owner { get; private set; }
+        internal int OwnerRegisteration;
+
+        public NetworkEntityAuthorityMode Authority { get; private set; }
+        public NetworkEntityLifetimeMode Lifetime { get; private set; }
+
+        public NetworkScene Scene { get; private set; }
+        internal int SceneRegisteration;
+
+        internal void AssignDefinition(NetworkEntityDefinition definition)
         {
-            this.ID = ID;
-            this.Source = Source;
-            this.Resource = Resource;
+            ID = definition.ID;
+            Origin = definition.Origin;
+            Resource = definition.Resource;
+
+            //Assign Scene
+            if (definition.HasScene)
+            {
+                if (Room.Scenes.TryGet(definition.Scene, out var reference) is false)
+                    throw new InvalidOperationException($"No Scene {definition.Scene} Found");
+
+                Scene = reference.Component;
+            }
+            else
+            {
+                Scene = default;
+            }
+
+            //Assign Owner
+            if (definition.DefinesOwner)
+            {
+                if (Room.Clients.TryGet(definition.Owner, out var reference) is false)
+                    throw new InvalidOperationException($"No Network Client {definition.Owner} Found");
+
+                Owner = reference;
+            }
+            else
+            {
+                Owner = Room.Clients.Master;
+            }
         }
 
         public RoomInstance Room { get; private set; }
-        internal void Set(RoomInstance reference)
+        internal void AssignRoom(RoomInstance reference)
         {
             this.Room = reference;
         }
 
+        #region Spawn
         public bool IsSpawned { get; private set; }
+
         internal void Spawn()
         {
             IsSpawned = true;
@@ -37,6 +75,15 @@ namespace Wsla.Unity
             OnSpawn?.Invoke();
         }
         public event Action OnSpawn;
+
+        internal void Despawn()
+        {
+            IsSpawned = false;
+
+            OnDespawn?.Invoke();
+        }
+        public event Action OnDespawn;
+        #endregion
 
         public bool IsReplicated { get; private set; }
         internal void Replicate()
@@ -46,13 +93,6 @@ namespace Wsla.Unity
             OnReplicated?.Invoke();
         }
         public event Action OnReplicated;
-
-        public void ReadState(ref NetPacketReader reader)
-        {
-            ID = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
-            Source = NetworkSerializer.ReadValue<NetworkEntitySource, NetPacketReader>(ref reader);
-            Resource = NetworkSerializer.ReadValue<NetworkEntityResource, NetPacketReader>(ref reader);
-        }
 
         [field: SerializeField]
         public BehavioursProperty Behaviours { get; private set; }
@@ -224,14 +264,6 @@ namespace Wsla.Unity
         public NetworkEntity()
         {
             Behaviours = new BehavioursProperty(this);
-        }
-
-        //Static Utility
-        public static void ReadProperties(NetPacketReader reader, out NetworkEntitySource source, out NetworkEntityResource resource, out NetworkEntityID id)
-        {
-            source = NetworkSerializer.ReadValue<NetworkEntitySource, NetPacketReader>(ref reader);
-            resource = NetworkSerializer.ReadValue<NetworkEntityResource, NetPacketReader>(ref reader);
-            id = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
         }
     }
 }

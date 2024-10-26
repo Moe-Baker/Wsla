@@ -68,6 +68,11 @@ namespace Wsla
         }
         public bool TryAdd(int index, T item)
         {
+#if DEBUG
+            if (IsAssigned(item) is false)
+                throw new InvalidOperationException($"Item Passed can't be null");
+#endif
+
             Fit(index);
 
             ref var element = ref Collection[index];

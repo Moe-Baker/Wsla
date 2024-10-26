@@ -9,10 +9,10 @@ namespace Wsla
         public WslaErrorCode Code;
         public string Description;
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context) where TStream : INetworkStream
+        public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref Code, ref stream);
-            context.Select(ref Description, ref stream);
+            context.Select(ref Code);
+            context.Select(ref Description);
         }
 
         public override string ToString()
@@ -39,7 +39,7 @@ namespace Wsla
             {
                 case DisconnectReason.ConnectionRejected:
                 case DisconnectReason.RemoteConnectionClose:
-                    return NetworkSerializer.ReadValue<WslaError, NetPacketReader>(ref info.AdditionalData);
+                    return NetworkSerializer.ReadValue<WslaError>(info.AdditionalData);
             }
 
             return From(WslaErrorCode.TransportFailure);
@@ -55,5 +55,7 @@ namespace Wsla
         SpawnTokenContractBroken = 5,
         SyncedPrefabNotFound = 6,
         SyncedPrefabWithoutNetworkEntity = 7,
+        NoSceneFoundForEntity = 8,
+        NoEntityFoundInScene = 9,
     }
 }

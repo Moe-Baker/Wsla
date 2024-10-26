@@ -2,37 +2,37 @@
 
 NetworkLog.UseConsole();
 
-var dispatcher = new ThreadDispatcher(TimeSpan.FromMilliseconds(500));
+var list = new ExpandList<Data>();
 
-for (int i = 0; i < 1; i++)
+list.Add(1);
+list.Add(2);
+list.Add(3);
+
+list.RemoveAt(0);
+list.RemoveAt(1);
+list.RemoveAt(2);
+
+list.Add(4);
+list.Add(5);
+
+foreach (var item in list)
 {
-    var job = new Job(dispatcher);
+    Console.WriteLine(item);
 }
 
 while (true)
     Console.ReadKey();
 
-class Job : ThreadDispatcher.IJob
+class Data
 {
-    ThreadDispatcher.IJob? ThreadDispatcher.IJob.Next { get; set; }
-    ThreadDispatcher.IJob? ThreadDispatcher.IJob.Previous { get; set; }
+    int Number;
 
-    readonly ThreadDispatcher.Processor Processor;
+    public override string ToString() => Number.ToString();
 
-    public void Send(TimeSpan elapsed)
+    public Data(int Number)
     {
-        Console.WriteLine("Debug");
+        this.Number = Number;
     }
 
-    public void Receive()
-    {
-        Console.WriteLine("Debug");
-    }
-
-    public Job(ThreadDispatcher dispatcher)
-    {
-        Processor = dispatcher.Retrieve();
-
-        Processor.Register(this);
-    }
+    public static implicit operator Data(int value) => new(value);
 }

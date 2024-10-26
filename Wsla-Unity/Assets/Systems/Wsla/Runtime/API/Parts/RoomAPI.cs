@@ -9,6 +9,8 @@ using Cysharp.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
+using NUnit.Framework;
+
 using Toolbox;
 
 using UnityEngine;
@@ -58,7 +60,7 @@ namespace Wsla.Unity
 
                 void ReceiveCallback(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
                 {
-                    var id = NetworkTypeSerializationResolver.ReadValue(ref reader);
+                    var id = NetworkTypeSerializationResolver.ReadValue(reader);
 
                     var handler = Handlers[id];
                     if (handler is null)
@@ -81,7 +83,7 @@ namespace Wsla.Unity
 
                     void Surrogate(NetPacketReader reader, byte channel, DeliveryMethod delivery)
                     {
-                        NetworkSerializer.ReadValue(ref reader, out T data);
+                        NetworkSerializer.ReadValue(reader, out T data);
                         handler(ref data, reader, channel, delivery);
                     }
                 }
@@ -255,7 +257,7 @@ namespace Wsla.Unity
                 {
                     var packet = Room.Transport.PacketWriter.Take();
 
-                    NetworkSerializer.WriteValue(in request, ref packet);
+                    NetworkSerializer.WriteValue(in request, packet);
 
                     var endpoint = new IPEndPoint(Address, Port);
 
@@ -298,15 +300,15 @@ namespace Wsla.Unity
                 }
             }
 
-            public void Send<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
+            public void SendData<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
                 var writer = PacketWriter.Take();
 
-                NetworkSerializer.WriteHeader(data, ref writer);
+                NetworkSerializer.WriteHeader(data, writer);
 
-                Send(writer, channel, delivery);
+                SendWriter(writer, channel, delivery);
             }
-            public void Send(in NetDataWriter writer, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
+            public void SendWriter(in NetDataWriter writer, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
                 Peer.Send(writer, channel, delivery);
             }
@@ -333,6 +335,7 @@ namespace Wsla.Unity
         public ClientsProperty Clients { get; }
         public class ClientsProperty
         {
+            public NetworkClient Master { get; private set; }
             public LocalNetworkClient Local { get; private set; }
 
             ExpandArray<NetworkClient> Collection;
@@ -355,8 +358,12 @@ namespace Wsla.Unity
                     if (Local is null)
                         throw new InvalidOperationException("No Local Client Received in Response");
 
+                    //Check if we didn't recieve the master client
+                    if (Master is null)
+                        throw new InvalidOperationException("No Master Client Received in Response");
+
                     //Sync Spawn Tokens
-                    Local.ReadSpawnTokens(ref reader, message);
+                    Local.ReadSpawnTokens(reader, message);
 
                     //Sync Scenes
                     await Room.Scenes.ReadState(reader, message);
@@ -372,18 +379,19 @@ namespace Wsla.Unity
             {
                 for (int i = 0; i < message.Clients; i++)
                 {
-                    var id = NetworkClient.ReadID(ref reader);
-
-                    var isLocal = id == message.ID;
+                    var id = NetworkClient.ReadID(reader);
 
                     NetworkClient client;
 
-                    if (isLocal)
-                        client = Local = new LocalNetworkClient(id, message.SpawnTokens);
+                    if (id == message.LocalID)
+                        client = Local = new LocalNetworkClient(Room, id, message.SpawnTokens);
                     else
-                        client = new RemoteNetworkClient(id);
+                        client = new RemoteNetworkClient(Room, id);
 
-                    client.ReadState(ref reader);
+                    if (id == message.MasterID)
+                        Master = client;
+
+                    client.ReadState(reader);
 
                     Register(client);
                 }
@@ -391,7 +399,7 @@ namespace Wsla.Unity
 
             void ClientConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var client = RemoteNetworkClient.ReadInstance(ref reader);
+                var client = RemoteNetworkClient.ReadInstance(Room, ref reader);
 
                 Register(client);
             }
@@ -448,9 +456,10 @@ namespace Wsla.Unity
                 readonly RoomInstance Room;
 
                 internal NetworkEntityID Token;
-
-                bool ResourceAssigned;
                 internal NetworkEntityResource Resource;
+                internal NetworkEntityAuthorityMode Authority;
+                internal NetworkEntityLifetimeMode Lifetime;
+                internal NetworkScene Scene;
 
                 public SpawnOptions SetResource(NetworkEntityResource value)
                 {
@@ -471,6 +480,37 @@ namespace Wsla.Unity
                     return this;
                 }
 
+                public SpawnOptions SetAuthority(NetworkEntityAuthorityMode mode)
+                {
+                    if (mode is NetworkEntityAuthorityMode.Authoritative && Room.Clients.Local.IsMaster is false)
+                    {
+                        NetworkLog.Error($"Can Only Spawn Items with {NetworkEntityAuthorityMode.Authoritative} Authority if Master Client");
+                        return this;
+                    }
+
+                    Authority = mode;
+                    return this;
+                }
+
+                public SpawnOptions SetLifetime(NetworkEntityLifetimeMode mode)
+                {
+                    Lifetime = mode;
+                    return this;
+                }
+
+                public SpawnOptions SetScene(NetworkSceneID id)
+                {
+                    if (Room.Scenes.TryGet(id, out var instance) is false)
+                    {
+                        NetworkLog.Error($"Can't Spawn Entity on Scene {id.Value}, Scene is not Loaded");
+                        return this;
+                    }
+
+                    Scene = instance.Component;
+                    return this;
+                }
+
+                bool ResourceAssigned;
                 bool Validate()
                 {
                     if (Room.Clients.Local.SpawnAllowance is 0)
@@ -485,6 +525,17 @@ namespace Wsla.Unity
                         return false;
                     }
 
+                    if (Scene is null)
+                    {
+                        if (Room.Scenes.Active is null)
+                        {
+                            NetworkLog.Error("Can't Spawn Objects Untill a Network Scene is Loaded");
+                            return false;
+                        }
+
+                        Scene = Room.Scenes.Active.Component;
+                    }
+
                     return true;
                 }
 
@@ -495,8 +546,8 @@ namespace Wsla.Unity
 
                     Token = Room.Clients.Local.RemoveSpawnToken();
 
-                    var request = new SpawnEntityRequest(Token, Resource);
-                    Room.Transport.Send(in request);
+                    var request = new SpawnEntityRequest(Token, Resource, Authority, Lifetime, Scene.ID);
+                    Room.Transport.SendData(in request);
 
                     return Room.Entities.SpawnLocal(this);
                 }
@@ -506,9 +557,12 @@ namespace Wsla.Unity
                     this.Room = Room;
 
                     Token = default;
+                    Resource = default;
+                    Authority = NetworkEntityAuthorityMode.Explicit;
+                    Lifetime = NetworkEntityLifetimeMode.Scene;
+                    Scene = default;
 
                     ResourceAssigned = false;
-                    Resource = default;
                 }
             }
 
@@ -526,9 +580,9 @@ namespace Wsla.Unity
             }
             void SpawnCommandHandler(ref SpawnEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                NetworkEntity.ReadProperties(reader, out var source, out var resource, out var id);
+                NetworkSerializer.ReadValue(reader, out NetworkEntityDefinition definition);
 
-                var response = RetrieveInstance(source, resource);
+                var response = RetrieveInstance(definition);
                 if (response.IsError)
                 {
                     NetworkLog.Error(response.Error);
@@ -538,8 +592,8 @@ namespace Wsla.Unity
 
                 var instance = response.Value;
 
-                instance.Set(Room);
-                instance.SetProperties(id, source, resource);
+                instance.AssignRoom(Room);
+                instance.AssignDefinition(definition);
 
                 instance.Spawn();
                 instance.Replicate();
@@ -549,9 +603,9 @@ namespace Wsla.Unity
 
             internal void SpawnBuffered(NetPacketReader reader)
             {
-                NetworkEntity.ReadProperties(reader, out var source, out var resource, out var id);
+                NetworkSerializer.ReadValue(reader, out NetworkEntityDefinition definition);
 
-                var response = RetrieveInstance(source, resource);
+                var response = RetrieveInstance(definition);
                 if (response.IsError)
                 {
                     NetworkLog.Error(response.Error);
@@ -561,8 +615,8 @@ namespace Wsla.Unity
 
                 var instance = response.Value;
 
-                instance.Set(Room);
-                instance.SetProperties(id, source, resource);
+                instance.AssignRoom(Room);
+                instance.AssignDefinition(definition);
 
                 instance.Spawn();
                 instance.Replicate();
@@ -572,6 +626,8 @@ namespace Wsla.Unity
 
             NetworkEntity SpawnLocal(SpawnOptions options)
             {
+                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, options.Lifetime, Room.Clients.Local.ID, options.Scene.ID);
+
                 var response = InstantiatePrefab(options.Resource);
                 if (response.IsError)
                 {
@@ -582,8 +638,8 @@ namespace Wsla.Unity
 
                 var instance = response.Value;
 
-                instance.Set(Room);
-                instance.SetProperties(options.Token, NetworkEntitySource.Prefab, options.Resource);
+                instance.AssignRoom(Room);
+                instance.AssignDefinition(definition);
 
                 instance.Spawn();
 
@@ -592,15 +648,23 @@ namespace Wsla.Unity
                 return instance;
             }
 
-            Response<NetworkEntity, WslaError> RetrieveInstance(NetworkEntitySource source, NetworkEntityResource resource)
+            Response<NetworkEntity, WslaError> RetrieveInstance(NetworkEntityDefinition definition)
             {
-                switch (source)
+                switch (definition.Origin)
                 {
-                    case NetworkEntitySource.Prefab:
-                        return InstantiatePrefab(resource);
+                    case NetworkEntityOrigin.Prefab:
+                        return InstantiatePrefab(definition.Resource);
 
-                    case NetworkEntitySource.Scene:
-                        throw new NotImplementedException();
+                    case NetworkEntityOrigin.Scene:
+                    {
+                        if (Room.Scenes.TryGet(definition.Scene, out var scene) is false)
+                            return WslaError.From(WslaErrorCode.NoSceneFoundForEntity);
+
+                        if (scene.Component.TryGet(definition.Resource, out var entity) is false)
+                            return WslaError.From(WslaErrorCode.NoEntityFoundInScene);
+
+                        return entity;
+                    }
 
                     default:
                         throw new NotImplementedException();
@@ -679,11 +743,9 @@ namespace Wsla.Unity
                 {
                     Operation = SceneManager.LoadSceneAsync(BuildIndex, mode);
                     await Operation;
-                }
 
-                internal void Unload()
-                {
-                    throw new NotImplementedException();
+                    while (IsRegistered is false)
+                        await UniTask.NextFrame();
                 }
 
                 public bool IsRegistered => Component != null;
@@ -695,12 +757,15 @@ namespace Wsla.Unity
                 }
                 public event Action OnRegister;
 
+                internal void Spawn() => Component.Spawn();
+                internal void Despawn() => Component.Despawn();
+
                 public Constructor(NetworkSceneID ID)
                 {
                     this.ID = ID;
                 }
             }
-            public bool TryFind(NetworkSceneID id, out Constructor target)
+            public bool TryGet(NetworkSceneID id, out Constructor target)
             {
                 for (int i = 0; i < Collection.Count; i++)
                 {
@@ -713,15 +778,24 @@ namespace Wsla.Unity
                 return false;
             }
 
+            public Constructor Active
+            {
+                get
+                {
+                    if (Collection.Count is 0)
+                        return default;
+
+                    return Collection[0];
+                }
+            }
+
             internal UniTask ReadState(NetPacketReader reader, ClientConnectionResponse message)
             {
-                var list = ChangeOptions.List;
-
-                list.Clear();
+                var list = ChangeOptions.ListPool.Take();
 
                 for (int i = 0; i < message.Scenes; i++)
                 {
-                    var id = NetworkSerializer.ReadValue<NetworkSceneID, NetPacketReader>(ref reader);
+                    NetworkSerializer.ReadValue(reader, out NetworkSceneID id);
                     list.Add(id);
                 }
 
@@ -729,12 +803,12 @@ namespace Wsla.Unity
             }
 
             public ChangeOptions Load(NetworkSceneID scene, NetworkSceneLoadMode mode) => new ChangeOptions(Room, mode, scene);
-            public ref struct ChangeOptions
+            public struct ChangeOptions
             {
                 readonly RoomInstance Room;
                 internal readonly NetworkSceneLoadMode LoadMode;
 
-                internal static List<NetworkSceneID> List = new List<NetworkSceneID>(Capacity);
+                internal List<NetworkSceneID> List;
                 public int Count => List.Count;
                 public const int Capacity = ChangeScenesRequest.Capacity;
 
@@ -764,13 +838,11 @@ namespace Wsla.Unity
                     //Replicate
                     {
                         var message = new ChangeScenesRequest(LoadMode, List);
-                        Room.Transport.Send(message);
+                        Room.Transport.SendData(message);
                     }
 
                     //Local
-                    {
-                        return Room.Scenes.ChangeProcedure(LoadMode, List);
-                    }
+                    return Room.Scenes.AuthorChange(ref this);
                 }
 
                 public ChangeOptions(RoomInstance Room, NetworkSceneLoadMode LoadMode, NetworkSceneID Scene)
@@ -778,10 +850,11 @@ namespace Wsla.Unity
                     this.Room = Room;
                     this.LoadMode = LoadMode;
 
-                    List.Clear();
-
+                    List = ListPool.Take();
                     List.Add(Scene);
                 }
+
+                internal static SingleInstancePool<List<NetworkSceneID>> ListPool = new(new(Capacity), x => x.Clear());
             }
 
             void ChangeCommandHandler(ref ChangeScenesCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -795,12 +868,14 @@ namespace Wsla.Unity
                 }
             }
 
+            UniTask AuthorChange(ref ChangeOptions options) => Room.Scenes.ChangeProcedure(options.LoadMode, options.List);
+
             public async UniTask ChangeProcedure(NetworkSceneLoadMode mode, List<NetworkSceneID> ids)
             {
                 if (mode is NetworkSceneLoadMode.Single)
                 {
                     for (int i = 0; i < Collection.Count; i++)
-                        Collection[i].Unload();
+                        Collection[i].Despawn();
 
                     Collection.Clear();
                 }
@@ -818,7 +893,7 @@ namespace Wsla.Unity
 
             internal void Register(NetworkScene scene)
             {
-                if (TryFind(scene.ID, out var constructor) is false)
+                if (TryGet(scene.ID, out var constructor) is false)
                 {
                     Debug.LogError($"NetworkScene Registered Without a Loading Operation");
                     return;
@@ -874,42 +949,46 @@ namespace Wsla.Unity
 
     public abstract class NetworkClient
     {
-        public NetworkClientID ID { get; private set; }
+        public NetworkClientID ID { get; }
         public string Username { get; private set; }
 
         public bool IsLocal => this is LocalNetworkClient;
+        public bool IsMaster => Room.Clients.Master == this;
 
-        public static NetworkClientID ReadID(ref NetPacketReader reader)
+        public RoomInstance Room { get; }
+
+        public static NetworkClientID ReadID(NetPacketReader reader)
         {
-            return NetworkSerializer.ReadValue<NetworkClientID, NetPacketReader>(ref reader);
+            return NetworkSerializer.ReadValue<NetworkClientID>(reader);
         }
-        public virtual void ReadState(ref NetPacketReader reader)
+        public virtual void ReadState(NetPacketReader reader)
         {
-            Username = NetworkSerializer.ReadValue<string, NetPacketReader>(ref reader);
+            Username = NetworkSerializer.ReadValue<string>(reader);
         }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 
-        public NetworkClient(NetworkClientID id)
+        public NetworkClient(RoomInstance Room, NetworkClientID ID)
         {
-            this.ID = id;
+            this.Room = Room;
+            this.ID = ID;
         }
     }
 
     public class RemoteNetworkClient : NetworkClient
     {
-        public static RemoteNetworkClient ReadInstance(ref NetPacketReader reader)
+        public static RemoteNetworkClient ReadInstance(RoomInstance room, ref NetPacketReader reader)
         {
-            var id = ReadID(ref reader);
+            var id = ReadID(reader);
 
-            var client = new RemoteNetworkClient(id);
+            var client = new RemoteNetworkClient(room, id);
 
-            client.ReadState(ref reader);
+            client.ReadState(reader);
 
             return client;
         }
 
-        public RemoteNetworkClient(NetworkClientID id) : base(id) { }
+        public RemoteNetworkClient(RoomInstance Room, NetworkClientID ID) : base(Room, ID) { }
     }
     public class LocalNetworkClient : NetworkClient
     {
@@ -926,19 +1005,19 @@ namespace Wsla.Unity
             return SpawnTokens.Dequeue();
         }
 
-        internal void ReadSpawnTokens(ref NetPacketReader reader, ClientConnectionResponse message)
+        internal void ReadSpawnTokens(NetPacketReader reader, ClientConnectionResponse message)
         {
             for (int i = 0; i < message.SpawnTokens; i++)
             {
-                var token = NetworkSerializer.ReadValue<NetworkEntityID, NetPacketReader>(ref reader);
+                var token = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
                 AddSpawnToken(token);
             }
         }
         #endregion
 
-        public LocalNetworkClient(NetworkClientID id, int spawnTokenCapacity) : base(id)
+        public LocalNetworkClient(RoomInstance Room, NetworkClientID ID, int SpawnTokenCapacity) : base(Room, ID)
         {
-            SpawnTokens = new Queue<NetworkEntityID>(spawnTokenCapacity);
+            SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
         }
     }
 }

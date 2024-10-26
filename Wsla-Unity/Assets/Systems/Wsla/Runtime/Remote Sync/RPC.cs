@@ -60,7 +60,7 @@ namespace Wsla.Unity
     {
         internal override void Invoke<TStream>(ref TStream reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref reader, out T1 arg1);
+            NetworkSerializer.ReadValue(reader, out T1 arg1);
 
             Method(arg1, info);
         }
@@ -135,52 +135,52 @@ namespace Wsla.Unity
 
         public RpcInvocationBuilder SetArguments<T1>(T1 arg1)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2>(T1 arg1, T2 arg2)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg5, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg5, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T5 arg6)
         {
-            NetworkSerializer.WriteValue(in arg1, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg5, ref ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg6, ref ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg5, ArgumentsWriter);
+            NetworkSerializer.WriteValue(in arg6, ArgumentsWriter);
 
             return this;
         }
@@ -229,11 +229,11 @@ namespace Wsla.Unity
                 var parameters = GetParameters();
                 var request = new BroadcastNetworkRpcRequest(BufferMode, parameters);
 
-                NetworkSerializer.WriteHeader(in request, ref PacketWriter);
+                NetworkSerializer.WriteHeader(in request, PacketWriter);
 
                 WriteArguments(PacketWriter);
 
-                Room.Transport.Send(in PacketWriter, channel: Channel, delivery: Delivery);
+                Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
             }
 
             //Local
@@ -250,11 +250,11 @@ namespace Wsla.Unity
             var parameters = GetParameters();
             var request = new BufferNetworkRpcRequest(BufferMode, parameters);
 
-            NetworkSerializer.WriteHeader(in request, ref PacketWriter);
+            NetworkSerializer.WriteHeader(in request, PacketWriter);
 
             WriteArguments(PacketWriter);
 
-            Room.Transport.Send(in PacketWriter, channel: Channel, delivery: Delivery);
+            Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
         }
 
         /// <summary>
@@ -282,11 +282,11 @@ namespace Wsla.Unity
             var parameters = GetParameters();
             var request = new TargetNetworkRpcRequest(Target, parameters);
 
-            NetworkSerializer.WriteHeader(in request, ref PacketWriter);
+            NetworkSerializer.WriteHeader(in request, PacketWriter);
 
             WriteArguments(PacketWriter);
 
-            Room.Transport.Send(in PacketWriter, channel: Channel, delivery: Delivery);
+            Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
         }
 
         void InvokeLocal()

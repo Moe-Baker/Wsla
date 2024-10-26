@@ -10,10 +10,9 @@ namespace Wsla
 
         public override string ToString() => $"(Username: {Username})";
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
+        public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref Username, ref stream);
+            context.Select(ref Username);
         }
 
         public ClientConnectionRequest(string Username)
@@ -21,31 +20,23 @@ namespace Wsla
             this.Username = Username;
         }
     }
-    public partial struct ClientConnectionResponse : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct ClientConnectionResponse
     {
-        public NetworkClientID ID;
+        public NetworkClientID LocalID;
+        public NetworkClientID MasterID;
 
         public byte Clients;
         public byte SpawnTokens;
         public byte Scenes;
         public ushort Entities;
 
-        public override string ToString() => $"(ClientID: {ID})";
+        public override string ToString() => $"(ClientID: {LocalID})";
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
+        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, byte Clients, byte SpawnTokens, byte Scenes, ushort Entities)
         {
-            context.Select(ref ID, ref stream);
-
-            context.Select(ref Clients, ref stream);
-            context.Select(ref SpawnTokens, ref stream);
-            context.Select(ref Scenes, ref stream);
-            context.Select(ref Entities, ref stream);
-        }
-
-        public ClientConnectionResponse(NetworkClientID ID, byte Clients, byte SpawnTokens, byte Scenes, ushort Entities)
-        {
-            this.ID = ID;
+            this.LocalID = LocalID;
+            this.MasterID = MasterID;
 
             this.Clients = Clients;
             this.SpawnTokens = SpawnTokens;
@@ -54,23 +45,15 @@ namespace Wsla
         }
     }
 
-    public partial struct ClientConnectMessage : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct ClientConnectMessage
     {
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
 
-        }
     }
-    public partial struct ClientDisconnectMessage : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct ClientDisconnectMessage
     {
         public NetworkClientID ID;
-
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
-            context.Select(ref ID, ref stream);
-        }
 
         public ClientDisconnectMessage(NetworkClientID ID)
         {
@@ -78,36 +61,34 @@ namespace Wsla
         }
     }
 
-    public partial struct SpawnEntityRequest : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct SpawnEntityRequest
     {
         public NetworkEntityID SpawnToken;
         public NetworkEntityResource Resource;
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
-            context.Select(ref SpawnToken, ref stream);
-            context.Select(ref Resource, ref stream);
-        }
+        public NetworkEntityAuthorityMode Authority;
+        public NetworkEntityLifetimeMode Lifetime;
 
-        public SpawnEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource)
+        public NetworkSceneID Scene;
+
+        public SpawnEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkEntityLifetimeMode Lifetime, NetworkSceneID Scene)
         {
             this.SpawnToken = SpawnToken;
+
             this.Resource = Resource;
+            this.Scene = Scene;
+
+            this.Authority = Authority;
+            this.Lifetime = Lifetime;
         }
     }
 
-    public partial struct SpawnEntityResponse : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct SpawnEntityResponse
     {
         public NetworkEntityID SourceToken;
         public NetworkEntityID ReplacementToken;
-
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
-            context.Select(ref SourceToken, ref stream);
-            context.Select(ref ReplacementToken, ref stream);
-        }
 
         public SpawnEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
         {
@@ -116,24 +97,16 @@ namespace Wsla
         }
     }
 
-    public partial struct SpawnEntityCommand : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct SpawnEntityCommand
     {
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
 
-        }
     }
 
-    public partial struct DespawnEntityCommand : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public partial struct DespawnEntityCommand
     {
         public NetworkEntityID ID;
-
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
-        {
-            context.Select(ref ID, ref stream);
-        }
 
         public DespawnEntityCommand(NetworkEntityID ID)
         {
@@ -148,11 +121,10 @@ namespace Wsla
 
         public const int Capacity = 10;
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
+        public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref LoadMode, ref stream);
-            context.Select(ref Scenes, ref stream);
+            context.Select(ref LoadMode);
+            context.Select(ref Scenes);
         }
 
         public ChangeScenesRequest(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
@@ -169,11 +141,10 @@ namespace Wsla
 
         public const int Capacity = ChangeScenesRequest.Capacity;
 
-        public void Select<TStream>(ref TStream stream, ref AutoSerializationContext context)
-            where TStream : INetworkStream
+        public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref LoadMode, ref stream);
-            context.Select(ref Scenes, ref stream);
+            context.Select(ref LoadMode);
+            context.Select(ref Scenes);
         }
 
         public ChangeScenesCommand(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
