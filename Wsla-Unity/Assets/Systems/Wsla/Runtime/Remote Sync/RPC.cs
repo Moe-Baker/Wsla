@@ -304,14 +304,14 @@ namespace Wsla.Unity
             this.Bind = Bind;
             this.Room = Room;
 
-            ArgumentsWriter = ArgumentWriterProperty.Take();
-            PacketWriter = Room.Transport.PacketWriter.Take();
+            ArgumentsWriter = ArgumentWriterPool.Take();
+            PacketWriter = Room.Pools.SinglePackerWriter.Take();
 
             Channel = 0;
             Delivery = DeliveryMethod.ReliableOrdered;
             BufferMode = RemoteBufferMode.None;
         }
 
-        static SinglePacketWriter ArgumentWriterProperty = SinglePacketWriter.Create(512);
+        static SinglePacketWriter ArgumentWriterPool = SinglePacketWriter.Create(512);
     }
 }

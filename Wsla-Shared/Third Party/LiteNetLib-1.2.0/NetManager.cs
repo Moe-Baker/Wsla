@@ -18,6 +18,8 @@ namespace LiteNetLib
         private readonly NetManager _manager;
         private readonly NetEvent _evt;
 
+        public bool KeepAlive;
+
         internal NetPacketReader(NetManager manager, NetEvent evt)
         {
             _manager = manager;
@@ -34,6 +36,8 @@ namespace LiteNetLib
 
         internal void RecycleInternal()
         {
+            KeepAlive = false;
+
             Clear();
             if (_packet != null)
                 _manager.PoolRecycle(_packet);

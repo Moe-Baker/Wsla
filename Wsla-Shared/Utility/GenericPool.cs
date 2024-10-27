@@ -11,8 +11,8 @@ namespace Wsla
 
         public struct Handle : IDisposable
         {
-            GenericPool<T> Pool;
-            T Item;
+            public GenericPool<T> Pool { get; }
+            public T Item { get; }
 
             public void Dispose()
             {

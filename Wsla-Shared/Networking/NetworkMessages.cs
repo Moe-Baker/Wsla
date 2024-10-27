@@ -1,10 +1,11 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Wsla.Serialization;
 
 namespace Wsla
 {
-    public partial struct ClientConnectionRequest : IAutoNetworkSerialization
+    public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
         public string Username;
 
@@ -21,37 +22,35 @@ namespace Wsla
         }
     }
     [NetworkBlittable]
-    public partial struct ClientConnectionResponse
+    public struct ClientConnectionResponse
     {
         public NetworkClientID LocalID;
         public NetworkClientID MasterID;
 
         public byte Clients;
         public byte SpawnTokens;
-        public byte Scenes;
         public ushort Entities;
 
         public override string ToString() => $"(ClientID: {LocalID})";
 
-        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, byte Clients, byte SpawnTokens, byte Scenes, ushort Entities)
+        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, byte Clients, byte SpawnTokens, ushort Entities)
         {
             this.LocalID = LocalID;
             this.MasterID = MasterID;
 
             this.Clients = Clients;
             this.SpawnTokens = SpawnTokens;
-            this.Scenes = Scenes;
             this.Entities = Entities;
         }
     }
 
     [NetworkBlittable]
-    public partial struct ClientConnectMessage
+    public struct ClientConnectMessage
     {
 
     }
     [NetworkBlittable]
-    public partial struct ClientDisconnectMessage
+    public struct ClientDisconnectMessage
     {
         public NetworkClientID ID;
 
@@ -62,17 +61,16 @@ namespace Wsla
     }
 
     [NetworkBlittable]
-    public partial struct SpawnEntityRequest
+    public struct SpawnPrefabEntityRequest
     {
         public NetworkEntityID SpawnToken;
         public NetworkEntityResource Resource;
 
         public NetworkEntityAuthorityMode Authority;
-        public NetworkEntityLifetimeMode Lifetime;
 
-        public NetworkSceneID Scene;
+        public NetworkSceneVersion Scene;
 
-        public SpawnEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkEntityLifetimeMode Lifetime, NetworkSceneID Scene)
+        public SpawnPrefabEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkSceneVersion Scene)
         {
             this.SpawnToken = SpawnToken;
 
@@ -80,31 +78,60 @@ namespace Wsla
             this.Scene = Scene;
 
             this.Authority = Authority;
-            this.Lifetime = Lifetime;
         }
     }
 
     [NetworkBlittable]
-    public partial struct SpawnEntityResponse
+    public struct SpawnPrefabEntityResponse
     {
         public NetworkEntityID SourceToken;
         public NetworkEntityID ReplacementToken;
 
-        public SpawnEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
+        public SpawnPrefabEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
         {
             this.SourceToken = SourceToken;
             this.ReplacementToken = ReplacementToken;
         }
     }
 
+    public struct SpawnPrefabEntityCommand : IAutoNetworkSerialization
+    {
+        public NetworkEntityID ID;
+        public NetworkEntityResource Resource;
+
+        public NetworkEntityAuthorityMode Authority;
+        public NetworkClientID Owner;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref ID);
+            context.Select(ref Resource);
+
+            context.Select(ref Authority);
+            if (Authority is not NetworkEntityAuthorityMode.Authoritative)
+                context.Select(ref ID);
+        }
+
+        public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
+        {
+            this.ID = ID;
+            this.Resource = Resource;
+            this.Authority = Authority;
+            this.Owner = Owner;
+        }
+    }
+
     [NetworkBlittable]
-    public partial struct SpawnEntityCommand
+    public struct SpawnScenenRequest { }
+
+    [NetworkBlittable]
+    public struct SpawnSceneCommand
     {
 
     }
 
     [NetworkBlittable]
-    public partial struct DespawnEntityCommand
+    public struct DespawnEntityCommand
     {
         public NetworkEntityID ID;
 
@@ -114,45 +141,27 @@ namespace Wsla
         }
     }
 
-    public partial struct ChangeScenesRequest : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public struct ChangeSceneRequest
     {
-        public NetworkSceneLoadMode LoadMode;
-        public List<NetworkSceneID> Scenes;
+        public NetworkSceneID Scene;
 
-        public const int Capacity = 10;
-
-        public void Select(ref AutoSerializationContext context)
+        public ChangeSceneRequest(NetworkSceneID Scene)
         {
-            context.Select(ref LoadMode);
-            context.Select(ref Scenes);
-        }
-
-        public ChangeScenesRequest(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
-        {
-            this.LoadMode = LoadMode;
-            this.Scenes = Scenes;
+            this.Scene = Scene;
         }
     }
 
-    public partial struct ChangeScenesCommand : IAutoNetworkSerialization
+    [NetworkBlittable]
+    public struct ChangeSceneCommand
     {
-        public NetworkSceneLoadMode LoadMode;
-        public List<NetworkSceneID> Scenes;
+        public NetworkSceneID ID;
+        public NetworkSceneVersion Version;
 
-        public const int Capacity = ChangeScenesRequest.Capacity;
-
-        public void Select(ref AutoSerializationContext context)
+        public ChangeSceneCommand(NetworkSceneID ID, NetworkSceneVersion Version)
         {
-            context.Select(ref LoadMode);
-            context.Select(ref Scenes);
+            this.ID = ID;
+            this.Version = Version;
         }
-
-        public ChangeScenesCommand(NetworkSceneLoadMode LoadMode, List<NetworkSceneID> Scenes)
-        {
-            this.LoadMode = LoadMode;
-            this.Scenes = Scenes;
-        }
-
-        public static ChangeScenesCommand From(ChangeScenesRequest request) => new ChangeScenesCommand(request.LoadMode, request.Scenes);
     }
 }

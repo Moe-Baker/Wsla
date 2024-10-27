@@ -41,23 +41,5 @@ public class Sandbox : MonoBehaviour
 
         var room = response.Value;
         Debug.Log($"Connected to Room {room}");
-
-        await UniTask.Delay(TimeSpan.FromSeconds(1));
-
-        //Load Scene
-        {
-            await room.Scenes.Load(new NetworkSceneID(1), NetworkSceneLoadMode.Single)
-                .Add(new NetworkSceneID(2))
-                .Send();
-
-            Debug.Log("Scene Load Finished");
-        }
-
-        //Create Entity
-        //{
-        //    room.Entities.Spawn()
-        //        .SetResource(new NetworkEntityResource(0))
-        //        .Send();
-        //}
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel.Design;
 
 using Wsla.Serialization;
 
@@ -36,9 +37,47 @@ namespace Wsla
         public static bool operator !=(NetworkSceneID left, NetworkSceneID right) => !left.Equals(right);
     }
 
-    public enum NetworkSceneLoadMode
+    [NetworkBlittable]
+    public partial struct NetworkSceneVersion : IEquatable<NetworkSceneVersion>
     {
-        Single = 0,
-        Additive = 1,
+        public byte Value { get; }
+
+        public const byte MaxValue = byte.MaxValue;
+
+        public override bool Equals(object obj)
+        {
+            if (obj is NetworkSceneVersion other)
+                return Equals(other);
+
+            return false;
+        }
+        public bool Equals(NetworkSceneVersion other)
+        {
+            return Value == other.Value;
+        }
+
+        public override int GetHashCode() => Value;
+
+        public override string ToString() => Value.ToString();
+
+        public NetworkSceneVersion(byte value)
+        {
+            this.Value = value;
+        }
+
+        public static NetworkSceneVersion Increment(NetworkSceneVersion key)
+        {
+            var index = key.Value;
+
+            if (index >= MaxValue)
+                index = 0;
+            else
+                index += 1;
+
+            return new NetworkSceneVersion(index);
+        }
+
+        public static bool operator ==(NetworkSceneVersion left, NetworkSceneVersion right) => left.Equals(right);
+        public static bool operator !=(NetworkSceneVersion left, NetworkSceneVersion right) => !left.Equals(right);
     }
 }

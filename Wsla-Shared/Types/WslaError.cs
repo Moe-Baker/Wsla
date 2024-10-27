@@ -55,7 +55,7 @@ namespace Wsla
         SpawnTokenContractBroken = 5,
         SyncedPrefabNotFound = 6,
         SyncedPrefabWithoutNetworkEntity = 7,
-        NoSceneFoundForEntity = 8,
+        NoAuthority = 8,
         NoEntityFoundInScene = 9,
     }
 }

@@ -65,18 +65,21 @@ namespace Wsla
             Add<ClientConnectMessage>(ref counter);
             Add<ClientDisconnectMessage>(ref counter);
 
-            Add<SpawnEntityRequest>(ref counter);
-            Add<SpawnEntityResponse>(ref counter);
-            Add<SpawnEntityCommand>(ref counter);
+            Add<SpawnPrefabEntityRequest>(ref counter);
+            Add<SpawnPrefabEntityResponse>(ref counter);
+            Add<SpawnPrefabEntityCommand>(ref counter);
 
-            Add<ChangeScenesRequest>(ref counter);
-            Add<ChangeScenesCommand>(ref counter);
+            Add<ChangeSceneRequest>(ref counter);
+            Add<ChangeSceneCommand>(ref counter);
 
             Add<BroadcastNetworkRpcRequest>(ref counter);
             Add<BufferNetworkRpcRequest>(ref counter);
             Add<TargetNetworkRpcRequest>(ref counter);
 
             Add<NetworkRpcCommand>(ref counter);
+
+            Add<SpawnScenenRequest>(ref counter);
+            Add<SpawnSceneCommand>(ref counter);
         }
     }
 

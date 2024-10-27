@@ -20,49 +20,40 @@ namespace Wsla.Unity
         public NetworkClient Owner { get; private set; }
         internal int OwnerRegisteration;
 
-        public NetworkEntityAuthorityMode Authority { get; private set; }
-        public NetworkEntityLifetimeMode Lifetime { get; private set; }
-
-        public NetworkScene Scene { get; private set; }
-        internal int SceneRegisteration;
-
-        internal void AssignDefinition(NetworkEntityDefinition definition)
+        internal void AssignOwner(NetworkClient target)
         {
+            Owner = target;
+        }
+
+        [field: SerializeField]
+        public NetworkEntityAuthorityMode Authority { get; private set; }
+
+        void Reset()
+        {
+            Authority = NetworkEntityAuthorityMode.Distributable;
+        }
+
+        public RoomInstance Room { get; private set; }
+        internal void Assign(RoomInstance Room, NetworkEntityDefinition definition)
+        {
+            this.Room = Room;
+
             ID = definition.ID;
             Origin = definition.Origin;
             Resource = definition.Resource;
 
-            //Assign Scene
-            if (definition.HasScene)
+            //Assign Owner
+            if (definition.IsOwnedByMasterClient)
             {
-                if (Room.Scenes.TryGet(definition.Scene, out var reference) is false)
-                    throw new InvalidOperationException($"No Scene {definition.Scene} Found");
-
-                Scene = reference.Component;
+                AssignOwner(Room.Clients.Master);
             }
             else
-            {
-                Scene = default;
-            }
-
-            //Assign Owner
-            if (definition.DefinesOwner)
             {
                 if (Room.Clients.TryGet(definition.Owner, out var reference) is false)
                     throw new InvalidOperationException($"No Network Client {definition.Owner} Found");
 
-                Owner = reference;
+                AssignOwner(reference);
             }
-            else
-            {
-                Owner = Room.Clients.Master;
-            }
-        }
-
-        public RoomInstance Room { get; private set; }
-        internal void AssignRoom(RoomInstance reference)
-        {
-            this.Room = reference;
         }
 
         #region Spawn
@@ -150,6 +141,8 @@ namespace Wsla.Unity
 
             public MonoBehaviour Script { get; }
             public INetworkBehaviour Contract { get; }
+
+            public RoomInstance Room => Entity.Room;
 
             public RpcProperty RPC { get; }
             public class RpcProperty

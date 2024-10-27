@@ -84,7 +84,6 @@ namespace Wsla
         public static bool operator !=(NetworkEntityResource left, NetworkEntityResource right) => !left.Equals(right);
     }
 
-    [NetworkBlittable]
     public struct NetworkEntityDefinition : IAutoNetworkSerialization
     {
         public NetworkEntityID ID;
@@ -92,13 +91,10 @@ namespace Wsla
         public NetworkEntityResource Resource;
 
         public NetworkEntityAuthorityMode Authority;
-        public NetworkEntityLifetimeMode Lifetime;
 
         public NetworkClientID Owner;
-        public NetworkSceneID Scene;
 
-        public bool HasScene => Lifetime is NetworkEntityLifetimeMode.Scene;
-        public bool DefinesOwner => Authority is not NetworkEntityAuthorityMode.Authoritative;
+        public bool IsOwnedByMasterClient => Authority is NetworkEntityAuthorityMode.Authoritative;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -107,25 +103,19 @@ namespace Wsla
             context.Select(ref Resource);
 
             context.Select(ref Authority);
-            if (Authority is not NetworkEntityAuthorityMode.Authoritative)
+            if (IsOwnedByMasterClient is false)
                 context.Select(ref Owner);
-
-            context.Select(ref Lifetime);
-            if (Lifetime is not NetworkEntityLifetimeMode.Scene)
-                context.Select(ref Scene);
         }
 
-        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkEntityLifetimeMode Lifetime, NetworkClientID Owner, NetworkSceneID Scene)
+        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
         {
             this.ID = ID;
             this.Origin = Origin;
             this.Resource = Resource;
 
             this.Authority = Authority;
-            this.Lifetime = Lifetime;
 
             this.Owner = Owner;
-            this.Scene = Scene;
         }
     }
 
@@ -145,46 +135,18 @@ namespace Wsla
     public enum NetworkEntityAuthorityMode : byte
     {
         /// <summary>
-        /// Authority is distributed to connected clients equally
-        /// </summary>
-        Distributable,
-
-        /// <summary>
-        /// Authority is handled explicitly by the master client
-        /// </summary>
-        Authoritative,
-
-        /// <summary>
         /// Authority is always handled by the spawning client
         /// </summary>
         Explicit,
 
         /// <summary>
-        /// Authority is handled by the spawning client with the ability to transfer instantly
+        /// Authority is handled by the master client
         /// </summary>
-        Transferable,
+        Authoritative,
 
         /// <summary>
-        /// Authority is handled by the spawning client, with the ability to request ownership from the current owner
+        /// Authority is distributed with the ability to transfer
         /// </summary>
-        Requestable,
-    }
-
-    public enum NetworkEntityLifetimeMode : byte
-    {
-        /// <summary>
-        /// Entitiy will live with it's owning client, and despawn when the owner disconnects
-        /// </summary>
-        Owner,
-
-        /// <summary>
-        /// Entity will live with the scene it was spawned in and despawn when that scene is unloaded
-        /// </summary>
-        Scene,
-
-        /// <summary>
-        /// Entity will live with no restrictions, will only despawn if manually requested
-        /// </summary>
-        Persistent,
+        Distributable,
     }
 }

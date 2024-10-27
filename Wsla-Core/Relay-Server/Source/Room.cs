@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection.Emit;
+using System.Runtime.InteropServices;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -15,7 +17,7 @@ namespace Wsla.Server
         public Room? Next { get; internal set; }
         public Room? Previous { get; internal set; }
 
-        public GenericPool<NetDataWriter> PackerWriterPool => ThreadProcessor.PacketWritersPool;
+        public RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
 
         public TransportProperty Transport { get; }
         public class TransportProperty
@@ -24,8 +26,6 @@ namespace Wsla.Server
             public ushort Port => (ushort)Manager.LocalPort;
 
             public EventBasedNetListener Listener { get; }
-
-            public readonly SinglePacketWriter PacketWriter;
 
             public DispatcherProperty Dispatcher { get; }
             public class DispatcherProperty
@@ -87,7 +87,7 @@ namespace Wsla.Server
 
             public void SendData<[NetworkSerializationMarker] T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
-                var writer = PacketWriter.Take();
+                var writer = Room.Pools.SinglePackerWriter.Take();
                 NetworkSerializer.WriteHeader(data, writer);
 
                 SendWriter(client, writer, channel, delivery);
@@ -99,7 +99,7 @@ namespace Wsla.Server
 
             public void BroadcastData<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient? except = null)
             {
-                var writer = PacketWriter.Take();
+                var writer = Room.Pools.SinglePackerWriter.Take();
                 NetworkSerializer.WriteHeader(data, writer);
 
                 BroadcastWriter(writer, channel, delivery, except: except);
@@ -114,7 +114,7 @@ namespace Wsla.Server
 
             public void Kick(NetworkClient client, WslaError error)
             {
-                var writer = PacketWriter.Take();
+                var writer = Room.Pools.SinglePackerWriter.Take();
 
                 NetworkSerializer.WriteValue(in error, writer);
 
@@ -142,9 +142,8 @@ namespace Wsla.Server
                 Listener = new EventBasedNetListener();
 
                 Manager = new NetManager(Listener);
+                Manager.DisconnectTimeout = 60 * 1000;
                 Manager.IPv6Enabled = false;
-
-                PacketWriter = SinglePacketWriter.Create(256);
 
                 Dispatcher = new DispatcherProperty(this);
             }
@@ -221,7 +220,7 @@ namespace Wsla.Server
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
-                var writer = Transport.PacketWriter.Take();
+                var writer = Room.Pools.SinglePackerWriter.Take();
 
                 var error = WslaError.From(code);
 
@@ -247,7 +246,7 @@ namespace Wsla.Server
 
                 //Broadcast To Others
                 {
-                    var writer = Transport.PacketWriter.Take();
+                    var writer = Room.Pools.SinglePackerWriter.Take();
 
                     var message = new ClientConnectMessage();
 
@@ -260,9 +259,9 @@ namespace Wsla.Server
 
                 //Unicast to Client
                 {
-                    var writer = Transport.PacketWriter.Take();
+                    var writer = Room.Pools.SinglePackerWriter.Take();
 
-                    var message = new ClientConnectionResponse(client.ID, Master.ID, Count, client.SpawnAllowance, Room.Scenes.Count, Room.Entities.Count);
+                    var message = new ClientConnectionResponse(client.ID, Master.ID, Count, client.SpawnAllowance, Room.Entities.Count);
                     NetworkSerializer.WriteHeader(in message, writer);
 
                     //Sync Clients
@@ -271,8 +270,8 @@ namespace Wsla.Server
                     //Sync Spawn Tokens
                     client.WriteSpawnTokens(writer);
 
-                    //Sync Scenes
-                    Room.Scenes.WriteState(writer);
+                    //Sync Scene
+                    Room.Scene.WriteState(writer);
 
                     //Sync Entity Definitions
                     Room.Entities.WriteDefinitions(writer);
@@ -335,21 +334,26 @@ namespace Wsla.Server
 
             TransportProperty Transport => Room.Transport;
 
-            void SpawnRequestHandler(NetworkClient sender, ref SpawnEntityRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void SpawnPrefabRequestHandler(NetworkClient sender, ref SpawnPrefabEntityRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
+                if (message.Authority is NetworkEntityAuthorityMode.Authoritative && sender.IsMaster is false)
+                {
+                    NetworkLog.Warning($"Client {sender} isn't Master Client and Can't Spawn {NetworkEntityAuthorityMode.Authoritative} Entities");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.NoAuthority));
+                    return;
+                }
+
+                if (message.Scene != Room.Scene.Version)
+                {
+                    NetworkLog.Warning($"Late Entity Spawn Request from {sender} for Scene Version {message.Scene}, Scene was Already Changed");
+                    return;
+                }
+
                 if (sender.ValdiateSpawnToken(message.SpawnToken) is false)
                 {
                     NetworkLog.Warning($"Invalid Spawn Token {message.SpawnToken} Received from {sender}");
                     Transport.Kick(sender, WslaError.From(WslaErrorCode.SpawnTokenContractBroken));
                     return;
-                }
-
-                var owner = ChooseOwner(sender, message.Authority);
-                if (ChooseScene(message.Lifetime, message.Scene, out var scene) is false)
-                {
-                    NetworkLog.Warning($"Client {sender} Trying to Spawn Entity on UnLoaded Scene, No Handing Implementation");
-                    //TODO: Despawn entity on client side
-                    throw new NotImplementedException();
                 }
 
                 if (IDGenerator.TryReserve(out var replacement) is false)
@@ -359,62 +363,25 @@ namespace Wsla.Server
                     return;
                 }
 
-                var entity = new NetworkEntity(Room, message.SpawnToken, NetworkEntityOrigin.Prefab, message.Resource, owner, scene, Authority: message.Authority, message.Lifetime);
+                var entity = new NetworkEntity(Room, message.SpawnToken, NetworkEntityOrigin.Prefab, message.Resource, sender, message.Authority);
 
                 Register(entity);
 
                 //Respond to Sender
                 {
-                    var response = new SpawnEntityResponse(entity.ID, replacement);
+                    var response = new SpawnPrefabEntityResponse(entity.ID, replacement);
                     Transport.SendData(sender, response);
                 }
 
                 //Broadcast to Others
                 {
-                    var writer = Transport.PacketWriter.Take();
+                    var writer = Room.Pools.SinglePackerWriter.Take();
 
-                    var command = new SpawnEntityCommand();
-
+                    var command = new SpawnPrefabEntityCommand(entity.ID, entity.Resource, entity.Authority, entity.Owner.ID);
                     NetworkSerializer.WriteHeader(in command, writer);
-
-                    entity.WriteDefinition(writer);
 
                     Transport.BroadcastWriter(writer, except: sender);
                 }
-            }
-
-            NetworkClient ChooseOwner(NetworkClient sender, NetworkEntityAuthorityMode authority)
-            {
-                switch (authority)
-                {
-                    case NetworkEntityAuthorityMode.Distributable:
-                        return ChooseDistributableOwner();
-
-                    case NetworkEntityAuthorityMode.Authoritative:
-                        return Room.Clients.Master;
-
-                    case NetworkEntityAuthorityMode.Explicit:
-                        return sender;
-
-                    case NetworkEntityAuthorityMode.Transferable:
-                        return sender;
-
-                    case NetworkEntityAuthorityMode.Requestable:
-                        return sender;
-
-                    default: throw new NotImplementedException();
-                }
-            }
-
-            bool ChooseScene(NetworkEntityLifetimeMode lifetime, NetworkSceneID id, out NetworkScene? scene)
-            {
-                if (lifetime is NetworkEntityLifetimeMode.Persistent)
-                {
-                    scene = default;
-                    return true;
-                }
-
-                return Room.Scenes.TryFind(id, out scene);
             }
 
             /// <summary>
@@ -422,9 +389,9 @@ namespace Wsla.Server
             /// </summary>
             /// <returns></returns>
             /// <exception cref="InvalidOperationException"></exception>
-            NetworkClient ChooseDistributableOwner()
+            internal NetworkClient ChooseDistributableOwner()
             {
-                (NetworkClient? Client, int Entities) Marker = (default, int.MinValue);
+                (NetworkClient? Client, int Entities) Marker = (default, int.MaxValue);
 
                 foreach (var client in Room.Clients.Collection)
                 {
@@ -438,18 +405,20 @@ namespace Wsla.Server
                 return Marker.Client;
             }
 
-            void Register(NetworkEntity entity)
+            internal void Register(NetworkEntity entity)
             {
                 Dictionary.Add(entity.ID, entity);
-
                 entity.Owner.RegisterEntity(entity);
-
-                if (entity.Scene is not null)
-                    entity.Scene.RegisterEntity(entity);
             }
-            void Unregister(NetworkEntityID id)
+            internal void Unregister(NetworkEntityID id)
             {
-                Dictionary.Remove(id);
+                if (Dictionary.TryGetValue(id, out var entity) is false)
+                    NetworkLog.Error($"No Entity with ID {id} Found");
+            }
+            internal void Unregister(NetworkEntity entity)
+            {
+                Dictionary.Remove(entity.ID);
+                entity.Owner.UnregisterEntity(entity);
             }
 
             void Transfer(NetworkEntity entity, NetworkClient to)
@@ -477,7 +446,7 @@ namespace Wsla.Server
 
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
 
-                Transport.Dispatcher.Register<SpawnEntityRequest>(SpawnRequestHandler);
+                Transport.Dispatcher.Register<SpawnPrefabEntityRequest>(SpawnPrefabRequestHandler);
             }
         }
 
@@ -494,7 +463,10 @@ namespace Wsla.Server
                     return;
                 }
 
-                var writer = (message.Buffer is RemoteBufferMode.None) ? Transport.PacketWriter.Take() : Room.PackerWriterPool.Retrieve();
+                if (message.Buffer is RemoteBufferMode.Buffer)
+                    entity.RpcBuffer.Register(message.Parameters.Behaviour, message.Parameters.RPC, reader);
+
+                var writer = Room.Pools.SinglePackerWriter.Take();
 
                 Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
             }
@@ -507,9 +479,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                var writer = Room.PackerWriterPool.Retrieve();
-
-                Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
+                entity.RpcBuffer.Register(message.Parameters.Behaviour, message.Parameters.RPC, reader);
             }
 
             void TargetRequestHandler(NetworkClient sender, ref TargetNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -520,7 +490,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                var writer = Transport.PacketWriter.Take();
+                var writer = Room.Pools.SinglePackerWriter.Take();
 
                 WriteCommand(sender, message.Parameters, reader, writer);
 
@@ -553,73 +523,104 @@ namespace Wsla.Server
             }
         }
 
-        public ScenesProperty Scenes { get; }
-        public class ScenesProperty
+        public SceneProperty Scene { get; }
+        public class SceneProperty
         {
-            public List<NetworkScene> Collection { get; }
-            public bool TryFind(NetworkSceneID id, [MaybeNullWhen(returnValue: false)] out NetworkScene target)
-            {
-                for (int i = 0; i < Collection.Count; i++)
-                {
-                    target = Collection[i];
-                    if (target.ID == id)
-                        return true;
-                }
-
-                target = default;
-                return false;
-            }
-
-            public byte Count => (byte)Collection.Count;
+            public NetworkSceneID ID { get; private set; }
+            public NetworkSceneVersion Version { get; private set; }
 
             public TransportProperty Transport => Room.Transport;
 
-            void ChangeRequestHandler(NetworkClient sender, ref ChangeScenesRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void ChangeRequestHandler(NetworkClient sender, ref ChangeSceneRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                ChangeProcedure(message.LoadMode, message.Scenes);
+                if (sender.IsMaster is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Tried Changing Scenes without Being Master Client");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.NoAuthority));
+                    return;
+                }
+
+                ChangeProcedure(message.Scene);
+
+                //Broadcast to All
+                {
+                    var command = new ChangeSceneCommand(ID, Version);
+                    Transport.BroadcastData(in command);
+                }
+            }
+            void ChangeProcedure(NetworkSceneID target)
+            {
+                ID = target;
+                Version = NetworkSceneVersion.Increment(Version);
+            }
+
+            void SpawnRequestHandler(NetworkClient sender, ref SpawnScenenRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (sender.IsMaster is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Trying to Spawn Scene Objects While not Being the Master Client");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.NoAuthority));
+                    return;
+                }
+
+                var count = NetworkSerializer.ReadValue<byte>(reader);
+
+                if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[count], out var ids) is false)
+                {
+                    NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded");
+                    Room.Shutdown();
+                    return;
+                }
+
+                var entities = Room.Pools.EntityList.Take();
+
+                for (byte i = 0; i < count; i++)
+                {
+                    var resource = new NetworkEntityResource(i);
+                    var authority = NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(reader);
+                    var owner = (authority is NetworkEntityAuthorityMode.Authoritative) ? Room.Clients.Master : Room.Entities.ChooseDistributableOwner();
+
+                    var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, owner, authority);
+
+                    Room.Entities.Register(entity);
+
+                    entities.Add(entity);
+                }
 
                 //Broadcast to Others
                 {
-                    //TODO: investigate replicating the request as the command since they have the same fields
-                    var command = ChangeScenesCommand.From(message);
-                    Transport.BroadcastData(in command, except: sender);
-                }
-            }
+                    var writer = Room.Pools.SinglePackerWriter.Take();
 
-            void ChangeProcedure(NetworkSceneLoadMode mode, List<NetworkSceneID> ids)
-            {
-                if (mode is NetworkSceneLoadMode.Single)
-                {
-                    for (int i = 0; i < Collection.Count; i++)
-                        Collection[i].Unload();
+                    var command = new SpawnSceneCommand();
+                    NetworkSerializer.WriteHeader(in command, writer);
 
-                    Collection.Clear();
-                }
+                    foreach (var entity in entities)
+                    {
+                        NetworkSerializer.WriteValue(entity.ID, writer);
 
-                for (int i = 0; i < ids.Count; i++)
-                {
-                    var instance = new NetworkScene(ids[i]);
+                        if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
+                            NetworkSerializer.WriteValue(entity.Owner.ID, writer);
+                    }
 
-                    Collection.Add(instance);
-
-                    instance.Load();
+                    Transport.BroadcastWriter(writer);
                 }
             }
 
             internal void WriteState(NetDataWriter writer)
             {
-                foreach (var scene in Collection)
-                    scene.WriteState(writer);
+                NetworkSerializer.WriteValue(ID, writer);
+                NetworkSerializer.WriteValue(Version, writer);
             }
 
             readonly Room Room;
-            public ScenesProperty(Room Room)
+            public SceneProperty(Room Room)
             {
                 this.Room = Room;
 
-                Collection = new List<NetworkScene>(1);
+                ID = new NetworkSceneID(1);
 
-                Transport.Dispatcher.Register<ChangeScenesRequest>(ChangeRequestHandler);
+                Transport.Dispatcher.Register<ChangeSceneRequest>(ChangeRequestHandler);
+                Transport.Dispatcher.Register<SpawnScenenRequest>(SpawnRequestHandler);
             }
         }
 
@@ -661,15 +662,13 @@ namespace Wsla.Server
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
-            Scenes = new ScenesProperty(this);
+            Scene = new SceneProperty(this);
             RPCs = new RpcProperty(this);
         }
     }
 
     public class NetworkClient
     {
-        public Room Room { get; }
-
         public NetworkClientID ID { get; }
 
         public string Username { get; private set; }
@@ -679,6 +678,8 @@ namespace Wsla.Server
         {
             this.Peer = value;
         }
+
+        public bool IsMaster => Room.Clients.Master == this;
 
         #region Spawn Tokens
         public Queue<NetworkEntityID> SpawnTokens { get; }
@@ -734,6 +735,7 @@ namespace Wsla.Server
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 
+        readonly Room Room;
         public NetworkClient(Room Room, NetworkClientID ID, string Username, int SpawnTokenCapacity)
         {
             this.Room = Room;
@@ -743,14 +745,12 @@ namespace Wsla.Server
 
             SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
 
-            Entities = new ExpandList<NetworkEntity>();
+            Entities = new(0);
         }
     }
 
     public class NetworkEntity
     {
-        public Room Room { get; }
-
         public NetworkEntityID ID { get; }
         public NetworkEntityOrigin Origin { get; }
         public NetworkEntityResource Resource { get; }
@@ -759,10 +759,8 @@ namespace Wsla.Server
         public int OwnerRegisteration;
 
         public NetworkEntityAuthorityMode Authority { get; private set; }
-        public NetworkEntityLifetimeMode Lifetime { get; private set; }
 
-        public NetworkScene Scene { get; }
-        public int SceneRegisteration;
+        internal RpcBufferCollection RpcBuffer;
 
         public void AssignOwner(NetworkClient target)
         {
@@ -771,14 +769,12 @@ namespace Wsla.Server
 
         public void WriteDefinition(NetDataWriter writer)
         {
-            var ownerID = Owner.ID;
-            var sceneID = (Scene?.ID).GetValueOrDefault();
-            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Lifetime, ownerID, sceneID);
-
+            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID);
             NetworkSerializer.WriteValue(in definition, writer);
         }
 
-        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkClient Owner, NetworkScene Scene, NetworkEntityAuthorityMode Authority, NetworkEntityLifetimeMode Lifetime)
+        readonly Room Room;
+        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
         {
             this.Room = Room;
             this.ID = ID;
@@ -787,49 +783,89 @@ namespace Wsla.Server
             this.Resource = Resource;
 
             this.Owner = Owner;
-            this.Scene = Scene;
 
             this.Authority = Authority;
-            this.Lifetime = Lifetime;
+
+            RpcBuffer = new(Room);
         }
     }
 
-    public class NetworkScene
+    public struct RpcBufferCollection
     {
-        public NetworkSceneID ID { get; }
+        Dictionary<Key, Payload>? Collection;
 
-        #region Entities
-        public ExpandList<NetworkEntity> Entities { get; }
-
-        public void RegisterEntity(NetworkEntity target)
+        public struct Key : IEquatable<Key>
         {
-            target.SceneRegisteration = Entities.Add(target);
+            public NetworkBehaviourID Behaviour { get; }
+            public NetworkRpcID RPC { get; }
+
+            public override bool Equals([NotNullWhen(true)] object? obj)
+            {
+                if (obj is Key other)
+                    return Equals(other);
+
+                return false;
+            }
+            public bool Equals(Key other)
+            {
+                return Behaviour == other.Behaviour && RPC == other.RPC;
+            }
+
+            readonly int Hashcode;
+            public override int GetHashCode() => Hashcode;
+
+            public Key(NetworkBehaviourID Behaviour, NetworkRpcID RPC)
+            {
+                this.Behaviour = Behaviour;
+                this.RPC = RPC;
+
+                Hashcode = (Behaviour.Value << 4) | (RPC.Value);
+            }
         }
-        public void UnregisterEntity(NetworkEntity target)
+        public struct Payload
         {
-            Entities.RemoveAt(target.SceneRegisteration);
-        }
-        #endregion
+            public NetDataWriter Arguments { get; }
 
-        public void Load()
-        {
-
-        }
-        public void Unload()
-        {
-
+            public Payload(NetDataWriter Arguments)
+            {
+                this.Arguments = Arguments;
+            }
         }
 
-        internal void WriteState(NetDataWriter writer)
+        public void Register(NetworkBehaviourID Behaviour, NetworkRpcID RPC, NetDataReader Input)
         {
-            NetworkSerializer.WriteValue(ID, writer);
+            if (Collection is null)
+                Collection = new(1);
+
+            var key = new Key(Behaviour, RPC);
+
+            ref var payload = ref CollectionsMarshal.GetValueRefOrAddDefault(Collection, key, out var exists);
+
+            if (exists is false)
+            {
+                var writer = Room.Pools.MultiPackerWriter.Retrieve();
+                payload = new Payload(writer);
+            }
+
+            //Copy Buffer
+            {
+                var marker = Input.Position;
+
+                var source = Input.GetRemainingBytesSpan();
+                var destination = payload.Arguments.Take(source.Length);
+
+                source.CopyTo(destination);
+
+                Input.SetPosition(marker);
+            }
         }
 
-        public NetworkScene(NetworkSceneID ID)
+        readonly Room Room;
+        public RpcBufferCollection(Room Room)
         {
-            this.ID = ID;
+            this.Room = Room;
 
-            Entities = new ExpandList<NetworkEntity>(40);
+            Collection = null;
         }
     }
 }

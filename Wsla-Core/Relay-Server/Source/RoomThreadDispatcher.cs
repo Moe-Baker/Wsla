@@ -27,7 +27,20 @@ namespace Wsla
 
             Stopwatch Stopwatch;
 
-            internal readonly GenericPool<NetDataWriter> PacketWritersPool;
+            public PoolsProperty Pools { get; }
+            public struct PoolsProperty
+            {
+                public SingleInstancePool<NetDataWriter> SinglePackerWriter { get; init; }
+                public GenericPool<NetDataWriter> MultiPackerWriter { get; init; }
+                public SingleInstancePool<List<NetworkEntity>> EntityList { get; init; }
+
+                public static PoolsProperty Create() => new PoolsProperty()
+                {
+                    SinglePackerWriter = new(new(true, 2048), x => x.SetPosition(0)),
+                    MultiPackerWriter = new(() => new NetDataWriter(true, 128)),
+                    EntityList = new(new(100), x => x.Clear()),
+                };
+            }
 
             /// <summary>
             /// Thread safe registeration
@@ -162,14 +175,14 @@ namespace Wsla
                 this.ID = ID;
                 this.TickDuration = TickDuration;
 
-                PacketWritersPool = new GenericPool<NetDataWriter>(() => new NetDataWriter(true, 128));
-
                 Registerations = new ConcurrentBag<Room>();
 
                 Stopwatch = new Stopwatch();
 
                 Thread = new Thread(Tick);
                 Thread.Start();
+
+                Pools = PoolsProperty.Create();
             }
         }
 

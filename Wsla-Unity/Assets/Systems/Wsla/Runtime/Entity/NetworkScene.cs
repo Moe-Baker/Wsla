@@ -1,10 +1,11 @@
+using LiteNetLib.Utils;
+
 using System;
 using System.Collections.Generic;
 
 using Toolbox;
 
 using UnityEditor;
-
 
 #if UNITY_EDITOR
 using UnityEditor.Build;
@@ -14,6 +15,8 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+using Wsla.Serialization;
+
 namespace Wsla.Unity
 {
     public class NetworkScene : MonoBehaviour
@@ -22,18 +25,18 @@ namespace Wsla.Unity
         public int BuildIndex => ID.Value;
 
         [field: SerializeField]
-        public NetworkEntity[] Entities { get; private set; }
-        public bool TryGet(NetworkEntityResource resource, out NetworkEntity entity)
+        public NetworkEntity[] Locals { get; private set; }
+        public bool TryGetLocal(NetworkEntityResource resource, out NetworkEntity entity)
         {
             var index = resource.Value;
 
-            if (Entities.IsValidIndex(index) is false)
+            if (Locals.IsValidIndex(index) is false)
             {
                 entity = default;
                 return false;
             }
 
-            entity = Entities[index];
+            entity = Locals[index];
             return true;
         }
 
@@ -46,7 +49,6 @@ namespace Wsla.Unity
         internal void Spawn()
         {
             IsSpawned = true;
-
             OnSpawn?.Invoke();
         }
         public event Action OnSpawn;
@@ -54,17 +56,24 @@ namespace Wsla.Unity
         internal void Despawn()
         {
             IsSpawned = false;
-
             OnDespawn?.Invoke();
         }
         public event Action OnDespawn;
         #endregion
 
+        internal void WriteRequest(NetDataWriter writer)
+        {
+            NetworkSerializer.WriteValue((byte)Locals.Length, writer);
+
+            foreach (var entity in Locals)
+                NetworkSerializer.WriteValue(entity.Authority, writer);
+        }
+
         internal void Assign(IList<NetworkEntity> source)
         {
-            Entities = new NetworkEntity[source.Count];
+            Locals = new NetworkEntity[source.Count];
             for (int i = 0; i < source.Count; i++)
-                Entities[i] = source[i];
+                Locals[i] = source[i];
         }
 
         void Awake()
@@ -79,7 +88,7 @@ namespace Wsla.Unity
                 return;
             }
 
-            Room.Scenes.Register(this);
+            Room.Scene.Register(this);
         }
 
 #if UNITY_EDITOR
