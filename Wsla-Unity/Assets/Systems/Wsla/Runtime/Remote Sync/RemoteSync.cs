@@ -7,6 +7,7 @@ namespace Wsla.Unity
     public interface IRemoteSyncMembers
     {
         void RegisterRPCs(List<BaseRpcBind> list);
+        void RegisterVariables(List<NetworkVariable> list);
     }
 
     public enum RemoteSyncDelivery : byte

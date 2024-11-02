@@ -66,7 +66,7 @@ namespace Wsla.Serialization
                 public static void Write<TValue>(in TValue value, INetworkStream stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.Take(sizeof(TValue));
+                    var span = stream.PopSpan(sizeof(TValue));
 
                     fixed (byte* destination = span)
                     {
@@ -87,7 +87,7 @@ namespace Wsla.Serialization
                 public static void Read<TValue>(ref TValue value, INetworkStream stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.Take(sizeof(TValue));
+                    var span = stream.PopSpan(sizeof(TValue));
 
                     fixed (byte* source = span)
                     {
@@ -123,7 +123,7 @@ namespace Wsla.Serialization
                     /// <param name="collection"></param>
                     /// <param name="stream"></param>
                     /// <returns>true if null, false if not</returns>
-                    public static bool Write<TValue>(in TValue collection, ref INetworkStream stream)
+                    public static bool Write<TValue>(in TValue collection, INetworkStream stream)
                         where TValue : ICollection
                     {
                         ushort length;
@@ -173,7 +173,7 @@ namespace Wsla.Serialization
                     /// <param name="stream"></param>
                     /// <param name="length"></param>
                     /// <returns>true if null, false if not</returns>
-                    public static bool Read(ref INetworkStream stream, out int length)
+                    public static bool Read(INetworkStream stream, out int length)
                     {
                         length = NetworkSerializer.ReadValue<ushort>(stream);
 
@@ -219,7 +219,7 @@ namespace Wsla.Serialization
                 /// <param name="stream"></param>
                 public static void Write(bool value, INetworkStream stream)
                 {
-                    var span = stream.Take(1);
+                    var span = stream.PopSpan(1);
 
                     if (value)
                         span[0] = Values.IsNull;
@@ -234,7 +234,7 @@ namespace Wsla.Serialization
                 /// <returns>true for null, false for not</returns>
                 public static bool Read(INetworkStream stream)
                 {
-                    var span = stream.Take(1);
+                    var span = stream.PopSpan(1);
 
                     if (span[0] == Values.IsNull)
                         return true;
@@ -245,18 +245,18 @@ namespace Wsla.Serialization
 
             public static class Length
             {
-                public static void Write<TValue>(in TValue collection, ref INetworkStream stream)
+                public static void Write<TValue>(in TValue collection, INetworkStream stream)
                     where TValue : ICollection
                 {
                     NetworkSerializer.WriteValue((ushort)(collection.Count), stream);
                 }
 
-                public static void Write(int value, ref INetworkStream stream)
+                public static void Write(int value, INetworkStream stream)
                 {
                     NetworkSerializer.WriteValue((ushort)(value), stream);
                 }
 
-                public static int Read(ref INetworkStream stream)
+                public static int Read(INetworkStream stream)
                 {
                     return NetworkSerializer.ReadValue<ushort>(stream);
                 }

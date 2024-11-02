@@ -9,18 +9,11 @@ using Cysharp.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
-using NUnit.Framework;
-
 using Toolbox;
-
-using UnityEditor.SearchService;
-
-using UnityEditorInternal.Profiling.Memory.Experimental.FileFormat;
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-using Wsla;
 using Wsla.Serialization;
 
 namespace Wsla.Unity
@@ -28,7 +21,7 @@ namespace Wsla.Unity
     [Serializable]
     public class RoomAPI : NetworkAPI.Property
     {
-        public RoomInstance Instance { get; private set; }
+        public RoomInstance Current { get; private set; }
 
         public async UniTask<Response<RoomInstance, WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
         {
@@ -39,7 +32,7 @@ namespace Wsla.Unity
             if (response.IsError)
                 return response.Error;
 
-            Instance = target;
+            Current = target;
 
             return target;
         }
@@ -340,7 +333,7 @@ namespace Wsla.Unity
                 Listener = new BufferListener();
 
                 Manager = new NetManager(Listener);
-                Manager.DisconnectTimeout = 60 * 1000;
+                Manager.DisconnectTimeout = 240 * 1000;
                 Manager.AutoRecycle = false;
 
                 Dispatcher = new DispatcherProperty(this);
@@ -363,47 +356,10 @@ namespace Wsla.Unity
             {
                 reader.KeepAlive = true;
 
-                Procedure(message, reader, channel, delivery).Forget();
-                async UniTask Procedure(ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
-                {
-                    Transport.Listener.Pause();
-
-                    //Sync Clients
-                    ReadState(reader, message);
-
-                    //Check if we didn't recieve our local client
-                    if (Local is null)
-                        throw new InvalidOperationException("No Local Client Received in Response");
-
-                    //Check if we didn't recieve the master client
-                    if (Master is null)
-                        throw new InvalidOperationException("No Master Client Received in Response");
-
-                    //Sync Spawn Tokens
-                    Local.ReadSpawnTokens(reader, message);
-
-                    //Sync Scenes
-                    await Room.Scene.ReadState(reader, message);
-
-                    var entities = Room.Pools.EntityList.Take();
-
-                    //Sync Entities
-                    Room.Entities.ReadState(reader, message, entities);
-
-                    //Spawn && Replicate Entities
-                    foreach (var entity in entities)
-                    {
-                        entity.Spawn();
-                        entity.Replicate();
-                    }
-
-                    Transport.Listener.Resume();
-
-                    reader.Recycle();
-                }
+                Room.ReadState(message, reader).Forget();
             }
 
-            void ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            internal void ReadState(NetPacketReader reader, ClientConnectionResponse message)
             {
                 for (int i = 0; i < message.Clients; i++)
                 {
@@ -423,6 +379,14 @@ namespace Wsla.Unity
 
                     Register(client);
                 }
+
+                //Check if we didn't recieve our local client
+                if (Local is null)
+                    throw new InvalidOperationException("No Local Client Received in Response");
+
+                //Check if we didn't recieve the master client
+                if (Master is null)
+                    throw new InvalidOperationException("No Master Client Received in Response");
             }
 
             void ClientConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -454,7 +418,7 @@ namespace Wsla.Unity
             {
                 this.Room = room;
 
-                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.MaxValue, 10);
+                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
 
                 Transport.Dispatcher.Register<ClientConnectionResponse>(ConnectResponseHandler);
                 Transport.Dispatcher.Register<ClientConnectMessage>(ClientConnectHandler);
@@ -681,6 +645,172 @@ namespace Wsla.Unity
             }
         }
 
+        public RpcsProperty RPCs { get; }
+        public class RpcsProperty
+        {
+            TransportProperty Transport => Room.Transport;
+
+            void CommandHandler(ref NetworkRpcCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Get(ref message.Parameters, out var bind) is false)
+                {
+                    Debug.LogError($"No Network RPC Found for Parameters of {message.Parameters}");
+                    return;
+                }
+
+                var info = RpcInfo.From(Room, ref message, channel, delivery);
+
+                bind.Invoke(reader, info);
+            }
+
+            bool Get(ref NetworkRpcParameters parameters, out BaseRpcBind bind)
+            {
+                if (Room.Entities.TryGet(parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {parameters.Entity} Found");
+                    bind = default;
+                    return false;
+                }
+
+                return Get(entity, parameters.Behaviour, parameters.RPC, out bind);
+            }
+            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkRpcID rpcID, out BaseRpcBind bind)
+            {
+                if (entity.Behaviours.TryGet(behaviourID, out var behaviour) is false)
+                {
+                    NetworkLog.Error($"No Network Behaviour with ID {behaviourID} Found on {entity}");
+                    bind = default;
+                    return false;
+                }
+
+                if (behaviour.RPC.TryGet(rpcID, out bind) is false)
+                {
+                    NetworkLog.Error($"No Network RPC with ID {rpcID} Found on {entity} on Behaviour {behaviour}");
+                    bind = default;
+                    return false;
+                }
+
+                return true;
+            }
+
+            internal void ReadState(NetPacketReader reader)
+            {
+                var total = NetworkSerializer.ReadValue<ushort>(reader);
+
+                for (int x = 0; x < total; x++)
+                {
+                    var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    if (Room.Entities.TryGet(entityID, out var entity) is false)
+                        throw new InvalidOperationException($"No Entity found With ID {entityID}");
+
+                    var count = NetworkSerializer.ReadValue<ushort>(reader);
+
+                    for (int y = 0; y < count; y++)
+                    {
+                        var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
+                        var rpcID = NetworkSerializer.ReadValue<NetworkRpcID>(reader);
+
+                        if (Get(entity, behaviourID, rpcID, out var bind))
+                        {
+                            var info = RpcInfo.Buffered();
+                            bind.Invoke(reader, info);
+                        }
+                    }
+                }
+            }
+
+            readonly RoomInstance Room;
+            public RpcsProperty(RoomInstance Room)
+            {
+                this.Room = Room;
+
+                Transport.Dispatcher.Register<NetworkRpcCommand>(CommandHandler);
+            }
+        }
+
+        public VariablesProperty Variables { get; }
+        public class VariablesProperty
+        {
+            TransportProperty Transport => Room.Transport;
+
+            void CommandHandler(ref NetworkVariableCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Get(ref message.Parameters, out var bind) is false)
+                {
+                    Debug.LogError($"No Network RPC Found for Parameters of {message.Parameters}");
+                    return;
+                }
+
+                var info = NetworkVariableInfo.From(Room, ref message, channel, delivery);
+
+                bind.Set(reader, info);
+            }
+
+            bool Get(ref NetworkVariableParameters parameters, out NetworkVariable variable)
+            {
+                if (Room.Entities.TryGet(parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {parameters.Entity} Found");
+                    variable = default;
+                    return false;
+                }
+
+                return Get(entity, parameters.Behaviour, parameters.Variable, out variable);
+            }
+            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkVariableID variableID, out NetworkVariable variable)
+            {
+                if (entity.Behaviours.TryGet(behaviourID, out var behaviour) is false)
+                {
+                    NetworkLog.Error($"No Network Behaviour with ID {behaviourID} Found on {entity}");
+                    variable = default;
+                    return false;
+                }
+
+                if (behaviour.Variables.TryGet(variableID, out variable) is false)
+                {
+                    NetworkLog.Error($"No Network Variable with ID {variableID} Found on {entity} on Behaviour {behaviour}");
+                    variable = default;
+                    return false;
+                }
+
+                return true;
+            }
+
+            internal void ReadState(NetPacketReader reader)
+            {
+                var total = NetworkSerializer.ReadValue<ushort>(reader);
+
+                for (int x = 0; x < total; x++)
+                {
+                    var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    if (Room.Entities.TryGet(entityID, out var entity) is false)
+                        throw new NotImplementedException();
+
+                    var count = NetworkSerializer.ReadValue<ushort>(reader);
+
+                    for (int y = 0; y < count; y++)
+                    {
+                        var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
+                        var variableID = NetworkSerializer.ReadValue<NetworkVariableID>(reader);
+
+                        if (Get(entity, behaviourID, variableID, out var variable))
+                        {
+                            var info = NetworkVariableInfo.Buffered();
+                            variable.Set(reader, info);
+                        }
+                    }
+                }
+            }
+
+            readonly RoomInstance Room;
+            public VariablesProperty(RoomInstance Room)
+            {
+                this.Room = Room;
+
+                Transport.Dispatcher.Register<NetworkVariableCommand>(CommandHandler);
+            }
+        }
+
         public SceneProperty Scene { get; }
         public class SceneProperty
         {
@@ -812,6 +942,45 @@ namespace Wsla.Unity
             Transport.Stop();
         }
 
+        async UniTask ReadState(ClientConnectionResponse message, NetPacketReader reader)
+        {
+            Transport.Listener.Pause();
+            {
+                //Sync Clients
+                Clients.ReadState(reader, message);
+
+                //Sync Spawn Tokens
+                Clients.Local.ReadSpawnTokens(reader, message);
+
+                //Sync Scenes
+                await Scene.ReadState(reader, message);
+
+                var entities = Pools.EntityList.Take();
+
+                //Sync Entities
+                Entities.ReadState(reader, message, entities);
+
+                //Spawn && Replicate Entities
+                foreach (var entity in entities)
+                {
+                    entity.Spawn();
+                    entity.Replicate();
+                }
+
+                //Spawn Scene
+                Scene.Component.Spawn();
+
+                //Sync Variables
+                Variables.ReadState(reader);
+
+                //Sync RPCs
+                RPCs.ReadState(reader);
+            }
+            Transport.Listener.Resume();
+
+            reader.Recycle();
+        }
+
         public void Shutdown()
         {
             //TODO: Implement
@@ -826,6 +995,8 @@ namespace Wsla.Unity
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
             Scene = new SceneProperty(this);
+            RPCs = new RpcsProperty(this);
+            Variables = new VariablesProperty(this);
         }
     }
 
@@ -835,6 +1006,8 @@ namespace Wsla.Unity
         public string Username { get; private set; }
 
         public bool IsLocal => this is LocalNetworkClient;
+        public bool IsRemote => IsLocal is false;
+
         public bool IsMaster => Room.Clients.Master == this;
 
         #region Entities

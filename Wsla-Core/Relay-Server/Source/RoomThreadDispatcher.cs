@@ -37,7 +37,7 @@ namespace Wsla
                 public static PoolsProperty Create() => new PoolsProperty()
                 {
                     SinglePackerWriter = new(new(true, 2048), x => x.SetPosition(0)),
-                    MultiPackerWriter = new(() => new NetDataWriter(true, 128)),
+                    MultiPackerWriter = new(() => new NetDataWriter(true, 128), x => x.SetPosition(0)),
                     EntityList = new(new(100), x => x.Clear()),
                 };
             }

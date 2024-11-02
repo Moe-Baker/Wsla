@@ -41,13 +41,15 @@ namespace Wsla.Unity
         }
 
         static NetworkAPI API => NetworkAPI.Instance;
-        static RoomInstance Room => API.Room.Instance;
+        static RoomInstance Room => API.Room.Current;
 
         #region Spawn
         public bool IsSpawned { get; private set; }
 
         internal void Spawn()
         {
+            NetworkLog.Info($"Spawning Scene {BuildIndex}");
+
             IsSpawned = true;
             OnSpawn?.Invoke();
         }

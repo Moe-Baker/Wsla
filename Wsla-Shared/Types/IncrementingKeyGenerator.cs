@@ -4,9 +4,10 @@ using System.Collections.Generic;
 namespace Wsla
 {
     public class IncrementingKeyGenerator<TKey>
-        where TKey : struct
+        where TKey : struct, IEquatable<TKey>
     {
         TKey Index;
+        TKey Max;
 
         Queue<FreeEntry> Free;
         public struct FreeEntry
@@ -25,8 +26,8 @@ namespace Wsla
 
         public TimeSpan Lifetime { get; }
 
-        SourceDelegate Source;
-        public delegate bool SourceDelegate(ref TKey index, out TKey key);
+        IncrementDelegate Incrementor;
+        public delegate TKey IncrementDelegate(TKey index);
 
         public DateTime Time => DateTime.Now;
 
@@ -35,7 +36,10 @@ namespace Wsla
             if (TryDequeue(out key))
                 return true;
 
-            return Source(ref Index, out key);
+            if (TryGenerate(out key))
+                return true;
+
+            return false;
         }
         bool TryDequeue(out TKey key)
         {
@@ -48,6 +52,18 @@ namespace Wsla
 
             key = default;
             return false;
+        }
+        bool TryGenerate(out TKey key)
+        {
+            if (Index.Equals(Max))
+            {
+                key = default;
+                return false;
+            }
+
+            key = Index;
+            Index = Incrementor(Index);
+            return true;
         }
 
         public bool TryReserve(Span<TKey> buffer, out Span<TKey> result)
@@ -66,7 +82,7 @@ namespace Wsla
 
             while (index < buffer.Length)
             {
-                if (Source(ref Index, out buffer[index]) is false)
+                if (TryGenerate(out buffer[index]) is false)
                 {
                     var slice = buffer.Slice(0, index);
                     Return(slice);
@@ -90,13 +106,14 @@ namespace Wsla
                 Return(keys[i]);
         }
 
-        public IncrementingKeyGenerator(TKey index, int capacity, TimeSpan lifetime, SourceDelegate source)
+        public IncrementingKeyGenerator(TKey Min, TKey Max, int Capacity, TimeSpan Lifetime, IncrementDelegate Incrementor)
         {
-            Free = new Queue<FreeEntry>(capacity);
+            this.Max = Max;
+            this.Lifetime = Lifetime;
+            this.Incrementor = Incrementor;
 
-            this.Index = index;
-            this.Lifetime = lifetime;
-            this.Source = source;
+            Index = Min;
+            Free = new Queue<FreeEntry>(Capacity);
         }
     }
 }

@@ -50,27 +50,6 @@ namespace LiteNetLib
             _listener = listener;
         }
 
-        public NetPeer AcceptIfKey(string key)
-        {
-            if (!TryActivate())
-                return null;
-            try
-            {
-                if (Data.GetString() == key)
-                    Result = ConnectionRequestResult.Accept;
-            }
-            catch
-            {
-                NetDebug.WriteError("[AC] Invalid incoming data");
-            }
-            if (Result == ConnectionRequestResult.Accept)
-                return _listener.OnConnectionSolved(this, null, 0, 0);
-
-            Result = ConnectionRequestResult.Reject;
-            _listener.OnConnectionSolved(this, null, 0, 0);
-            return null;
-        }
-
         /// <summary>
         /// Accept connection and get new NetPeer as result
         /// </summary>

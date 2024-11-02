@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 
 using Cysharp.Threading.Tasks;
@@ -6,24 +5,22 @@ using Cysharp.Threading.Tasks;
 using Toolbox;
 
 using UnityEngine;
+using UnityEngine.UI;
 
 using Wsla;
 using Wsla.Unity;
 
 public class Sandbox : MonoBehaviour
 {
-    NetworkAPI NetworkAPI => NetworkAPI.Instance;
+    public Button StartButton;
 
-    public ButtonField Execute = ButtonField.Create<Sandbox>(x =>
-    {
-        return ButtonFieldOperation.None;
-    });
+    NetworkAPI NetworkAPI => NetworkAPI.Instance;
 
     void Start()
     {
         Application.runInBackground = true;
 
-        Initialize().Forget();
+        StartButton.onClick.AddListener(() => Initialize().Forget());
     }
 
     async UniTask Initialize()

@@ -167,11 +167,6 @@ namespace LiteNetLib
         public bool UnconnectedMessagesEnabled = false;
 
         /// <summary>
-        /// Enable nat punch messages
-        /// </summary>
-        public bool NatPunchEnabled = false;
-
-        /// <summary>
         /// Library logic update and send period in milliseconds
         /// Lowest values in Windows doesn't change much because of Thread.Sleep precision
         /// To more frequent sends (or sends tied to your game logic) use <see cref="TriggerUpdate"/>
@@ -265,11 +260,6 @@ namespace LiteNetLib
         /// Toggles the collection of network statistics for the instance and all known peers
         /// </summary>
         public bool EnableStatistics = false;
-
-        /// <summary>
-        /// NatPunchModule for NAT hole punching operations
-        /// </summary>
-        public readonly NatPunchModule NatPunchModule;
 
         /// <summary>
         /// Returns true if socket listening and update thread is running
@@ -366,7 +356,6 @@ namespace LiteNetLib
             _deliveryEventListener = listener as IDeliveryEventListener;
             _ntpEventListener = listener as INtpEventListener;
             _peerAddressChangedListener = listener as IPeerAddressChangedListener;
-            NatPunchModule = new NatPunchModule(this);
             _extraPacketLayer = extraPacketLayer;
         }
 
@@ -895,8 +884,6 @@ namespace LiteNetLib
                     CreateEvent(NetEvent.EType.ReceiveUnconnected, remoteEndPoint: remoteEndPoint, readerSource: packet);
                     return;
                 case PacketProperty.NatMessage:
-                    if (NatPunchEnabled)
-                        NatPunchModule.ProcessMessage(remoteEndPoint, packet);
                     return;
             }
 
@@ -1075,7 +1062,7 @@ namespace LiteNetLib
         /// <param name="options">Send options (reliable, unreliable, etc.)</param>
         public void SendToAll(NetDataWriter writer, DeliveryMethod options)
         {
-            SendToAll(writer.Data, 0, writer.Length, options);
+            SendToAll(writer.Data, 0, writer.Position, options);
         }
 
         /// <summary>
@@ -1108,7 +1095,7 @@ namespace LiteNetLib
         /// <param name="options">Send options (reliable, unreliable, etc.)</param>
         public void SendToAll(NetDataWriter writer, byte channelNumber, DeliveryMethod options)
         {
-            SendToAll(writer.Data, 0, writer.Length, channelNumber, options);
+            SendToAll(writer.Data, 0, writer.Position, channelNumber, options);
         }
 
         /// <summary>
@@ -1152,7 +1139,7 @@ namespace LiteNetLib
         /// <param name="excludePeer">Excluded peer</param>
         public void SendToAll(NetDataWriter writer, DeliveryMethod options, NetPeer excludePeer)
         {
-            SendToAll(writer.Data, 0, writer.Length, 0, options, excludePeer);
+            SendToAll(writer.Data, 0, writer.Position, 0, options, excludePeer);
         }
 
         /// <summary>
@@ -1188,7 +1175,7 @@ namespace LiteNetLib
         /// <param name="excludePeer">Excluded peer</param>
         public void SendToAll(NetDataWriter writer, byte channelNumber, DeliveryMethod options, NetPeer excludePeer)
         {
-            SendToAll(writer.Data, 0, writer.Length, channelNumber, options, excludePeer);
+            SendToAll(writer.Data, 0, writer.Position, channelNumber, options, excludePeer);
         }
 
         /// <summary>
@@ -1404,7 +1391,7 @@ namespace LiteNetLib
         {
             IPEndPoint remoteEndPoint = NetUtils.MakeEndPoint(address, port);
 
-            return SendUnconnectedMessage(writer.Data, 0, writer.Length, remoteEndPoint);
+            return SendUnconnectedMessage(writer.Data, 0, writer.Position, remoteEndPoint);
         }
 
         /// <summary>
@@ -1415,7 +1402,7 @@ namespace LiteNetLib
         /// <returns>Operation result</returns>
         public bool SendUnconnectedMessage(NetDataWriter writer, IPEndPoint remoteEndPoint)
         {
-            return SendUnconnectedMessage(writer.Data, 0, writer.Length, remoteEndPoint);
+            return SendUnconnectedMessage(writer.Data, 0, writer.Position, remoteEndPoint);
         }
 
         /// <summary>
@@ -1479,19 +1466,6 @@ namespace LiteNetLib
         /// </summary>
         /// <param name="address">Server IP or hostname</param>
         /// <param name="port">Server Port</param>
-        /// <param name="key">Connection key</param>
-        /// <returns>New NetPeer if new connection, Old NetPeer if already connected, null peer if there is ConnectionRequest awaiting</returns>
-        /// <exception cref="InvalidOperationException">Manager is not running. Call <see cref="Start()"/></exception>
-        public NetPeer Connect(string address, int port, string key)
-        {
-            return Connect(address, port, NetDataWriter.FromString(key));
-        }
-
-        /// <summary>
-        /// Connect to remote host
-        /// </summary>
-        /// <param name="address">Server IP or hostname</param>
-        /// <param name="port">Server Port</param>
         /// <param name="connectionData">Additional data for remote peer</param>
         /// <returns>New NetPeer if new connection, Old NetPeer if already connected, null peer if there is ConnectionRequest awaiting</returns>
         /// <exception cref="InvalidOperationException">Manager is not running. Call <see cref="Start()"/></exception>
@@ -1508,18 +1482,6 @@ namespace LiteNetLib
                 return null;
             }
             return Connect(ep, connectionData);
-        }
-
-        /// <summary>
-        /// Connect to remote host
-        /// </summary>
-        /// <param name="target">Server end point (ip and port)</param>
-        /// <param name="key">Connection key</param>
-        /// <returns>New NetPeer if new connection, Old NetPeer if already connected, null peer if there is ConnectionRequest awaiting</returns>
-        /// <exception cref="InvalidOperationException">Manager is not running. Call <see cref="Start()"/></exception>
-        public NetPeer Connect(IPEndPoint target, string key)
-        {
-            return Connect(target, NetDataWriter.FromString(key));
         }
 
         /// <summary>
@@ -1714,7 +1676,7 @@ namespace LiteNetLib
         /// <param name="writer">additional data</param>
         public void DisconnectPeer(NetPeer peer, NetDataWriter writer)
         {
-            DisconnectPeer(peer, writer.Data, 0, writer.Length);
+            DisconnectPeer(peer, writer.Data, 0, writer.Position);
         }
 
         /// <summary>

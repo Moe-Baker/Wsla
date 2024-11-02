@@ -83,28 +83,36 @@ namespace Wsla.Serialization
     {
         static Encoding Encoder => Encoding.UTF8;
 
+        public const int StackOptimizationLimit = 1024;
+
         public override void Write(in string value, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in value, value.Length, stream))
+            if (value is null)
+            {
+                NetworkSerializer.Helper.Length.Write(0, stream);
                 return;
+            }
 
-            if (value.Length <= 1024)
+            if (value.Length > StackOptimizationLimit)
+            {
+                var length = Encoder.GetByteCount(value);
+                NetworkSerializer.Helper.Length.Write(length + 1, stream);
+
+                var buffer = stream.PopSpan(length);
+                Encoder.GetBytes(value, buffer);
+            }
+            else
             {
                 //Small strings optimization
 
                 Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
 
-                var written = Encoder.GetBytes(value, buffer);
+                var length = Encoder.GetBytes(value, buffer);
+                NetworkSerializer.Helper.Length.Write(length + 1, stream);
 
-                var destination = stream.Take(written);
+                var destination = stream.PopSpan(length);
 
-                buffer.Slice(0, written).CopyTo(destination);
-            }
-            else
-            {
-                var buffer = stream.Take(Encoder.GetByteCount(value));
-
-                Encoder.GetBytes(value, buffer);
+                buffer.Slice(0, length).CopyTo(destination);
             }
 
             var count = Encoder.GetByteCount(value);
@@ -112,13 +120,17 @@ namespace Wsla.Serialization
 
         public override void Read(ref string value, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            var length = NetworkSerializer.Helper.Length.Read(stream);
+
+            if (length is 0)
             {
                 value = null;
                 return;
             }
 
-            var span = stream.Take(length);
+            length -= 1;
+
+            var span = stream.PopSpan(length);
 
             value = Encoder.GetString(span);
         }
@@ -132,7 +144,7 @@ namespace Wsla.Serialization
 
         public override void Write(in TEnum value, INetworkStream stream)
         {
-            var buffer = stream.Take(Size);
+            var buffer = stream.PopSpan(Size);
 
             fixed (void* source = &value)
             fixed (void* destination = buffer)
@@ -142,7 +154,7 @@ namespace Wsla.Serialization
         }
         public override void Read(ref TEnum value, INetworkStream stream)
         {
-            var buffer = stream.Take(Size);
+            var buffer = stream.PopSpan(Size);
 
             fixed (void* source = buffer)
             fixed (void* destination = &value)
@@ -155,11 +167,10 @@ namespace Wsla.Serialization
 
     #region List
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
-        where TValue : new()
     {
         public override void Write(in TValue[] array, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in array, ref stream))
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in array, stream))
                 return;
 
             for (int i = 0; i < array.Length; i++)
@@ -168,7 +179,7 @@ namespace Wsla.Serialization
 
         public override void Read(ref TValue[] array, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
             {
                 array = default;
                 return;
@@ -189,11 +200,10 @@ namespace Wsla.Serialization
     }
 
     public class ArraySegmentNetworkSerializationResolver<TValue> : NetworkSerializationResolver<ArraySegment<TValue>>
-        where TValue : new()
     {
         public override void Write(in ArraySegment<TValue> segment, INetworkStream stream)
         {
-            NetworkSerializer.Helper.Length.Write(segment.Count, ref stream);
+            NetworkSerializer.Helper.Length.Write(segment.Count, stream);
 
             for (int i = 0; i < segment.Count; i++)
                 NetworkSerializer.WriteValue(segment[i], stream);
@@ -201,11 +211,11 @@ namespace Wsla.Serialization
 
         public override void Read(ref ArraySegment<TValue> segment, INetworkStream stream)
         {
-            var length = NetworkSerializer.Helper.Length.Read(ref stream);
+            var length = NetworkSerializer.Helper.Length.Read(stream);
 
             if (length is 0)
             {
-                segment = new ArraySegment<TValue>(default, 0, 0);
+                segment = ArraySegment<TValue>.Empty;
                 return;
             }
 
@@ -220,11 +230,10 @@ namespace Wsla.Serialization
     }
 
     public class ListNetworkSerializationResolver<TValue> : NetworkSerializationResolver<List<TValue>>
-        where TValue : new()
     {
         public override void Write(in List<TValue> list, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in list, ref stream))
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in list, stream))
                 return;
 
             for (int i = 0; i < list.Count; i++)
@@ -233,7 +242,7 @@ namespace Wsla.Serialization
 
         public override void Read(ref List<TValue> list, INetworkStream stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
             {
                 list = default;
                 return;
@@ -260,7 +269,7 @@ namespace Wsla.Serialization
 
     #region Custom
     public class ManualNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
-        where TValue : IManualNetworkSerialization
+        where TValue : IManualNetworkSerialization, new()
     {
         readonly bool IsNullable = NetworkSerializer.Helper.Nullability.IsNullable<TValue>();
 
@@ -276,10 +285,12 @@ namespace Wsla.Serialization
             if (IsNullable && NetworkSerializer.Helper.Nullability.Read(stream))
             {
                 value = default;
-                return;
             }
-
-            value.Read(stream);
+            else
+            {
+                value ??= new();
+                value.Read(stream);
+            }
         }
     }
     public interface IManualNetworkSerialization
@@ -289,7 +300,7 @@ namespace Wsla.Serialization
     }
 
     public class AutoNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
-        where TValue : IAutoNetworkSerialization
+        where TValue : IAutoNetworkSerialization, new()
     {
         readonly bool IsNullable = NetworkSerializer.Helper.Nullability.IsNullable<TValue>();
 
@@ -307,12 +318,13 @@ namespace Wsla.Serialization
             if (IsNullable && NetworkSerializer.Helper.Nullability.Read(stream))
             {
                 value = default;
-                return;
             }
-
-            var context = new AutoSerializationContext(stream, AutoSerializationMode.Read);
-
-            value.Select(ref context);
+            else
+            {
+                value ??= new();
+                var context = new AutoSerializationContext(stream, AutoSerializationMode.Read);
+                value.Select(ref context);
+            }
         }
     }
     public interface IAutoNetworkSerialization

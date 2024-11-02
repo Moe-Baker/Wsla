@@ -33,22 +33,13 @@ namespace Wsla
             this.Value = value;
         }
 
+        public static NetworkEntityID Min { get; } = new(ushort.MinValue);
+        public static NetworkEntityID Max { get; } = new(ushort.MaxValue);
+
         public static bool operator ==(NetworkEntityID left, NetworkEntityID right) => left.Equals(right);
         public static bool operator !=(NetworkEntityID left, NetworkEntityID right) => !left.Equals(right);
 
-        public static bool Increment(ref NetworkEntityID index, out NetworkEntityID key)
-        {
-            if (index.Value >= MaxValue)
-            {
-                key = default;
-                return false;
-            }
-
-            key = index;
-            index = new NetworkEntityID((ushort)(index.Value + 1));
-
-            return true;
-        }
+        public static NetworkEntityID Increment(NetworkEntityID index) => new NetworkEntityID((ushort)(index.Value + 1));
     }
 
     [Serializable]

@@ -8,6 +8,7 @@ namespace Wsla
     {
         Stack<T> Stack;
         Func<T> Creator;
+        Action<T> Reseter;
 
         public struct Handle : IDisposable
         {
@@ -41,11 +42,16 @@ namespace Wsla
             return item;
         }
 
-        public void Return(T item) => Stack.Push(item);
+        public void Return(T item)
+        {
+            Reseter(item);
+            Stack.Push(item);
+        }
 
-        public GenericPool(Func<T> Creator)
+        public GenericPool(Func<T> Creator, Action<T> Reseter)
         {
             this.Creator = Creator;
+            this.Reseter = Reseter;
 
             Stack = new Stack<T>(5);
         }

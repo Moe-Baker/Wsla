@@ -10,8 +10,6 @@ namespace Wsla
     {
         public byte Value { get; private set; }
 
-        public const byte MaxValue = byte.MaxValue;
-
         public override bool Equals(object obj)
         {
             if (obj is NetworkClientID other)
@@ -33,21 +31,12 @@ namespace Wsla
             this.Value = value;
         }
 
+        public static NetworkClientID Min { get; } = new(byte.MinValue);
+        public static NetworkClientID Max { get; } = new(byte.MaxValue);
+
         public static bool operator ==(NetworkClientID left, NetworkClientID right) => left.Equals(right);
         public static bool operator !=(NetworkClientID left, NetworkClientID right) => !left.Equals(right);
 
-        public static bool Increment(ref NetworkClientID index, out NetworkClientID key)
-        {
-            if (index.Value >= MaxValue)
-            {
-                key = default;
-                return false;
-            }
-
-            key = index;
-            index = new NetworkClientID((byte)(index.Value + 1));
-
-            return true;
-        }
+        public static NetworkClientID Increment(NetworkClientID index) => new NetworkClientID((byte)(index.Value + 1));
     }
 }

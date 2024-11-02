@@ -4,53 +4,43 @@ namespace Wsla.Serialization
 {
     public interface INetworkStream
     {
-        void Advance(int count);
+        int Position { get; set; }
+        int Available { get; }
 
-        /// <summary>
-        /// Returns the remaining capacity available without advancing the stream
-        /// </summary>
-        /// <returns></returns>
-        Span<byte> GetRemaining();
+        void EnsureFit(int extra);
 
-        /// <summary>
-        /// Returns the a span with the specified size & advances the stream
-        /// </summary>
-        /// <param name="size"></param>
-        /// <returns></returns>
-        Span<byte> Take(int count);
+        Span<byte> GetSpan(int start, int length);
     }
 
-    public class NetworkStream : INetworkStream
+    public static class NetworkStreamExtensions
     {
-        public byte[] Data { get; }
-
-        public int Position { get; private set; }
-
-        public int Remaining => Data.Length - Position;
-
-        public void Advance(int count)
+        public static Span<byte> PeekAvailableSpan<TStream>(this TStream stream)
+            where TStream : INetworkStream
         {
-            if (count > Remaining)
-                throw new ArgumentOutOfRangeException($"Advancement count of {count} Bigger than the Remaing capacity of {Remaining}");
-
-            Position += count;
+            return stream.GetSpan(stream.Position, stream.Available);
         }
-
-        public Span<byte> GetRemaining() => new Span<byte>(Data, Position, Remaining);
-
-        public Span<byte> Take(int size)
+        public static Span<byte> PopAvailableSpan<TStream>(this TStream stream)
+            where TStream : INetworkStream
         {
-            var span = new Span<byte>(Data, Position, size);
-            Position += size;
+            var span = PeekAvailableSpan(stream);
+            stream.Position += span.Length;
             return span;
         }
 
-        public void Reset() => Position = 0;
-
-        public NetworkStream(int count) : this(new byte[count]) { }
-        public NetworkStream(byte[] Data)
+        public static Span<byte> PeekAllocatedSpan<TStream>(this TStream stream)
+            where TStream : INetworkStream
         {
-            this.Data = Data;
+            return stream.GetSpan(0, stream.Position);
+        }
+
+        public static Span<byte> PopSpan<TStream>(this TStream stream, int length)
+            where TStream : INetworkStream
+        {
+            stream.EnsureFit(length);
+
+            var buffer = stream.GetSpan(stream.Position, length);
+            stream.Position += length;
+            return buffer;
         }
     }
 }

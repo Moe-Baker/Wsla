@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 using Wsla.Serialization;
 
-[assembly: NetworkSerializationResolverRegisteration(typeof(Wsla.NetworkTypeSerializationResolver), 0, "Register")]
+[assembly: NetworkSerializationResolverRegisteration(typeof(Wsla.WslaSerializationResolvers), 0, "Register")]
 
 namespace Wsla
 {
@@ -59,7 +59,6 @@ namespace Wsla
                 counter += 1;
             }
 
-            //Sample
             Add<ClientConnectionResponse>(ref counter);
 
             Add<ClientConnectMessage>(ref counter);
@@ -75,11 +74,14 @@ namespace Wsla
             Add<BroadcastNetworkRpcRequest>(ref counter);
             Add<BufferNetworkRpcRequest>(ref counter);
             Add<TargetNetworkRpcRequest>(ref counter);
-
             Add<NetworkRpcCommand>(ref counter);
 
             Add<SpawnScenenRequest>(ref counter);
             Add<SpawnSceneCommand>(ref counter);
+
+            Add<BroadcastNetworkVariableRequest>(ref counter);
+            Add<BufferNetworkVariableRequest>(ref counter);
+            Add<NetworkVariableCommand>(ref counter);
         }
     }
 
@@ -105,10 +107,16 @@ namespace Wsla
 
         public static byte ReadValue(INetworkStream stream)
             => NetworkSerializer.ReadValue<byte>(stream);
+    }
 
+    public static class WslaSerializationResolvers
+    {
         static void Register()
         {
             NetworkSerializationResolver.Register<Type, NetworkTypeSerializationResolver>();
+
+            NetworkSerializationResolver.Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
+            NetworkSerializationResolver.Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
         }
     }
 }

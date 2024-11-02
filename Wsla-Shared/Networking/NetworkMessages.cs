@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-
-using Wsla.Serialization;
+﻿using Wsla.Serialization;
 
 namespace Wsla
 {
@@ -109,7 +106,7 @@ namespace Wsla
 
             context.Select(ref Authority);
             if (Authority is not NetworkEntityAuthorityMode.Authoritative)
-                context.Select(ref ID);
+                context.Select(ref Owner);
         }
 
         public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)

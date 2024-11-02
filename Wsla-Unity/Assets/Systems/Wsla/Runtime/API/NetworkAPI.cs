@@ -27,31 +27,34 @@ namespace Wsla.Unity
         {
             base.Init();
 
-            NetworkLog.Handler = (type, item) =>
-            {
-                switch (type)
-                {
-                    case NetworkLogType.Trace:
-                        Debug.Log(item);
-                        break;
-
-                    case NetworkLogType.Info:
-                        Debug.Log(item);
-                        break;
-
-                    case NetworkLogType.Warning:
-                        Debug.LogWarning(item);
-                        break;
-
-                    case NetworkLogType.Error:
-                        Debug.LogError(item);
-                        break;
-
-                    default: throw new NotImplementedException();
-                }
-            };
+            NetworkLog.Handler = LogHandler;
 
             Room.Set(this);
+        }
+
+        [HideInCallstack]
+        void LogHandler(NetworkLogType type, object item)
+        {
+            switch (type)
+            {
+                case NetworkLogType.Trace:
+                    Debug.Log(item);
+                    break;
+
+                case NetworkLogType.Info:
+                    Debug.Log(item);
+                    break;
+
+                case NetworkLogType.Warning:
+                    Debug.LogWarning(item);
+                    break;
+
+                case NetworkLogType.Error:
+                    Debug.LogError(item);
+                    break;
+
+                default: throw new NotImplementedException();
+            }
         }
     }
 }

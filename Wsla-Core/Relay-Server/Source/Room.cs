@@ -9,7 +9,7 @@ using Wsla.Serialization;
 
 namespace Wsla.Server
 {
-    public class Room
+    public class Room : IDisposable
     {
         public string Name { get; }
 
@@ -142,7 +142,7 @@ namespace Wsla.Server
                 Listener = new EventBasedNetListener();
 
                 Manager = new NetManager(Listener);
-                Manager.DisconnectTimeout = 60 * 1000;
+                Manager.DisconnectTimeout = 240 * 1000;
                 Manager.IPv6Enabled = false;
 
                 Dispatcher = new DispatcherProperty(this);
@@ -150,7 +150,7 @@ namespace Wsla.Server
         }
 
         public ClientsProperty Clients { get; private set; }
-        public class ClientsProperty
+        public class ClientsProperty : IDisposable
         {
             IncrementingKeyGenerator<NetworkClientID> IDGenerator;
 
@@ -264,17 +264,7 @@ namespace Wsla.Server
                     var message = new ClientConnectionResponse(client.ID, Master.ID, Count, client.SpawnAllowance, Room.Entities.Count);
                     NetworkSerializer.WriteHeader(in message, writer);
 
-                    //Sync Clients
-                    WriteState(writer);
-
-                    //Sync Spawn Tokens
-                    client.WriteSpawnTokens(writer);
-
-                    //Sync Scene
-                    Room.Scene.WriteState(writer);
-
-                    //Sync Entity Definitions
-                    Room.Entities.WriteDefinitions(writer);
+                    Room.WriteState(client, writer);
 
                     Transport.SendWriter(client, writer);
                 }
@@ -301,12 +291,20 @@ namespace Wsla.Server
                     var message = new ClientDisconnectMessage(client.ID);
                     Transport.BroadcastData(in message, except: client);
                 }
+
+                client.Dispose();
             }
 
-            void WriteState(NetDataWriter writer)
+            internal void WriteState(NetDataWriter writer)
             {
                 foreach (var other in Collection)
                     other.WriteState(writer);
+            }
+
+            public void Dispose()
+            {
+                foreach (var client in Collection)
+                    client.Dispose();
             }
 
             readonly Room Room;
@@ -314,14 +312,14 @@ namespace Wsla.Server
             {
                 this.Room = room;
 
-                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(new NetworkClientID(1), 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
+                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(NetworkClientID.Min, NetworkClientID.Max, 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
 
-                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.MaxValue, 10);
+                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
             }
         }
 
         public EntitiesProperty Entities;
-        public class EntitiesProperty
+        public class EntitiesProperty : IDisposable
         {
             internal IncrementingKeyGenerator<NetworkEntityID> IDGenerator;
 
@@ -419,6 +417,8 @@ namespace Wsla.Server
             {
                 Dictionary.Remove(entity.ID);
                 entity.Owner.UnregisterEntity(entity);
+
+                entity.Dispose();
             }
 
             void Transfer(NetworkEntity entity, NetworkClient to)
@@ -431,10 +431,26 @@ namespace Wsla.Server
                 entity.AssignOwner(to);
             }
 
-            internal void WriteDefinitions(NetDataWriter writer)
+            internal void WriteDefinitions(NetDataWriter writer, out (ushort variables, ushort rpcs) buffer)
             {
+                buffer = (0, 0);
+
                 foreach (var (id, entity) in Dictionary)
+                {
+                    if (entity.RpcBuffer.Count > 0)
+                        buffer.rpcs += 1;
+
+                    if (entity.VariableBuffer.Count > 0)
+                        buffer.variables += 1;
+
                     entity.WriteDefinition(writer);
+                }
+            }
+
+            public void Dispose()
+            {
+                foreach (var (id, client) in Dictionary)
+                    client.Dispose();
             }
 
             readonly Room Room;
@@ -442,7 +458,7 @@ namespace Wsla.Server
             {
                 this.Room = room;
 
-                IDGenerator = new(new NetworkEntityID(1), 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
+                IDGenerator = new(NetworkEntityID.Min, NetworkEntityID.Max, 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
 
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
 
@@ -466,9 +482,12 @@ namespace Wsla.Server
                 if (message.Buffer is RemoteBufferMode.Buffer)
                     entity.RpcBuffer.Register(message.Parameters.Behaviour, message.Parameters.RPC, reader);
 
-                var writer = Room.Pools.SinglePackerWriter.Take();
-
-                Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
+                //Send to Others
+                {
+                    var writer = Room.Pools.SinglePackerWriter.Take();
+                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
+                }
             }
 
             void BufferRequestHandler(NetworkClient sender, ref BufferNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -486,30 +505,47 @@ namespace Wsla.Server
             {
                 if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
                 {
-                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} for Non-Existing Entity");
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} to Non-Existing Entity");
                     return;
                 }
 
-                var writer = Room.Pools.SinglePackerWriter.Take();
+                if (Room.Clients.TryGet(message.Target, out var target) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} to Non-Existing Client");
+                    return;
+                }
 
-                WriteCommand(sender, message.Parameters, reader, writer);
-
-                Transport.SendWriter(sender, writer);
+                //Send to Target
+                {
+                    var writer = Room.Pools.SinglePackerWriter.Take();
+                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    Transport.SendWriter(target, writer);
+                }
             }
 
-            void WriteCommand(NetworkClient sender, NetworkRpcParameters parameters, NetPacketReader arguments, NetDataWriter destination)
+            void WriteCommand(NetworkClient sender, ref NetworkRpcParameters parameters, NetPacketReader input, NetDataWriter output)
             {
                 var command = new NetworkRpcCommand(sender.ID, parameters);
 
-                NetworkSerializer.WriteHeader(in command, destination);
+                NetworkSerializer.WriteHeader(in command, output);
 
                 //Write Arguments
                 {
-                    var source = arguments.GetRemainingBytesSpan();
-                    var buffer = destination.Take(source.Length);
-
-                    source.CopyTo(buffer);
+                    var source = input.PeekAvailableSpan();
+                    var destination = output.PopSpan(source.Length);
+                    source.CopyTo(destination);
                 }
+            }
+
+            internal void WriteState(NetDataWriter writer, ushort count)
+            {
+                NetworkSerializer.WriteValue(in count, writer);
+
+                if (count is 0)
+                    return;
+
+                foreach (var (id, entity) in Room.Entities.Dictionary)
+                    entity.RpcBuffer.WriteState(id, writer);
             }
 
             readonly Room Room;
@@ -520,6 +556,75 @@ namespace Wsla.Server
                 Transport.Dispatcher.Register<BroadcastNetworkRpcRequest>(BroadcastRequestHandler);
                 Transport.Dispatcher.Register<BufferNetworkRpcRequest>(BufferRequestHandler);
                 Transport.Dispatcher.Register<TargetNetworkRpcRequest>(TargetRequestHandler);
+            }
+        }
+
+        public VariablesProperty Variables { get; private set; }
+        public class VariablesProperty
+        {
+            TransportProperty Transport => Room.Transport;
+
+            void BroadcastRequestHandler(NetworkClient sender, ref BroadcastNetworkVariableRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent Variable {message.Parameters} for Non-Existing Entity");
+                    return;
+                }
+
+                entity.VariableBuffer.Register(message.Parameters.Behaviour, message.Parameters.Variable, reader);
+
+                //Send to Others
+                {
+                    var writer = Room.Pools.SinglePackerWriter.Take();
+                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
+                }
+            }
+
+            void BufferRequestHandler(NetworkClient sender, ref BufferNetworkVariableRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Room.Entities.TryGet(message.Parameters.Entity, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Client {sender} Sent RPC {message.Parameters} for Non-Existing Entity");
+                    return;
+                }
+
+                entity.VariableBuffer.Register(message.Parameters.Behaviour, message.Parameters.Variable, reader);
+            }
+
+            void WriteCommand(NetworkClient sender, ref NetworkVariableParameters parameters, NetPacketReader input, NetDataWriter output)
+            {
+                var command = new NetworkVariableCommand(sender.ID, parameters);
+
+                NetworkSerializer.WriteHeader(in command, output);
+
+                //Write Value
+                {
+                    var source = input.PeekAvailableSpan();
+                    var destination = output.PopSpan(source.Length);
+                    source.CopyTo(destination);
+                }
+            }
+
+            internal void WriteState(NetDataWriter writer, ushort count)
+            {
+                NetworkSerializer.WriteValue(in count, writer);
+
+                if (count is 0)
+                    return;
+
+                foreach (var (id, entity) in Room.Entities.Dictionary)
+                    entity.VariableBuffer.WriteState(id, writer);
+            }
+
+            readonly Room Room;
+            public VariablesProperty(Room Room)
+            {
+                this.Room = Room;
+
+                Transport.Dispatcher.Register<BroadcastNetworkVariableRequest>(BroadcastRequestHandler);
+                Transport.Dispatcher.Register<BufferNetworkVariableRequest>(BufferRequestHandler);
             }
         }
 
@@ -648,12 +753,39 @@ namespace Wsla.Server
             Transport.Send(elapsed);
         }
 
+        void WriteState(NetworkClient client, NetDataWriter writer)
+        {
+            //Sync Clients
+            Clients.WriteState(writer);
+
+            //Sync Spawn Tokens
+            client.WriteSpawnTokens(writer);
+
+            //Sync Scene
+            Scene.WriteState(writer);
+
+            //Sync Entity Definitions
+            Entities.WriteDefinitions(writer, out var buffer);
+
+            //Sync Variables
+            Variables.WriteState(writer, buffer.variables);
+
+            //Sync RPCs
+            RPCs.WriteState(writer, buffer.rpcs);
+        }
+
         public void Shutdown()
         {
 
         }
 
         public override string ToString() => $"({Name})";
+
+        public void Dispose()
+        {
+            Clients.Dispose();
+            Entities.Dispose();
+        }
 
         public Room(string Name)
         {
@@ -664,10 +796,11 @@ namespace Wsla.Server
             Entities = new EntitiesProperty(this);
             Scene = new SceneProperty(this);
             RPCs = new RpcProperty(this);
+            Variables = new VariablesProperty(this);
         }
     }
 
-    public class NetworkClient
+    public class NetworkClient : IDisposable
     {
         public NetworkClientID ID { get; }
 
@@ -735,6 +868,11 @@ namespace Wsla.Server
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 
+        public void Dispose()
+        {
+
+        }
+
         readonly Room Room;
         public NetworkClient(Room Room, NetworkClientID ID, string Username, int SpawnTokenCapacity)
         {
@@ -749,7 +887,7 @@ namespace Wsla.Server
         }
     }
 
-    public class NetworkEntity
+    public class NetworkEntity : IDisposable
     {
         public NetworkEntityID ID { get; }
         public NetworkEntityOrigin Origin { get; }
@@ -760,7 +898,14 @@ namespace Wsla.Server
 
         public NetworkEntityAuthorityMode Authority { get; private set; }
 
-        internal RpcBufferCollection RpcBuffer;
+        internal RemoteSyncBufferCollection<NetworkRpcID> RpcBuffer;
+        internal RemoteSyncBufferCollection<NetworkVariableID> VariableBuffer;
+
+        public void Dispose()
+        {
+            RpcBuffer.Dispose();
+            VariableBuffer.Dispose();
+        }
 
         public void AssignOwner(NetworkClient target)
         {
@@ -787,17 +932,18 @@ namespace Wsla.Server
             this.Authority = Authority;
 
             RpcBuffer = new(Room);
+            VariableBuffer = new(Room);
         }
     }
 
-    public struct RpcBufferCollection
+    public struct RemoteSyncBufferCollection<TMember> : IDisposable
+        where TMember : unmanaged, IEquatable<TMember>, IRemoteSyncMemberID
     {
         Dictionary<Key, Payload>? Collection;
-
-        public struct Key : IEquatable<Key>
+        public readonly struct Key : IEquatable<Key>
         {
             public NetworkBehaviourID Behaviour { get; }
-            public NetworkRpcID RPC { get; }
+            public TMember Member { get; }
 
             public override bool Equals([NotNullWhen(true)] object? obj)
             {
@@ -808,60 +954,109 @@ namespace Wsla.Server
             }
             public bool Equals(Key other)
             {
-                return Behaviour == other.Behaviour && RPC == other.RPC;
+                return Behaviour == other.Behaviour && Member.Equals(other.Member);
             }
 
             readonly int Hashcode;
             public override int GetHashCode() => Hashcode;
 
-            public Key(NetworkBehaviourID Behaviour, NetworkRpcID RPC)
+            public Key(NetworkBehaviourID Behaviour, TMember Member)
             {
                 this.Behaviour = Behaviour;
-                this.RPC = RPC;
+                this.Member = Member;
 
-                Hashcode = (Behaviour.Value << 4) | (RPC.Value);
+                Hashcode = (Behaviour.Value << 4) | (Member.Value);
             }
         }
-        public struct Payload
+        public readonly struct Payload
         {
-            public NetDataWriter Arguments { get; }
+            public NetDataWriter? Stream { get; }
 
-            public Payload(NetDataWriter Arguments)
+            public Payload(NetDataWriter? Stream)
             {
-                this.Arguments = Arguments;
+                this.Stream = Stream;
             }
         }
 
-        public void Register(NetworkBehaviourID Behaviour, NetworkRpcID RPC, NetDataReader Input)
+        public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
+
+        public void Register(NetworkBehaviourID Behaviour, TMember Member, NetDataReader Input)
         {
             if (Collection is null)
                 Collection = new(1);
 
-            var key = new Key(Behaviour, RPC);
+            var key = new Key(Behaviour, Member);
 
             ref var payload = ref CollectionsMarshal.GetValueRefOrAddDefault(Collection, key, out var exists);
 
             if (exists is false)
             {
-                var writer = Room.Pools.MultiPackerWriter.Retrieve();
-                payload = new Payload(writer);
+                if (Input.AvailableBytes is 0)
+                {
+                    payload = new Payload(default);
+                }
+                else
+                {
+                    var writer = Room.Pools.MultiPackerWriter.Retrieve();
+                    payload = new Payload(writer);
+                }
             }
 
             //Copy Buffer
+            if (Input.AvailableBytes > 0 && payload.Stream is not null)
             {
-                var marker = Input.Position;
+                var source = Input.PeekAvailableSpan();
 
-                var source = Input.GetRemainingBytesSpan();
-                var destination = payload.Arguments.Take(source.Length);
+                payload.Stream.SetPosition(0);
+                var destination = payload.Stream.PopSpan(source.Length);
 
                 source.CopyTo(destination);
+            }
+        }
 
-                Input.SetPosition(marker);
+        public void WriteState(NetworkEntityID entity, NetDataWriter output)
+        {
+            if (Collection is null)
+                return;
+
+            NetworkSerializer.WriteValue(in entity, output);
+
+            NetworkSerializer.WriteValue(Count, output);
+
+            foreach (var (key, payload) in Collection)
+            {
+                //Write Key
+                {
+                    NetworkSerializer.WriteValue(key.Behaviour, output);
+                    NetworkSerializer.WriteValue(key.Member, output);
+                }
+
+                //Write Payload
+                if (payload.Stream is not null)
+                {
+                    var source = payload.Stream.PeekAllocatedSpan();
+                    var destination = output.PopSpan(source.Length);
+                    source.CopyTo(destination);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Collection is null)
+                return;
+
+            foreach (var (key, payload) in Collection)
+            {
+                if (payload.Stream is null)
+                    continue;
+
+                Room.Pools.MultiPackerWriter.Return(payload.Stream);
             }
         }
 
         readonly Room Room;
-        public RpcBufferCollection(Room Room)
+        public RemoteSyncBufferCollection(Room Room)
         {
             this.Room = Room;
 

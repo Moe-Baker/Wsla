@@ -1,13 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-using LiteNetLib;
-
 using Toolbox;
 
 using UnityEngine;
-
-using Wsla.Serialization;
 
 namespace Wsla.Unity
 {
@@ -61,6 +57,8 @@ namespace Wsla.Unity
 
         internal void Spawn()
         {
+            NetworkLog.Info($"Spawning Entity {ID}");
+
             IsSpawned = true;
 
             OnSpawn?.Invoke();
@@ -94,7 +92,7 @@ namespace Wsla.Unity
             public MonoBehaviour[] Components { get; private set; }
 
             public Behaviour[] Behaviours { get; private set; }
-            public bool TryGet(NetworkEntityID id, out Behaviour behaviour)
+            public bool TryGet(NetworkBehaviourID id, out Behaviour behaviour)
             {
                 var index = id.Value;
 
@@ -143,6 +141,28 @@ namespace Wsla.Unity
             public INetworkBehaviour Contract { get; }
 
             public RoomInstance Room => Entity.Room;
+            public NetworkClient Owner => Entity.Owner;
+            public NetworkEntityAuthorityMode Authority => Entity.Authority;
+
+            public bool IsSpawned => Entity.IsSpawned;
+            public event Action OnSpawn
+            {
+                add => Entity.OnSpawn += value;
+                remove => Entity.OnSpawn -= value;
+            }
+
+            public bool IsReplicated => Entity.IsReplicated;
+            public event Action OnReplicated
+            {
+                add => Entity.OnReplicated += value;
+                remove => Entity.OnReplicated -= value;
+            }
+
+            public event Action OnDespawn
+            {
+                add => Entity.OnDespawn += value;
+                remove => Entity.OnDespawn -= value;
+            }
 
             public RpcProperty RPC { get; }
             public class RpcProperty
@@ -227,6 +247,69 @@ namespace Wsla.Unity
                 static List<BaseRpcBind> Collector = new(10);
             }
 
+            public VariablesProperty Variables { get; }
+            public class VariablesProperty
+            {
+                readonly Behaviour Behaviour;
+
+                List<NetworkVariable> List;
+                public bool TryGet(NetworkVariableID id, out NetworkVariable variable)
+                {
+                    var index = id.Value;
+
+                    if (List.IsValidIndex(index) is false)
+                    {
+                        variable = default;
+                        return false;
+                    }
+
+                    variable = List[index];
+                    return true;
+                }
+
+                public VariableInvocationBuilder Set(NetworkVariable variable) => new VariableInvocationBuilder(variable, Behaviour.Entity.Room);
+
+                NetworkVariableID Index;
+                void Register(NetworkVariable variable)
+                {
+                    if (NetworkVariableID.Increment(ref Index, out var id) is false)
+                        throw new InvalidOperationException($"Network Variables Count Exceeded on {Behaviour.Script}, Max Count is {NetworkVariableID.MaxValue}");
+
+                    variable.Set(id, Behaviour);
+
+                    List.Add(variable);
+                }
+
+                public VariablesProperty(Behaviour Behaviour)
+                {
+                    this.Behaviour = Behaviour;
+
+                    Collector.Clear();
+
+                    //Declared Registeration
+                    if (Behaviour.Contract is IRemoteSyncMembers members)
+                    {
+                        members.RegisterVariables(Collector);
+                    }
+
+                    //Custom Registeration
+                    if (Behaviour.Script is IRegisterCustomVariables custom)
+                    {
+                        custom.RegisterVariables(Collector);
+                    }
+
+                    //Register All
+                    {
+                        List = new List<NetworkVariable>(Collector.Count);
+
+                        foreach (var bind in Collector)
+                            Register(bind);
+                    }
+                }
+
+                static List<NetworkVariable> Collector = new(10);
+            }
+
             public override string ToString() => Script.ToString();
 
             public Behaviour(NetworkEntity Entity, NetworkBehaviourID ID, MonoBehaviour Script)
@@ -239,6 +322,7 @@ namespace Wsla.Unity
                 Contract = Script as INetworkBehaviour;
 
                 RPC = new RpcProperty(this);
+                Variables = new VariablesProperty(this);
 
                 Contract.Set(this);
             }
