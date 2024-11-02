@@ -4,7 +4,7 @@ namespace Wsla
 {
     public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
-        public string Username;
+        public FixedString20 Username;
 
         public override string ToString() => $"(Username: {Username})";
 
@@ -13,7 +13,7 @@ namespace Wsla
             context.Select(ref Username);
         }
 
-        public ClientConnectionRequest(string Username)
+        public ClientConnectionRequest(FixedString20 Username)
         {
             this.Username = Username;
         }
@@ -159,6 +159,17 @@ namespace Wsla
         {
             this.ID = ID;
             this.Version = Version;
+        }
+    }
+
+    [NetworkBlittable]
+    public struct ChangeMasterClientCommand
+    {
+        public NetworkClientID MasterID;
+
+        public ChangeMasterClientCommand(NetworkClientID MasterID)
+        {
+            this.MasterID = MasterID;
         }
     }
 }

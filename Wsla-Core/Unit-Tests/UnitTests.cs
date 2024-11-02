@@ -2,6 +2,7 @@ using LiteNetLib.Utils;
 
 using System.Text;
 
+using Wsla;
 using Wsla.Serialization;
 
 using static SerializationTests.Utility;
@@ -42,6 +43,116 @@ namespace SerializationTests
             var clone = Duplicate(source);
 
             Assert.Equal(source, clone);
+        }
+    }
+
+    public class FixedStringTests
+    {
+        [Fact]
+        void Fixed20()
+        {
+            var source = new FixedString20("Hello World");
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed40()
+        {
+            var source = new FixedString40("Hello World");
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed80()
+        {
+            var source = new FixedString80("Hello World");
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+
+        [Fact]
+        void Min()
+        {
+            var source = new FixedString20("");
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+
+        [Fact]
+        void Max()
+        {
+            var source = new FixedString80(new string(char.MaxValue, 80));
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+    }
+
+    public class TupleTests
+    {
+        [Fact]
+        public void EmptyTest()
+        {
+            var original = new ValueTuple();
+            var clone = Duplicate(original);
+
+            Assert.Equal(original, clone);
+        }
+
+        [Fact]
+        public void Item2Test()
+        {
+            var original = ValueTuple.Create(1, "Hello World");
+            var clone = Duplicate(original);
+
+            Assert.Equal(original.Item1, clone.Item1);
+            Assert.Equal(original.Item2, clone.Item2);
+        }
+
+        [Fact]
+        public void Item4Test()
+        {
+            var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue);
+            var clone = Duplicate(original);
+
+            Assert.Equal(original.Item1, clone.Item1);
+            Assert.Equal(original.Item2, clone.Item2);
+            Assert.Equal(original.Item3, clone.Item3);
+            Assert.Equal(original.Item4, clone.Item4);
+        }
+
+        [Fact]
+        public void Item6Test()
+        {
+            var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue, ushort.MinValue, new int[] { 1, 2, 3 });
+            var clone = Duplicate(original);
+
+            Assert.Equal(original.Item1, clone.Item1);
+            Assert.Equal(original.Item2, clone.Item2);
+            Assert.Equal(original.Item3, clone.Item3);
+            Assert.Equal(original.Item4, clone.Item4);
+            Assert.Equal(original.Item5, clone.Item5);
+            Assert.Equal(original.Item6, clone.Item6);
+        }
+
+        [Fact]
+        public void Item8Test()
+        {
+            var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue, ushort.MinValue, new int[] { 1, 2, 3 }, "Bye World", 12);
+            var clone = Duplicate(original);
+
+            Assert.Equal(original.Item1, clone.Item1);
+            Assert.Equal(original.Item2, clone.Item2);
+            Assert.Equal(original.Item3, clone.Item3);
+            Assert.Equal(original.Item4, clone.Item4);
+            Assert.Equal(original.Item5, clone.Item5);
+            Assert.Equal(original.Item6, clone.Item6);
+            Assert.Equal(original.Item7, clone.Item7);
+            Assert.Equal(original.Item8, clone.Item8);
         }
     }
 
@@ -99,10 +210,10 @@ namespace SerializationTests
         {
             var array = new string[]
             {
-            "Hello",
-            "World",
-            "Bye",
-            "World",
+                "Hello",
+                "World",
+                "Bye",
+                "World",
             };
 
             var source = array;
@@ -127,9 +238,9 @@ namespace SerializationTests
         {
             var source = new string[]
             {
-            "Hello",
-            "World",
-            "Later",
+                "Hello",
+                "World",
+                "Later",
             };
             var destination = new string[source.Length];
             var marker = destination;
@@ -137,7 +248,7 @@ namespace SerializationTests
             WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
-            Assert.True(ReferenceEquals(destination, marker));
+            Assert.Same(destination, marker);
         }
     }
 
@@ -148,10 +259,10 @@ namespace SerializationTests
         {
             var array = new string[]
             {
-            "Hello",
-            "World",
-            "Bye",
-            "World",
+                "Hello",
+                "World",
+                "Bye",
+                "World",
             };
 
             var source = new ArraySegment<string>(array, 1, 2);
@@ -181,7 +292,7 @@ namespace SerializationTests
             WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
-            Assert.True(ReferenceEquals(destination.Array, marker.Array)); ;
+            Assert.Same(destination.Array, marker.Array);
         }
     }
 
@@ -191,12 +302,12 @@ namespace SerializationTests
         public void GeneralTest()
         {
             var list = new List<string>
-        {
-            "Hello",
-            "World",
-            "Bye",
-            "World",
-        };
+            {
+                "Hello",
+                "World",
+                "Bye",
+                "World",
+            };
 
             var source = list;
             var clone = Duplicate(source);
@@ -208,18 +319,18 @@ namespace SerializationTests
         public void InPlaceTest()
         {
             var source = new List<string>
-        {
-            "Hello",
-            "World",
-            "Later",
-        };
-            var destination = new List<string>();
+            {
+                "Hello",
+                "World",
+                "Later",
+            };
+            var destination = new List<string>() { "1", "2", "3", "4", "5" };
             var marker = destination;
 
             WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
-            Assert.True(ReferenceEquals(destination, marker));
+            Assert.Same(destination, marker);
         }
     }
 

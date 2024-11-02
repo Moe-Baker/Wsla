@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
+using static System.Net.Mime.MediaTypeNames;
+
 namespace Wsla.Serialization
 {
     public static partial class NetworkSerializationResolver
@@ -62,6 +64,9 @@ namespace Wsla.Serialization
 
             Register<int, BlittableNetworkSerializationResolver<int>>();
             Register<uint, BlittableNetworkSerializationResolver<uint>>();
+
+            Register<long, BlittableNetworkSerializationResolver<long>>();
+            Register<ulong, BlittableNetworkSerializationResolver<ulong>>();
 
             Register<float, BlittableNetworkSerializationResolver<float>>();
             Register<double, BlittableNetworkSerializationResolver<double>>();
@@ -165,7 +170,188 @@ namespace Wsla.Serialization
     }
     #endregion
 
-    #region List
+    #region Tuple
+    public class TupleSerializationResolver : NetworkSerializationResolver<ValueTuple>
+    {
+        public override void Write(in ValueTuple value, INetworkStream stream) { }
+        public override void Read(ref ValueTuple value, INetworkStream stream) { }
+    }
+    public class TupleSerializationResolver<T1> : NetworkSerializationResolver<ValueTuple<T1>>
+    {
+        public override void Write(in ValueTuple<T1> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+        }
+        public override void Read(ref ValueTuple<T1> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2> : NetworkSerializationResolver<ValueTuple<T1, T2>>
+    {
+        public override void Write(in ValueTuple<T1, T2> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3> : NetworkSerializationResolver<ValueTuple<T1, T2, T3>>
+    {
+        public override void Write(in ValueTuple<T1, T2, T3> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3, T4> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4>>
+    {
+        public override void Write(in ValueTuple<T1, T2, T3, T4> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item4, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3, T4> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item4, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3, T4, T5> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5>>
+    {
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item4, stream);
+            NetworkSerializer.WriteValue(in value.Item5, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item4, stream);
+            NetworkSerializer.ReadValue(ref value.Item5, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6>>
+    {
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item4, stream);
+            NetworkSerializer.WriteValue(in value.Item5, stream);
+            NetworkSerializer.WriteValue(in value.Item6, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item4, stream);
+            NetworkSerializer.ReadValue(ref value.Item5, stream);
+            NetworkSerializer.ReadValue(ref value.Item6, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
+    {
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item4, stream);
+            NetworkSerializer.WriteValue(in value.Item5, stream);
+            NetworkSerializer.WriteValue(in value.Item6, stream);
+            NetworkSerializer.WriteValue(in value.Item7, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item4, stream);
+            NetworkSerializer.ReadValue(ref value.Item5, stream);
+            NetworkSerializer.ReadValue(ref value.Item6, stream);
+            NetworkSerializer.ReadValue(ref value.Item7, stream);
+        }
+    }
+    public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7, TRest> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest>>
+        where TRest : struct
+    {
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item4, stream);
+            NetworkSerializer.WriteValue(in value.Item5, stream);
+            NetworkSerializer.WriteValue(in value.Item6, stream);
+            NetworkSerializer.WriteValue(in value.Item7, stream);
+            NetworkSerializer.WriteValue(in value.Rest, stream);
+        }
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item4, stream);
+            NetworkSerializer.ReadValue(ref value.Item5, stream);
+            NetworkSerializer.ReadValue(ref value.Item6, stream);
+            NetworkSerializer.ReadValue(ref value.Item7, stream);
+            NetworkSerializer.ReadValue(ref value.Rest, stream);
+        }
+    }
+    #endregion
+
+    public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
+        where T : struct
+    {
+        public override void Write(in T? value, INetworkStream stream)
+        {
+            if (value.HasValue)
+            {
+                NetworkSerializer.Helper.Nullability.Write(false, stream);
+
+                NetworkSerializer.WriteValue(value.Value, stream);
+            }
+            else
+            {
+                NetworkSerializer.Helper.Nullability.Write(true, stream);
+            }
+        }
+        public override void Read(ref T? value, INetworkStream stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Read(stream))
+            {
+                value = default;
+                return;
+            }
+
+            NetworkSerializer.ReadValue(ref value, stream);
+        }
+    }
+
+    #region Collections
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
     {
         public override void Write(in TValue[] array, INetworkStream stream)
@@ -174,7 +360,7 @@ namespace Wsla.Serialization
                 return;
 
             for (int i = 0; i < array.Length; i++)
-                NetworkSerializer.WriteValue(array[i], stream);
+                NetworkSerializer.WriteValue(in array[i], stream);
         }
 
         public override void Read(ref TValue[] array, INetworkStream stream)
@@ -195,7 +381,7 @@ namespace Wsla.Serialization
                 array = new TValue[length];
 
             for (int i = 0; i < length; i++)
-                array[i] = NetworkSerializer.ReadValue<TValue>(stream);
+                NetworkSerializer.ReadValue(ref array[i], stream);
         }
     }
 
@@ -225,7 +411,11 @@ namespace Wsla.Serialization
                 segment = new ArraySegment<TValue>(segment.Array, 0, length);
 
             for (int i = 0; i < length; i++)
-                segment[i] = NetworkSerializer.ReadValue<TValue>(stream);
+            {
+                var item = segment[i];
+                NetworkSerializer.ReadValue(ref item, stream);
+                segment[i] = item;
+            }
         }
     }
 
@@ -254,15 +444,22 @@ namespace Wsla.Serialization
             }
             else
             {
-                list.Clear();
-                list.Capacity = length;
+                if (length > list.Capacity)
+                    list.Capacity = length;
             }
 
             for (int i = 0; i < length; i++)
             {
-                var item = NetworkSerializer.ReadValue<TValue>(stream);
-                list.Add(item);
+                if (i >= list.Count)
+                    list.Add(default);
+
+                var item = list[i];
+                NetworkSerializer.ReadValue(ref item, stream);
+                list[i] = item;
             }
+
+            if (list.Count > length)
+                list.RemoveRange(length, list.Count - length);
         }
     }
     #endregion

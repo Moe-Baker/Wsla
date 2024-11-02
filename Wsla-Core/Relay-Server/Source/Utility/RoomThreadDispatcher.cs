@@ -3,9 +3,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
-using Wsla.Server;
-
-namespace Wsla
+namespace Wsla.Server
 {
     public class RoomThreadDispatcher
     {

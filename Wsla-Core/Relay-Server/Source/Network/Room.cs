@@ -1,6 +1,4 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -16,8 +14,7 @@ namespace Wsla.Server
         RoomThreadDispatcher.Processor? ThreadProcessor;
         public Room? Next { get; internal set; }
         public Room? Previous { get; internal set; }
-
-        public RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
+        internal RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
 
         public TransportProperty Transport { get; }
         public class TransportProperty
@@ -80,10 +77,11 @@ namespace Wsla.Server
             {
                 if (Manager.StartInManualMode(Constants.RelayManagementPort) is false)
                     throw new InvalidOperationException($"Can't Start Relay Server on Port {Constants.RelayManagementPort}");
-
-                NetworkLog.Info($"Starting Room {Room} on Port {Port}");
             }
-            public void Stop() { }
+            public void Stop()
+            {
+                Manager.Stop(false);
+            }
 
             public void SendData<[NetworkSerializationMarker] T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
@@ -142,7 +140,7 @@ namespace Wsla.Server
                 Listener = new EventBasedNetListener();
 
                 Manager = new NetManager(Listener);
-                Manager.DisconnectTimeout = 240 * 1000;
+                Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
                 Manager.IPv6Enabled = false;
 
                 Dispatcher = new DispatcherProperty(this);
@@ -161,14 +159,6 @@ namespace Wsla.Server
             public NetworkClient? Master { get; private set; }
 
             TransportProperty Transport => Room.Transport;
-
-            internal void Start()
-            {
-                Transport.Listener.ConnectionRequestEvent += RequestHandler;
-
-                Transport.Listener.PeerConnectedEvent += ConnectHandler;
-                Transport.Listener.PeerDisconnectedEvent += DisconnectHandler;
-            }
 
             void RequestHandler(ConnectionRequest request)
             {
@@ -231,9 +221,7 @@ namespace Wsla.Server
 
             void ConnectHandler(NetPeer peer)
             {
-                var client = peer.Tag as NetworkClient;
-                if (client is null)
-                    throw new Exception("No Client Assigned to Peer");
+                var client = RetrieveFromPeer(peer);
 
                 client.AssignPeer(peer);
 
@@ -271,28 +259,69 @@ namespace Wsla.Server
             }
             void DisconnectHandler(NetPeer peer, DisconnectInfo info)
             {
-                var client = peer.Tag as NetworkClient;
-                if (client is null)
-                    throw new Exception("No Client Assigned to Peer");
+                var client = RetrieveFromPeer(peer);
 
                 NetworkLog.Info($"Client {client} Disconnected");
 
                 Collection.Remove(client.ID.Value);
 
-                //Free Client ID
-                IDGenerator.Return(client.ID);
-
-                //Free Entity Spawn Tokens
-                foreach (var token in client.SpawnTokens)
-                    Room.Entities.IDGenerator.Return(token);
-
-                //Broadcast To Others
+                if (Collection.Count is 0) //Last Client, Shutdown Room
                 {
-                    var message = new ClientDisconnectMessage(client.ID);
-                    Transport.BroadcastData(in message, except: client);
+                    Room.Stop();
                 }
+                else
+                {
+                    //Free Client ID
+                    IDGenerator.Return(client.ID);
 
-                client.Dispose();
+                    //Free Entity Spawn Tokens
+                    foreach (var token in client.SpawnTokens)
+                        Room.Entities.IDGenerator.Return(token);
+
+                    //Check Master Client
+                    if (client == Master)
+                        ReplaceMaster();
+
+                    //Broadcast To Others
+                    {
+                        var message = new ClientDisconnectMessage(client.ID);
+                        Transport.BroadcastData(in message, except: client);
+                    }
+
+                    client.Dispose();
+                }
+            }
+
+            NetworkClient RetrieveFromPeer(NetPeer peer)
+            {
+                var client = peer.Tag as NetworkClient;
+                if (client is null)
+                    throw new Exception($"No Client Assigned to Peer {peer}");
+
+                return client;
+            }
+
+            void ReplaceMaster()
+            {
+                var previous = Master;
+                Master = ChooseMaster();
+                var current = Master;
+
+                foreach (var entity in previous.Entities)
+                    Room.Entities.Transfer(entity, current);
+
+                //Broadcast to All
+                {
+                    var change = new ChangeMasterClientCommand(Master.ID);
+                    Transport.BroadcastData(change);
+                }
+            }
+            NetworkClient ChooseMaster()
+            {
+                foreach (var client in Collection)
+                    return client;
+
+                throw new InvalidOperationException($"No Registerd Clients to Choose From");
             }
 
             internal void WriteState(NetDataWriter writer)
@@ -315,6 +344,10 @@ namespace Wsla.Server
                 IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(NetworkClientID.Min, NetworkClientID.Max, 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
 
                 Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
+
+                Transport.Listener.ConnectionRequestEvent += RequestHandler;
+                Transport.Listener.PeerConnectedEvent += ConnectHandler;
+                Transport.Listener.PeerDisconnectedEvent += DisconnectHandler;
             }
         }
 
@@ -357,7 +390,7 @@ namespace Wsla.Server
                 if (IDGenerator.TryReserve(out var replacement) is false)
                 {
                     NetworkLog.Error($"Room {Room} ran out of Entity Spawn Tokens");
-                    Room.Shutdown();
+                    Room.Stop();
                     return;
                 }
 
@@ -421,14 +454,14 @@ namespace Wsla.Server
                 entity.Dispose();
             }
 
-            void Transfer(NetworkEntity entity, NetworkClient to)
+            internal void Transfer(NetworkEntity entity, NetworkClient to)
             {
                 var from = entity.Owner;
 
                 from.UnregisterEntity(entity);
                 to.RegisterEntity(entity);
 
-                entity.AssignOwner(to);
+                entity.TransferOwner(to);
             }
 
             internal void WriteDefinitions(NetDataWriter writer, out (ushort variables, ushort rpcs) buffer)
@@ -673,7 +706,7 @@ namespace Wsla.Server
                 if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[count], out var ids) is false)
                 {
                     NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded");
-                    Room.Shutdown();
+                    Room.Stop();
                     return;
                 }
 
@@ -731,8 +764,9 @@ namespace Wsla.Server
 
         public void Start(RoomThreadDispatcher Dispatcher)
         {
+            NetworkLog.Info($"Starting Room {this}");
+
             Transport.Start();
-            Clients.Start();
 
             ThreadProcessor = Dispatcher.Retrieve();
             ThreadProcessor.Register(this);
@@ -742,16 +776,14 @@ namespace Wsla.Server
             NetworkLog.Info($"Stopping Room {this}");
 
             Transport.Stop();
+
+            ThreadProcessor.Unregister(this);
+
+            Dispose();
         }
 
-        public void Receive()
-        {
-            Transport.Receive();
-        }
-        public void Send(TimeSpan elapsed)
-        {
-            Transport.Send(elapsed);
-        }
+        public void Receive() => Transport.Receive();
+        public void Send(TimeSpan elapsed) => Transport.Send(elapsed);
 
         void WriteState(NetworkClient client, NetDataWriter writer)
         {
@@ -774,11 +806,6 @@ namespace Wsla.Server
             RPCs.WriteState(writer, buffer.rpcs);
         }
 
-        public void Shutdown()
-        {
-
-        }
-
         public override string ToString() => $"({Name})";
 
         public void Dispose()
@@ -797,270 +824,6 @@ namespace Wsla.Server
             Scene = new SceneProperty(this);
             RPCs = new RpcProperty(this);
             Variables = new VariablesProperty(this);
-        }
-    }
-
-    public class NetworkClient : IDisposable
-    {
-        public NetworkClientID ID { get; }
-
-        public string Username { get; private set; }
-
-        public NetPeer? Peer { get; private set; }
-        internal void AssignPeer(NetPeer value)
-        {
-            this.Peer = value;
-        }
-
-        public bool IsMaster => Room.Clients.Master == this;
-
-        #region Spawn Tokens
-        public Queue<NetworkEntityID> SpawnTokens { get; }
-        public byte SpawnAllowance => (byte)SpawnTokens.Count;
-
-        public void AddSpawnToken(NetworkEntityID id)
-        {
-            SpawnTokens.Enqueue(id);
-        }
-        public NetworkEntityID RemoveSpawnToken()
-        {
-            return SpawnTokens.Dequeue();
-        }
-
-        public bool ValdiateSpawnToken(NetworkEntityID id)
-        {
-            if (SpawnTokens.TryPeek(out var registerd) is false)
-                return false;
-
-            if (registerd != id)
-                return false;
-
-            RemoveSpawnToken();
-            return true;
-        }
-
-        public void WriteSpawnTokens(NetDataWriter writer)
-        {
-            foreach (var token in SpawnTokens)
-                NetworkSerializer.WriteValue(token, writer);
-        }
-        #endregion
-
-        #region Entities
-        public ExpandList<NetworkEntity> Entities { get; }
-
-        public void RegisterEntity(NetworkEntity target)
-        {
-            target.OwnerRegisteration = Entities.Add(target);
-        }
-
-        public void UnregisterEntity(NetworkEntity target)
-        {
-            Entities.RemoveAt(target.OwnerRegisteration);
-        }
-        #endregion
-
-        public void WriteState(NetDataWriter writer)
-        {
-            NetworkSerializer.WriteValue(ID, writer);
-            NetworkSerializer.WriteValue(Username, writer);
-        }
-
-        public override string ToString() => $"(ID: {ID}, Username: {Username})";
-
-        public void Dispose()
-        {
-
-        }
-
-        readonly Room Room;
-        public NetworkClient(Room Room, NetworkClientID ID, string Username, int SpawnTokenCapacity)
-        {
-            this.Room = Room;
-
-            this.ID = ID;
-            this.Username = Username;
-
-            SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
-
-            Entities = new(0);
-        }
-    }
-
-    public class NetworkEntity : IDisposable
-    {
-        public NetworkEntityID ID { get; }
-        public NetworkEntityOrigin Origin { get; }
-        public NetworkEntityResource Resource { get; }
-
-        public NetworkClient Owner { get; private set; }
-        public int OwnerRegisteration;
-
-        public NetworkEntityAuthorityMode Authority { get; private set; }
-
-        internal RemoteSyncBufferCollection<NetworkRpcID> RpcBuffer;
-        internal RemoteSyncBufferCollection<NetworkVariableID> VariableBuffer;
-
-        public void Dispose()
-        {
-            RpcBuffer.Dispose();
-            VariableBuffer.Dispose();
-        }
-
-        public void AssignOwner(NetworkClient target)
-        {
-            Owner = target;
-        }
-
-        public void WriteDefinition(NetDataWriter writer)
-        {
-            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID);
-            NetworkSerializer.WriteValue(in definition, writer);
-        }
-
-        readonly Room Room;
-        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
-        {
-            this.Room = Room;
-            this.ID = ID;
-
-            this.Origin = Origin;
-            this.Resource = Resource;
-
-            this.Owner = Owner;
-
-            this.Authority = Authority;
-
-            RpcBuffer = new(Room);
-            VariableBuffer = new(Room);
-        }
-    }
-
-    public struct RemoteSyncBufferCollection<TMember> : IDisposable
-        where TMember : unmanaged, IEquatable<TMember>, IRemoteSyncMemberID
-    {
-        Dictionary<Key, Payload>? Collection;
-        public readonly struct Key : IEquatable<Key>
-        {
-            public NetworkBehaviourID Behaviour { get; }
-            public TMember Member { get; }
-
-            public override bool Equals([NotNullWhen(true)] object? obj)
-            {
-                if (obj is Key other)
-                    return Equals(other);
-
-                return false;
-            }
-            public bool Equals(Key other)
-            {
-                return Behaviour == other.Behaviour && Member.Equals(other.Member);
-            }
-
-            readonly int Hashcode;
-            public override int GetHashCode() => Hashcode;
-
-            public Key(NetworkBehaviourID Behaviour, TMember Member)
-            {
-                this.Behaviour = Behaviour;
-                this.Member = Member;
-
-                Hashcode = (Behaviour.Value << 4) | (Member.Value);
-            }
-        }
-        public readonly struct Payload
-        {
-            public NetDataWriter? Stream { get; }
-
-            public Payload(NetDataWriter? Stream)
-            {
-                this.Stream = Stream;
-            }
-        }
-
-        public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
-
-        public void Register(NetworkBehaviourID Behaviour, TMember Member, NetDataReader Input)
-        {
-            if (Collection is null)
-                Collection = new(1);
-
-            var key = new Key(Behaviour, Member);
-
-            ref var payload = ref CollectionsMarshal.GetValueRefOrAddDefault(Collection, key, out var exists);
-
-            if (exists is false)
-            {
-                if (Input.AvailableBytes is 0)
-                {
-                    payload = new Payload(default);
-                }
-                else
-                {
-                    var writer = Room.Pools.MultiPackerWriter.Retrieve();
-                    payload = new Payload(writer);
-                }
-            }
-
-            //Copy Buffer
-            if (Input.AvailableBytes > 0 && payload.Stream is not null)
-            {
-                var source = Input.PeekAvailableSpan();
-
-                payload.Stream.SetPosition(0);
-                var destination = payload.Stream.PopSpan(source.Length);
-
-                source.CopyTo(destination);
-            }
-        }
-
-        public void WriteState(NetworkEntityID entity, NetDataWriter output)
-        {
-            if (Collection is null)
-                return;
-
-            NetworkSerializer.WriteValue(in entity, output);
-
-            NetworkSerializer.WriteValue(Count, output);
-
-            foreach (var (key, payload) in Collection)
-            {
-                //Write Key
-                {
-                    NetworkSerializer.WriteValue(key.Behaviour, output);
-                    NetworkSerializer.WriteValue(key.Member, output);
-                }
-
-                //Write Payload
-                if (payload.Stream is not null)
-                {
-                    var source = payload.Stream.PeekAllocatedSpan();
-                    var destination = output.PopSpan(source.Length);
-                    source.CopyTo(destination);
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-            if (Collection is null)
-                return;
-
-            foreach (var (key, payload) in Collection)
-            {
-                if (payload.Stream is null)
-                    continue;
-
-                Room.Pools.MultiPackerWriter.Return(payload.Stream);
-            }
-        }
-
-        readonly Room Room;
-        public RemoteSyncBufferCollection(Room Room)
-        {
-            this.Room = Room;
-
-            Collection = null;
         }
     }
 }

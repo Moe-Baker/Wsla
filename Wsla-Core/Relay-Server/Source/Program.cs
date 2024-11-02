@@ -1,4 +1,4 @@
-﻿namespace Wsla.Server.Relay
+﻿namespace Wsla.Server
 {
     public class Program
     {

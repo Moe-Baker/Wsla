@@ -333,7 +333,7 @@ namespace Wsla.Unity
                 Listener = new BufferListener();
 
                 Manager = new NetManager(Listener);
-                Manager.DisconnectTimeout = 240 * 1000;
+                Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
                 Manager.AutoRecycle = false;
 
                 Dispatcher = new DispatcherProperty(this);
@@ -352,7 +352,7 @@ namespace Wsla.Unity
 
             TransportProperty Transport => Room.Transport;
 
-            void ConnectResponseHandler(ref ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void ConnectionResponseHandler(ref ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 reader.KeepAlive = true;
 
@@ -389,15 +389,38 @@ namespace Wsla.Unity
                     throw new InvalidOperationException("No Master Client Received in Response");
             }
 
-            void ClientConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void ConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 var client = RemoteNetworkClient.ReadInstance(Room, ref reader);
 
                 Register(client);
             }
-            void ClientDisconnectHandler(ref ClientDisconnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void DisconnectHandler(ref ClientDisconnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 Unregister(message.ID);
+            }
+
+            public delegate void MasterChangeDelegate(NetworkClient client);
+            public event MasterChangeDelegate OnMasterChange;
+            void ChangeMasterHandler(ref ChangeMasterClientCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                var previous = Master;
+
+                if (TryGet(message.MasterID, out var current) is false)
+                {
+                    NetworkLog.Error($"No Client with ID {message.MasterID} Found");
+                    Room.Shutdown();
+                    return;
+                }
+
+                Master = current;
+
+                NetworkLog.Info($"Master Client Changed to {Master}");
+
+                foreach (var entity in previous.Entities)
+                    Room.Entities.Transfer(entity, current);
+
+                OnMasterChange?.Invoke(Master);
             }
 
             void Register(NetworkClient client)
@@ -420,9 +443,12 @@ namespace Wsla.Unity
 
                 Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
 
-                Transport.Dispatcher.Register<ClientConnectionResponse>(ConnectResponseHandler);
-                Transport.Dispatcher.Register<ClientConnectMessage>(ClientConnectHandler);
-                Transport.Dispatcher.Register<ClientDisconnectMessage>(ClientDisconnectHandler);
+                Transport.Dispatcher.Register<ClientConnectionResponse>(ConnectionResponseHandler);
+
+                Transport.Dispatcher.Register<ClientConnectMessage>(ConnectHandler);
+                Transport.Dispatcher.Register<ClientDisconnectMessage>(DisconnectHandler);
+
+                Transport.Dispatcher.Register<ChangeMasterClientCommand>(ChangeMasterHandler);
             }
         }
 
@@ -617,7 +643,6 @@ namespace Wsla.Unity
 
                 entity.Owner.RegisterEntity(entity);
             }
-
             void Unregister(NetworkEntityID id)
             {
                 if (Dictionary.TryGetValue(id, out var entity) is false)
@@ -631,6 +656,16 @@ namespace Wsla.Unity
             void Unregister(NetworkEntity entity)
             {
                 Dictionary.Remove(entity.ID);
+            }
+
+            internal void Transfer(NetworkEntity entity, NetworkClient to)
+            {
+                var from = entity.Owner;
+
+                from.UnregisterEntity(entity);
+                to.RegisterEntity(entity);
+
+                entity.TransferOwner(to);
             }
 
             readonly RoomInstance Room;
@@ -960,6 +995,12 @@ namespace Wsla.Unity
                 //Sync Entities
                 Entities.ReadState(reader, message, entities);
 
+                //Sync Variables
+                Variables.ReadState(reader);
+
+                //Sync RPCs
+                RPCs.ReadState(reader);
+
                 //Spawn && Replicate Entities
                 foreach (var entity in entities)
                 {
@@ -969,12 +1010,6 @@ namespace Wsla.Unity
 
                 //Spawn Scene
                 Scene.Component.Spawn();
-
-                //Sync Variables
-                Variables.ReadState(reader);
-
-                //Sync RPCs
-                RPCs.ReadState(reader);
             }
             Transport.Listener.Resume();
 
@@ -1003,7 +1038,7 @@ namespace Wsla.Unity
     public abstract class NetworkClient
     {
         public NetworkClientID ID { get; }
-        public string Username { get; private set; }
+        public FixedString20 Username { get; private set; }
 
         public bool IsLocal => this is LocalNetworkClient;
         public bool IsRemote => IsLocal is false;
@@ -1017,7 +1052,6 @@ namespace Wsla.Unity
         {
             target.OwnerRegisteration = Entities.Add(target);
         }
-
         public void UnregisterEntity(NetworkEntity target)
         {
             Entities.RemoveAt(target.OwnerRegisteration);
@@ -1032,7 +1066,7 @@ namespace Wsla.Unity
         }
         public virtual void ReadState(NetPacketReader reader)
         {
-            Username = NetworkSerializer.ReadValue<string>(reader);
+            Username = NetworkSerializer.ReadValue<FixedString20>(reader);
         }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";

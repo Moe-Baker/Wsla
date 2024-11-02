@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 
 using Cysharp.Threading.Tasks;
@@ -8,6 +9,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 using Wsla;
+using Wsla.Serialization;
 using Wsla.Unity;
 
 public class Sandbox : MonoBehaviour

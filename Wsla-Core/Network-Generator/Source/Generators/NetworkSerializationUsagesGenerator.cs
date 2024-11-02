@@ -1,14 +1,11 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Operations;
 
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 
 namespace Wsla.Generator
@@ -57,6 +54,8 @@ namespace Wsla.Generator
 
             public INamedTypeSymbol EnumResolver;
 
+            public INamedTypeSymbol[] TupleResolvers;
+
             (IAssemblySymbol, INamedTypeSymbol) GetComparableFields() => (Assembly, MarkerAttribute);
 
             public override bool Equals(object obj)
@@ -95,6 +94,19 @@ namespace Wsla.Generator
                     BlittableAttribute = compilation.GetTypeByMetadataName(Constants.NetworkBlittableAttribute),
 
                     EnumResolver = compilation.GetGenericTypeByMetadataName(Constants.EnumNetworkSerializationResolver, 2),
+
+                    TupleResolvers = new INamedTypeSymbol[9]
+                    {
+                        compilation.GetTypeByMetadataName(Constants.TupleSerializationResolver),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 1),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 2),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 3),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 4),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 5),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 6),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 7),
+                        compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 8),
+                    }
                 };
 
                 return data;
@@ -254,6 +266,8 @@ namespace Wsla.Generator
             public static readonly string NetworkBlittableAttribute = $"{Namespace}.{nameof(NetworkBlittableAttribute)}";
 
             public static readonly string EnumNetworkSerializationResolver = $"{Namespace}.{nameof(EnumNetworkSerializationResolver)}";
+
+            public static readonly string TupleSerializationResolver = $"{Namespace}.{nameof(TupleSerializationResolver)}";
         }
 
         public class Resolvers
@@ -264,32 +278,28 @@ namespace Wsla.Generator
                 if (resolvers.ContainsKey(usage))
                     return true;
 
-                //Blittable
                 if (ResolveBlittable(compilation, usage, resolvers))
                     return true;
 
-                //Manual
                 if (ResolveManual(compilation, usage, resolvers))
                     return true;
 
-                //Auto
                 if (ResolveAuto(compilation, usage, resolvers))
                     return true;
 
-                //Array
                 if (ResolveArray(compilation, usage, resolvers))
                     return true;
 
-                //Array Segment
                 if (ResolveArraySegment(compilation, usage, resolvers))
                     return true;
 
-                //List
                 if (ResolveList(compilation, usage, resolvers))
                     return true;
 
-                //Enum
                 if (ResolveEnum(compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveTuple(compilation, usage, resolvers))
                     return true;
 
                 return false;
@@ -391,6 +401,34 @@ namespace Wsla.Generator
                 var type = usage as INamedTypeSymbol;
 
                 resolvers[usage] = compilation.EnumResolver.Construct(type, type.EnumUnderlyingType);
+
+                return true;
+            }
+
+            static bool ResolveTuple(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                if (usage.IsValueType is false)
+                    return false;
+
+                if (usage.IsTupleType is false)
+                    return false;
+
+                var type = usage as INamedTypeSymbol;
+                if (type is null)
+                    return false;
+
+                if (type.IsGenericType)
+                {
+                    var arguments = type.TypeArguments;
+                    resolvers[usage] = compilation.TupleResolvers[arguments.Length].Construct(arguments, default);
+
+                    foreach (var argument in arguments)
+                        Resolve(compilation, argument, resolvers);
+                }
+                else
+                {
+                    resolvers[usage] = compilation.TupleResolvers[0];
+                }
 
                 return true;
             }

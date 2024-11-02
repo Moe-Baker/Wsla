@@ -82,6 +82,8 @@ namespace Wsla
             Add<BroadcastNetworkVariableRequest>(ref counter);
             Add<BufferNetworkVariableRequest>(ref counter);
             Add<NetworkVariableCommand>(ref counter);
+
+            Add<ChangeMasterClientCommand>(ref counter);
         }
     }
 
@@ -117,6 +119,10 @@ namespace Wsla
 
             NetworkSerializationResolver.Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
             NetworkSerializationResolver.Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
+
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString20>(x => new FixedString20(x)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString40>(x => new FixedString40(x)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString80>(x => new FixedString80(x)));
         }
     }
 }

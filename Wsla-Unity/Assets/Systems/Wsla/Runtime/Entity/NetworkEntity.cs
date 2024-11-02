@@ -21,6 +21,15 @@ namespace Wsla.Unity
             Owner = target;
         }
 
+        public event TransferOwnerDelegate OnTransferOwner;
+        public delegate void TransferOwnerDelegate(NetworkClient owner);
+        internal void TransferOwner(NetworkClient target)
+        {
+            AssignOwner(target);
+
+            OnTransferOwner?.Invoke(target);
+        }
+
         [field: SerializeField]
         public NetworkEntityAuthorityMode Authority { get; private set; }
 

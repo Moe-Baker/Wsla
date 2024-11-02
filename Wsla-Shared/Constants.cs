@@ -1,4 +1,6 @@
-﻿namespace Wsla
+﻿using System;
+
+namespace Wsla
 {
     public class Constants
     {
@@ -6,5 +8,7 @@
 
         public const ushort RelayManagementPort = 4785;
         public const ushort CoordinatorServicePort = 4724;
+
+        public static TimeSpan Timeout = TimeSpan.FromSeconds(10);
     }
 }
