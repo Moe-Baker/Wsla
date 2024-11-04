@@ -1,38 +1,77 @@
-﻿using Wsla;
+﻿using System.Collections;
+
+using Wsla;
 
 NetworkLog.UseConsole();
 
-var list = new ExpandList<Data>();
-
-list.Add(1);
-list.Add(2);
-list.Add(3);
-
-list.RemoveAt(0);
-list.RemoveAt(1);
-list.RemoveAt(2);
-
-list.Add(4);
-list.Add(5);
-
-foreach (var item in list)
+unsafe
 {
-    Console.WriteLine(item);
+    var x = new NetworkVersion(255, 255, 255);
+
+    PrintBits((int)x.Major << 16, littleEndian: true);
+    PrintBits((int)x.Minor << 8, littleEndian: true);
+    PrintBits((int)x.Patch << 0, littleEndian: true);
+
+    PrintBits(0);
+    PrintBits(1);
+    return;
+
+    var a = new NetworkVersion(0, 1, 0);
+    var b = new NetworkVersion(1, 0, 1);
+
+    Console.WriteLine(Convert.ToString((uint)a.Major, toBase: 2));
+    Console.WriteLine(Convert.ToString((uint)a.Minor << 8, toBase: 2));
+    Console.WriteLine(Convert.ToString((uint)a.Patch << 16, toBase: 2));
+    PrintBits(a);
+    PrintBits(a.Numerical);
+    Console.WriteLine(a.Numerical);
+
+    PrintBits(a);
+    PrintBits(a.Numerical);
+    Console.WriteLine(b.Numerical);
+
+    Console.WriteLine("--------------------------------");
+
+    PrintBits(b);
+    PrintBits(b.Numerical);
+
+    Console.WriteLine(a > b);
 }
 
 while (true)
     Console.ReadKey();
 
-class Data
+unsafe void PrintBits<T>(T instance, bool littleEndian = false)
+    where T : unmanaged
 {
-    int Number;
+    void* ptr = &instance;
 
-    public override string ToString() => Number.ToString();
+    var bytes = new byte[sizeof(T)];
 
-    public Data(int Number)
+    fixed (void* destination = bytes)
     {
-        this.Number = Number;
+        Buffer.MemoryCopy(ptr, destination, bytes.Length, bytes.Length);
     }
 
-    public static implicit operator Data(int value) => new(value);
+    var bits = new BitArray(bytes);
+
+    if (littleEndian)
+    {
+        for (int i = 0; i < bits.Count; i++)
+            Console.Write(bits[i] ? 1 : 0);
+    }
+    else
+    {
+        for (int i = bits.Count - 1; i >= 0; i--)
+            Console.Write(bits[i] ? 1 : 0);
+    }
+
+    Console.WriteLine();
+}
+
+struct Data
+{
+    public bool a;
+    public ushort c;
+    public uint d;
 }

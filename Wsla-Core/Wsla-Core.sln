@@ -15,7 +15,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playground", "Playground\Pl
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Network-Generator", "Network-Generator\Network-Generator.csproj", "{643F40A6-EAA0-4BC1-9251-E1503BEFCA88}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unit-Tests", "Unit-Tests\Unit-Tests.csproj", "{A7EAC854-9F26-4BE5-B440-107348454630}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unit-Tests", "Unit-Tests\Unit-Tests.csproj", "{A7EAC854-9F26-4BE5-B440-107348454630}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -49,7 +49,7 @@ namespace SerializationTests
     public class FixedStringTests
     {
         [Fact]
-        void Fixed20()
+        void Fixed20Test()
         {
             var source = new FixedString20("Hello World");
             var clone = Duplicate(source);
@@ -57,7 +57,7 @@ namespace SerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed40()
+        void Fixed40Test()
         {
             var source = new FixedString40("Hello World");
             var clone = Duplicate(source);
@@ -65,7 +65,15 @@ namespace SerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed80()
+        void Fixed60Test()
+        {
+            var source = new FixedString60("Hello World");
+            var clone = Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed80Test()
         {
             var source = new FixedString80("Hello World");
             var clone = Duplicate(source);
@@ -74,7 +82,7 @@ namespace SerializationTests
         }
 
         [Fact]
-        void Min()
+        void MinTestTest()
         {
             var source = new FixedString20("");
             var clone = Duplicate(source);
@@ -83,12 +91,24 @@ namespace SerializationTests
         }
 
         [Fact]
-        void Max()
+        void MaxTest()
         {
             var source = new FixedString80(new string(char.MaxValue, 80));
             var clone = Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
+        }
+
+        [Fact]
+        void BinaryLengthTest()
+        {
+            var instance = new FixedString20("Hello World");
+
+            var writer = new NetDataWriter();
+
+            NetworkSerializer.WriteValue(in instance, writer);
+
+            Assert.Equal(writer.Length, instance.Length + 1);
         }
     }
 

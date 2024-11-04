@@ -122,6 +122,7 @@ namespace Wsla
 
             NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString20>(x => new FixedString20(x)));
             NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString40>(x => new FixedString40(x)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString60>(x => new FixedString60(x)));
             NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString80>(x => new FixedString80(x)));
         }
     }
