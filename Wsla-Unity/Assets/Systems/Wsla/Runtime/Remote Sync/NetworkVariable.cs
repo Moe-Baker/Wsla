@@ -30,7 +30,8 @@ namespace Wsla.Unity
     [Serializable]
     public class NetworkVariable<T> : NetworkVariable
     {
-        public T Value { get; private set; }
+        T Value_Internal;
+        public T Value => Value_Internal;
 
         public VariableInvocationBuilder Change(T value) => Behaviour.Variables.Set(this).SetValue(value);
 
@@ -38,16 +39,16 @@ namespace Wsla.Unity
         public delegate void SetDelegate(ChangePairData<T> value, NetworkVariableInfo info);
         internal override void Set(INetworkStream reader, NetworkVariableInfo info)
         {
-            var previous = Value;
-            Value = NetworkSerializer.ReadValue<T>(reader);
-            var current = Value;
+            var previous = Value_Internal;
+            NetworkSerializer.ReadValue(ref Value_Internal, reader);
+            var current = Value_Internal;
 
             OnSet?.Invoke(new(previous, current), info);
         }
 
         public NetworkVariable(T initial)
         {
-            Value = initial;
+            Value_Internal = initial;
         }
     }
 

@@ -34,9 +34,10 @@ namespace Wsla.Generator
             return false;
         }
 
-        public static void WriteAssemblyAsClass(IAssemblySymbol assembly, CodeStringBuilder builder)
+        public static void WriteAssemblyAsClass(IAssemblySymbol assembly, CodeStringBuilder builder) => WriteAssemblyAsClass(assembly, builder);
+        public static void WriteAssemblyAsClass(string name, CodeStringBuilder builder)
         {
-            foreach (var character in assembly.Name)
+            foreach (var character in name)
             {
                 if (char.IsLetter(character))
                     builder.Write(character);
@@ -53,6 +54,22 @@ namespace Wsla.Generator
         public static bool ImplementsInterface(this ITypeSymbol type, INamedTypeSymbol target)
         {
             return type.AllInterfaces.Contains(target);
+        }
+
+        public static bool IsOpenGenericType(this INamedTypeSymbol type)
+        {
+            if (type.IsGenericType is false)
+                return false;
+
+            var parameters = type.TypeArguments;
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (parameters[i].TypeKind is TypeKind.TypeParameter)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

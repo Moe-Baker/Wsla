@@ -176,6 +176,27 @@ namespace SerializationTests
         }
     }
 
+    public class NullableTests
+    {
+        [Fact]
+        void ValueTest()
+        {
+            var original = new Nullable<int>(42);
+            var clone = Duplicate(original);
+
+            Assert.Equal(original, clone);
+        }
+
+        [Fact]
+        void NullTest()
+        {
+            var original = new Nullable<int>();
+            var clone = Duplicate(original);
+
+            Assert.Equal(original, clone);
+        }
+    }
+
     public class EnumTests
     {
         [Fact]

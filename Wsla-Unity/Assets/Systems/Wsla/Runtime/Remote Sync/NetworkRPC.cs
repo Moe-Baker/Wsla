@@ -55,9 +55,11 @@ namespace Wsla.Unity
 
     public class RpcBind<T1> : BaseRpcBind<RpcDelegate<T1>>
     {
+        T1 arg1;
+
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(reader, out T1 arg1);
+            NetworkSerializer.ReadValue(ref arg1, reader);
 
             Method(arg1, info);
         }

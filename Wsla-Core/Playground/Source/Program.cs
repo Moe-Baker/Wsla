@@ -4,39 +4,16 @@ using Wsla;
 
 NetworkLog.UseConsole();
 
+var a = Choice.A;
+
 unsafe
 {
-    var x = new NetworkVersion(255, 255, 255);
-
-    PrintBits((int)x.Major << 16, littleEndian: true);
-    PrintBits((int)x.Minor << 8, littleEndian: true);
-    PrintBits((int)x.Patch << 0, littleEndian: true);
-
-    PrintBits(0);
-    PrintBits(1);
-    return;
-
-    var a = new NetworkVersion(0, 1, 0);
-    var b = new NetworkVersion(1, 0, 1);
-
-    Console.WriteLine(Convert.ToString((uint)a.Major, toBase: 2));
-    Console.WriteLine(Convert.ToString((uint)a.Minor << 8, toBase: 2));
-    Console.WriteLine(Convert.ToString((uint)a.Patch << 16, toBase: 2));
-    PrintBits(a);
-    PrintBits(a.Numerical);
-    Console.WriteLine(a.Numerical);
-
-    PrintBits(a);
-    PrintBits(a.Numerical);
-    Console.WriteLine(b.Numerical);
-
-    Console.WriteLine("--------------------------------");
-
-    PrintBits(b);
-    PrintBits(b.Numerical);
-
-    Console.WriteLine(a > b);
+    Console.WriteLine(sizeof(Choice));
 }
+
+PrintBits(a);
+
+Console.WriteLine("DONE");
 
 while (true)
     Console.ReadKey();
@@ -74,4 +51,9 @@ struct Data
     public bool a;
     public ushort c;
     public uint d;
+}
+
+public enum Choice : byte
+{
+    A, B, C, D, E
 }

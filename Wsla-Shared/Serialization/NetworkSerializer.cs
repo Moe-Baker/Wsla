@@ -212,7 +212,7 @@ namespace Wsla.Serialization
                 }
 
                 /// <summary>
-                /// Writes nullability byte, pass true for null, false if not
+                /// Writes nullability byte, pass true for null, false for not
                 /// </summary>
                 /// <typeparam name="TValue"></typeparam>
                 /// <param name="value"></param>
@@ -231,7 +231,7 @@ namespace Wsla.Serialization
                 /// Reads nullability
                 /// </summary>
                 /// <param name="stream"></param>
-                /// <returns>true for null, false for not</returns>
+                /// <returns>true for null, false if not</returns>
                 public static bool Read(INetworkStream stream)
                 {
                     var span = stream.PopSpan(1);

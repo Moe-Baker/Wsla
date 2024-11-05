@@ -32,7 +32,8 @@ namespace Wsla.Generator
 
         public struct CompilationData : IEquatable<CompilationData>
         {
-            public IAssemblySymbol Assembly;
+            public string AssemblyName;
+
             public INamedTypeSymbol MarkerAttribute;
 
             public INamedTypeSymbol ArrayResolver;
@@ -55,8 +56,9 @@ namespace Wsla.Generator
             public INamedTypeSymbol EnumResolver;
 
             public INamedTypeSymbol[] TupleResolvers;
+            public INamedTypeSymbol NullableResolver;
 
-            (IAssemblySymbol, INamedTypeSymbol) GetComparableFields() => (Assembly, MarkerAttribute);
+            (string, INamedTypeSymbol) GetComparableFields() => (AssemblyName, MarkerAttribute);
 
             public override bool Equals(object obj)
             {
@@ -73,7 +75,7 @@ namespace Wsla.Generator
             {
                 var data = new CompilationData()
                 {
-                    Assembly = compilation.Assembly,
+                    AssemblyName = compilation.Assembly.Name,
                     MarkerAttribute = compilation.GetTypeByMetadataName(Constants.NetworkSerializationMarkerAttribute),
 
                     ArrayResolver = compilation.GetGenericTypeByMetadataName(Constants.ArrayNetworkSerializationResolver, 1),
@@ -93,7 +95,7 @@ namespace Wsla.Generator
                     BlittableResolver = compilation.GetGenericTypeByMetadataName(Constants.BlittableNetworkSerializationResolver, 1),
                     BlittableAttribute = compilation.GetTypeByMetadataName(Constants.NetworkBlittableAttribute),
 
-                    EnumResolver = compilation.GetGenericTypeByMetadataName(Constants.EnumNetworkSerializationResolver, 2),
+                    EnumResolver = compilation.GetGenericTypeByMetadataName(Constants.EnumNetworkSerializationResolver, 1),
 
                     TupleResolvers = new INamedTypeSymbol[9]
                     {
@@ -106,7 +108,9 @@ namespace Wsla.Generator
                         compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 6),
                         compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 7),
                         compilation.GetGenericTypeByMetadataName(Constants.TupleSerializationResolver, 8),
-                    }
+                    },
+
+                    NullableResolver = compilation.GetGenericTypeByMetadataName(Constants.NullableNetworkSerializationResolver, 1),
                 };
 
                 return data;
@@ -131,6 +135,9 @@ namespace Wsla.Generator
                 if (CodeUtility.HasAttribute(parameters[i], input.Compilation.MarkerAttribute))
                 {
                     if (arguments[i].TypeKind is TypeKind.TypeParameter)
+                        continue;
+
+                    if (arguments[i] is INamedTypeSymbol named && named.IsOpenGenericType())
                         continue;
 
                     return arguments[i];
@@ -221,7 +228,7 @@ namespace Wsla.Generator
 
             void WriteClassName()
             {
-                CodeUtility.WriteAssemblyAsClass(compilation.Assembly, builder);
+                CodeUtility.WriteAssemblyAsClass(compilation.AssemblyName, builder);
                 builder.Write("_");
                 builder.Write(prefix);
                 builder.Write("SerializationRegisteration");
@@ -268,6 +275,8 @@ namespace Wsla.Generator
             public static readonly string EnumNetworkSerializationResolver = $"{Namespace}.{nameof(EnumNetworkSerializationResolver)}";
 
             public static readonly string TupleSerializationResolver = $"{Namespace}.{nameof(TupleSerializationResolver)}";
+
+            public static readonly string NullableNetworkSerializationResolver = $"{Namespace}.{nameof(NullableNetworkSerializationResolver)}";
         }
 
         public class Resolvers
@@ -300,6 +309,9 @@ namespace Wsla.Generator
                     return true;
 
                 if (ResolveTuple(compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveNullable(compilation, usage, resolvers))
                     return true;
 
                 return false;
@@ -400,7 +412,7 @@ namespace Wsla.Generator
 
                 var type = usage as INamedTypeSymbol;
 
-                resolvers[usage] = compilation.EnumResolver.Construct(type, type.EnumUnderlyingType);
+                resolvers[usage] = compilation.EnumResolver.Construct(type);
 
                 return true;
             }
@@ -429,6 +441,32 @@ namespace Wsla.Generator
                 {
                     resolvers[usage] = compilation.TupleResolvers[0];
                 }
+
+                return true;
+            }
+
+            static bool ResolveNullable(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                if (usage.IsValueType is false)
+                    return false;
+
+                if (usage.NullableAnnotation != NullableAnnotation.Annotated)
+                    return false;
+
+                var type = usage as INamedTypeSymbol;
+                if (type is null)
+                    return false;
+
+                if (type.IsGenericType is false)
+                    return false;
+
+                var arguments = type.TypeArguments;
+                if (arguments.Length is 0)
+                    return false;
+
+                resolvers[usage] = compilation.NullableResolver.Construct(arguments, default);
+
+                Resolve(compilation, arguments[0], resolvers);
 
                 return true;
             }
