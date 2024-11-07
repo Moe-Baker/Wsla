@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 using Wsla;
+using Wsla.Serialization;
 using Wsla.Unity;
 
 public partial class Player : NetworkBehaviour
@@ -21,15 +22,18 @@ public partial class Player : NetworkBehaviour
     {
         NetworkLog.Info($"Player {Network.Entity.ID} Spawned");
 
-        Network.RPC.Invoke(nameof(Call))
-            .SetArguments("Hello World")
-            .SetChannel(0)
-            .SetDelivery(RemoteSyncDelivery.Unreliable)
-            .SetBufferMode()
-            .Broadcast();
-
         if (Network.Owner.IsLocal)
         {
+            Network.RPC.Invoke(nameof(Call))
+                .WritePayload(stream =>
+                {
+                    NetworkSerializer.WriteValue("Bye World", stream);
+                })
+                .SetChannel(0)
+                .SetDelivery(RemoteSyncDelivery.Unreliable)
+                .SetBufferMode()
+                .Broadcast();
+
             Number.Change(Random.Range(100, 1000))
                 .SetDelivery(RemoteSyncDelivery.Unreliable)
                 .SetChannel(0)
@@ -38,9 +42,19 @@ public partial class Player : NetworkBehaviour
     }
 
     [RPC]
-    void Call(string text, RpcInfo info)
+    void Call(INetworkStream stream, RpcInfo info)
     {
-        NetworkLog.Info($"RPC Called, Text: {text}, Sender: {info.Sender}, Buffered: {info.IsBuffered}");
+        var text = NetworkSerializer.ReadValue<string>(stream);
+
+        if (info.IsBuffered)
+        {
+            NetworkLog.Info($"Buffered RPC Called, Text: {text}");
+        }
+        else
+        {
+            var sender = info.GetSender();
+            NetworkLog.Info($"Realtime RPC Called, Text: {text}, Sender: {sender}");
+        }
     }
 }
 
@@ -48,7 +62,7 @@ partial class Player : IRemoteSyncMembers
 {
     void IRemoteSyncMembers.RegisterRPCs(List<BaseRpcBind> list)
     {
-        list.Add(new RpcBind<string>(Call));
+        list.Add(new StreamRpcBind(Call));
     }
 
     void IRemoteSyncMembers.RegisterVariables(List<NetworkVariable> list)

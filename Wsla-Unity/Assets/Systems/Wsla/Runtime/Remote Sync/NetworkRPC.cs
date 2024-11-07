@@ -3,6 +3,7 @@ using LiteNetLib.Utils;
 
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 
 using Wsla.Serialization;
 
@@ -53,6 +54,16 @@ namespace Wsla.Unity
     }
     public delegate void RpcDelegate(RpcInfo info);
 
+    public class StreamRpcBind : BaseRpcBind<RpcDelegate<INetworkStream>>
+    {
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            Method.Invoke(reader, info);
+        }
+
+        public StreamRpcBind(RpcDelegate<INetworkStream> Method) : base(Method) { }
+    }
+
     public class RpcBind<T1> : BaseRpcBind<RpcDelegate<T1>>
     {
         T1 arg1;
@@ -70,35 +81,52 @@ namespace Wsla.Unity
 
     public struct RpcInfo
     {
-        public NetworkClient Sender { get; }
+        public RoomInstance Room { get; }
+
+        NetworkClientID SenderID;
+
         public DeliveryMethod Delivery { get; }
         public byte Channel { get; }
         public bool IsBuffered { get; }
 
-        public RpcInfo(NetworkClient Sender, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        /// <summary>
+        /// Get the sender of the RPC, only valid on non-buffered RPCs, ie RPCs not sent to late joining clients to sync late game state
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public NetworkClient GetSender()
         {
-            this.Sender = Sender;
+            if (IsBuffered)
+                throw new InvalidOperationException($"Can't Get Sender for Buffered NetworkRPC");
+
+            if (Room.Clients.TryGet(SenderID, out var sender) is false)
+                throw new Exception($"No Sender Found for RPC {SenderID}, a Replication Error, Please Report");
+
+            return sender;
+        }
+
+        public RpcInfo(RoomInstance Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        {
+            this.Room = Room;
+            this.SenderID = SenderID;
             this.Channel = Channel;
             this.Delivery = Delivery;
             this.IsBuffered = IsBuffered;
         }
 
-        public static RpcInfo From(RoomInstance room, ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
+        public static RpcInfo FromRemote(RoomInstance room, ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
         {
-            if (room.Clients.TryGet(command.Sender, out var sender) is false)
-                NetworkLog.Warning($"No Sender Found for RPC {command}");
-
-            return new RpcInfo(sender, channel, delivery, false);
+            return new RpcInfo(room, command.Sender, channel, delivery, false);
         }
 
-        public static RpcInfo From(ref RpcInvocationBuilder builder)
+        public static RpcInfo FromLocal(ref RpcInvocationBuilder builder)
         {
-            var sender = builder.Room.Clients.Local;
+            var senderID = builder.Room.Clients.Local.ID;
 
-            return new RpcInfo(sender, builder.Channel, builder.Delivery, false);
+            return new RpcInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static RpcInfo Buffered() => new RpcInfo(null, 0, DeliveryMethod.ReliableOrdered, true);
+        public static RpcInfo FromBuffer(RoomInstance room) => new RpcInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public interface IRegisterCustomRPCs
@@ -136,7 +164,7 @@ namespace Wsla.Unity
             return this;
         }
 
-        public RpcInvocationBuilder SetArguments<T1>(T1 arg1)
+        public RpcInvocationBuilder Arguments<T1>(T1 arg1)
         {
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
 
@@ -176,7 +204,7 @@ namespace Wsla.Unity
 
             return this;
         }
-        public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T5 arg6)
+        public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
         {
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
@@ -185,6 +213,19 @@ namespace Wsla.Unity
             NetworkSerializer.WriteValue(in arg5, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg6, ArgumentsWriter);
 
+            return this;
+        }
+
+        public RpcInvocationBuilder WriteValue<T>(T value) => Arguments(value);
+        public RpcInvocationBuilder WritePayload(Action<INetworkStream> action)
+        {
+            action(ArgumentsWriter);
+            return this;
+        }
+
+        public RpcInvocationBuilder GetPayloadWriter(out INetworkStream writer)
+        {
+            writer = ArgumentsWriter;
             return this;
         }
 
@@ -291,7 +332,7 @@ namespace Wsla.Unity
 
         void InvokeLocal()
         {
-            var info = RpcInfo.From(ref this);
+            var info = RpcInfo.FromLocal(ref this);
 
             //Reset arguments writer to be read from
             ArgumentsWriter.SetPosition(0);

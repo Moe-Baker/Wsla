@@ -693,7 +693,7 @@ namespace Wsla.Unity
                     return;
                 }
 
-                var info = RpcInfo.From(Room, ref message, channel, delivery);
+                var info = RpcInfo.FromRemote(Room, ref message, channel, delivery);
 
                 bind.Invoke(reader, info);
             }
@@ -747,7 +747,7 @@ namespace Wsla.Unity
 
                         if (Get(entity, behaviourID, rpcID, out var bind))
                         {
-                            var info = RpcInfo.Buffered();
+                            var info = RpcInfo.FromBuffer(Room);
                             bind.Invoke(reader, info);
                         }
                     }
@@ -776,7 +776,7 @@ namespace Wsla.Unity
                     return;
                 }
 
-                var info = NetworkVariableInfo.From(Room, ref message, channel, delivery);
+                var info = NetworkVariableInfo.FromRemote(Room, ref message, channel, delivery);
 
                 bind.Set(reader, info);
             }
@@ -830,7 +830,7 @@ namespace Wsla.Unity
 
                         if (Get(entity, behaviourID, variableID, out var variable))
                         {
-                            var info = NetworkVariableInfo.Buffered();
+                            var info = NetworkVariableInfo.FromBuffer(Room);
                             variable.Set(reader, info);
                         }
                     }

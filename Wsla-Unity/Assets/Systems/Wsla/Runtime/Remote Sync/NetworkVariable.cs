@@ -59,36 +59,52 @@ namespace Wsla.Unity
 
     public struct NetworkVariableInfo
     {
-        public NetworkClient Sender { get; }
+        public RoomInstance Room { get; }
+
+        NetworkClientID SenderID;
+
         public DeliveryMethod Delivery { get; }
         public byte Channel { get; }
-
         public bool IsBuffered { get; }
 
-        public NetworkVariableInfo(NetworkClient Sender, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        /// <summary>
+        /// Get the sender of the RPC, only valid on non-buffered RPCs, ie RPCs not sent to late joining clients to sync late game state
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public NetworkClient GetSender()
         {
-            this.Sender = Sender;
+            if (IsBuffered)
+                throw new InvalidOperationException($"Can't Get Sender for Buffered NetworkRPC");
+
+            if (Room.Clients.TryGet(SenderID, out var sender) is false)
+                throw new Exception($"No Sender Found for RPC {SenderID}, a Replication Error, Please Report");
+
+            return sender;
+        }
+
+        public NetworkVariableInfo(RoomInstance Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        {
+            this.Room = Room;
+            this.SenderID = SenderID;
             this.Channel = Channel;
             this.Delivery = Delivery;
             this.IsBuffered = IsBuffered;
         }
 
-        public static NetworkVariableInfo From(RoomInstance room, ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
+        public static NetworkVariableInfo FromRemote(RoomInstance room, ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
         {
-            if (room.Clients.TryGet(command.Sender, out var sender) is false)
-                NetworkLog.Warning($"No Sender Found for RPC {command}");
-
-            return new NetworkVariableInfo(sender, channel, delivery, false);
+            return new NetworkVariableInfo(room, command.Sender, channel, delivery, false);
         }
 
-        public static NetworkVariableInfo From(ref VariableInvocationBuilder builder)
+        public static NetworkVariableInfo FromLocal(ref VariableInvocationBuilder builder)
         {
-            var sender = builder.Room.Clients.Local;
+            var senderID = builder.Room.Clients.Local.ID;
 
-            return new NetworkVariableInfo(sender, builder.Channel, builder.Delivery, false);
+            return new NetworkVariableInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static NetworkVariableInfo Buffered() => new NetworkVariableInfo(null, 0, DeliveryMethod.ReliableOrdered, true);
+        public static NetworkVariableInfo FromBuffer(RoomInstance room) => new NetworkVariableInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public struct VariableInvocationBuilder
@@ -191,7 +207,7 @@ namespace Wsla.Unity
 
         void SetLocal()
         {
-            var info = NetworkVariableInfo.From(ref this);
+            var info = NetworkVariableInfo.FromLocal(ref this);
 
             //Reset arguments writer to be read from
             var marker = ValueWriter.Length;

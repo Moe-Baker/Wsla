@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Wsla.Serialization
 {
-    public static partial class NetworkSerializationResolver
+    public static class NetworkSerializationResolver
     {
         public static void Register<TValue, TResolver>()
             where TResolver : NetworkSerializationResolver<TValue>, new()
@@ -74,14 +74,14 @@ namespace Wsla.Serialization
             Registeration.LoadAll();
         }
     }
-
     public abstract class NetworkSerializationResolver<TValue>
     {
         public abstract void Write(in TValue value, INetworkStream stream);
         public abstract void Read(ref TValue value, INetworkStream stream);
     }
 
-    #region Poco
+    //Derived Resolvers
+
     public class StringNetworkSerializationResolver : NetworkSerializationResolver<string>
     {
         static Encoding Encoder => Encoding.UTF8;
@@ -151,7 +151,6 @@ namespace Wsla.Serialization
             NetworkSerializer.Helper.Blittable.Read(ref value, stream);
         }
     }
-    #endregion
 
     #region Tuple
     public class TupleSerializationResolver : NetworkSerializationResolver<ValueTuple>
@@ -337,7 +336,6 @@ namespace Wsla.Serialization
         }
     }
 
-    #region Collections
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
     {
         public override void Write(in TValue[] array, INetworkStream stream)
@@ -466,9 +464,8 @@ namespace Wsla.Serialization
                 list.Capacity = length;
         }
     }
-    #endregion
 
-    #region Custom
+    #region Manual
     public class ManualNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : IManualNetworkSerialization, new()
     {
@@ -504,7 +501,9 @@ namespace Wsla.Serialization
         void Write(INetworkStream stream);
         void Read(INetworkStream stream);
     }
+    #endregion
 
+    #region Auto
     public class AutoNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : IAutoNetworkSerialization, new()
     {
@@ -578,7 +577,9 @@ namespace Wsla.Serialization
         Write,
         Read,
     }
+    #endregion
 
+    #region Blittable
     public unsafe class BlittableNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : unmanaged
     {
