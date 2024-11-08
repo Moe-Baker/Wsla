@@ -41,7 +41,7 @@ namespace Wsla.Unity
         }
 
         static NetworkAPI API => NetworkAPI.Instance;
-        static RoomInstance Room => API.Room.Current;
+        static RoomAPI Room => API.Room;
 
         #region Spawn
         public bool IsSpawned { get; private set; }
@@ -49,6 +49,11 @@ namespace Wsla.Unity
         internal void Spawn()
         {
             NetworkLog.Info($"Spawning Scene {BuildIndex}");
+
+            //Despawn any non-spawned scene objects as they were destroyed during gameplay
+            for (int i = 0; i < Locals.Length; i++)
+                if (Locals[i].IsSpawned is false)
+                    Locals[i].Despawn();
 
             IsSpawned = true;
             OnSpawn?.Invoke();
@@ -68,7 +73,15 @@ namespace Wsla.Unity
             NetworkSerializer.WriteValue((byte)Locals.Length, writer);
 
             foreach (var entity in Locals)
+            {
+                if (entity.Authority is NetworkEntityAuthorityMode.Explicit)
+                {
+                    Debug.LogWarning($"Network Entity ({entity.gameObject}) in Scene ({entity.gameObject.scene.name}) Has an {entity.Authority} Authority, Scene Objects Can Only have {NetworkEntityAuthorityMode.Authoritative} & {NetworkEntityAuthorityMode.Transferable} Authority, Switching");
+                    entity.Authority = NetworkEntityAuthorityMode.Authoritative;
+                }
+
                 NetworkSerializer.WriteValue(entity.Authority, writer);
+            }
         }
 
         internal void Assign(IList<NetworkEntity> source)

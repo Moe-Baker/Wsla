@@ -59,7 +59,7 @@ namespace Wsla.Unity
 
     public struct NetworkVariableInfo
     {
-        public RoomInstance Room { get; }
+        public RoomAPI Room { get; }
 
         NetworkClientID SenderID;
 
@@ -83,7 +83,7 @@ namespace Wsla.Unity
             return sender;
         }
 
-        public NetworkVariableInfo(RoomInstance Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        public NetworkVariableInfo(RoomAPI Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
         {
             this.Room = Room;
             this.SenderID = SenderID;
@@ -92,7 +92,7 @@ namespace Wsla.Unity
             this.IsBuffered = IsBuffered;
         }
 
-        public static NetworkVariableInfo FromRemote(RoomInstance room, ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
+        public static NetworkVariableInfo FromRemote(RoomAPI room, ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
         {
             return new NetworkVariableInfo(room, command.Sender, channel, delivery, false);
         }
@@ -104,13 +104,13 @@ namespace Wsla.Unity
             return new NetworkVariableInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static NetworkVariableInfo FromBuffer(RoomInstance room) => new NetworkVariableInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
+        public static NetworkVariableInfo FromBuffer(RoomAPI room) => new NetworkVariableInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public struct VariableInvocationBuilder
     {
         internal readonly NetworkVariable Variable;
-        internal readonly RoomInstance Room;
+        internal readonly RoomAPI Room;
 
         internal NetDataWriter ValueWriter;
         internal NetDataWriter PacketWriter;
@@ -218,7 +218,7 @@ namespace Wsla.Unity
             ValueWriter.SetPosition(marker);
         }
 
-        public VariableInvocationBuilder(NetworkVariable Variable, RoomInstance Room)
+        public VariableInvocationBuilder(NetworkVariable Variable, RoomAPI Room)
         {
             this.Variable = Variable;
             this.Room = Room;

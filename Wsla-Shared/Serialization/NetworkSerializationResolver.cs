@@ -54,6 +54,8 @@ namespace Wsla.Serialization
 
         static NetworkSerializationResolver()
         {
+            Register<bool, BlittableNetworkSerializationResolver<bool>>();
+
             Register<byte, BlittableNetworkSerializationResolver<byte>>();
             Register<sbyte, BlittableNetworkSerializationResolver<sbyte>>();
 

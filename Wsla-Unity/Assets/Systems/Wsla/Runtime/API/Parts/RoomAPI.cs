@@ -11,6 +11,8 @@ using LiteNetLib.Utils;
 
 using Toolbox;
 
+using UnityEditor.Experimental.GraphView;
+
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -21,29 +23,81 @@ namespace Wsla.Unity
     [Serializable]
     public class RoomAPI : NetworkAPI.Property
     {
-        public RoomInstance Current { get; private set; }
+        public bool IsConnected { get; private set; }
 
-        public async UniTask<Response<RoomInstance, WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
+        public override void Set(NetworkAPI value)
         {
-            var target = new RoomInstance(address, port);
+            base.Set(value);
 
-            var response = await target.Start(request);
+            IsConnected = false;
 
-            if (response.IsError)
-                return response.Error;
+            Pools = PoolsProperty.Create();
 
-            Current = target;
-
-            return target;
+            Application.quitting += ApplicationQuitCallback;
         }
-    }
 
-    [Serializable]
-    public class RoomInstance
-    {
-        static NetworkAPI NetworkAPI => NetworkAPI.Instance;
+        void ApplicationQuitCallback()
+        {
+            Application.quitting -= ApplicationQuitCallback;
 
-        public PoolsProperty Pools { get; }
+            if (IsConnected)
+                Disconnect();
+        }
+
+        public async UniTask<Response<WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
+        {
+            if (IsConnected is true)
+                throw new InvalidOperationException($"Client Already Connected to A Room");
+
+            //Assign Properties
+            {
+                Transport = new TransportProperty(this);
+                Clients = new ClientsProperty(this);
+                Entities = new EntitiesProperty(this);
+                Scene = new SceneProperty(this);
+                RPCs = new RpcsProperty(this);
+                Variables = new VariablesProperty(this);
+            }
+
+            //Start Transport
+            {
+                var response = await Transport.Start(address, port, request);
+                if (response.IsError)
+                {
+                    Stop();
+                    return response.Error;
+                }
+            }
+
+            IsConnected = true;
+
+            return true;
+        }
+        public void Disconnect()
+        {
+            if (IsConnected is false)
+                throw new InvalidOperationException($"Client not Connected to A Room");
+
+            Stop();
+        }
+
+        public void Stop()
+        {
+            Transport?.Stop();
+
+            Transport = default;
+            Clients = default;
+            Entities = default;
+            Scene = default;
+            RPCs = default;
+            Variables = default;
+
+            IsConnected = false;
+        }
+
+        public void Shutdown() => Stop(); //TODO: Fully Implement
+
+        internal PoolsProperty Pools;
         public struct PoolsProperty
         {
             public SingleInstancePool<NetDataWriter> SinglePackerWriter { get; private set; }
@@ -56,12 +110,9 @@ namespace Wsla.Unity
             };
         }
 
-        public TransportProperty Transport { get; }
+        public TransportProperty Transport { get; private set; }
         public class TransportProperty
         {
-            public IPAddress Address { get; }
-            public ushort Port { get; }
-
             public DispatcherProperty Dispatcher { get; }
             public class DispatcherProperty
             {
@@ -249,7 +300,7 @@ namespace Wsla.Unity
 
             CancellationTokenSource CancellationSource;
 
-            internal async UniTask<Response<WslaError>> Start(ClientConnectionRequest request)
+            internal async UniTask<Response<WslaError>> Start(IPAddress address, ushort port, ClientConnectionRequest request)
             {
                 Manager.Start();
 
@@ -268,7 +319,7 @@ namespace Wsla.Unity
 
                     NetworkSerializer.WriteValue(in request, packet);
 
-                    var endpoint = new IPEndPoint(Address, Port);
+                    var endpoint = new IPEndPoint(address, port);
 
                     Peer = Manager.Connect(endpoint, packet);
                 }
@@ -292,6 +343,9 @@ namespace Wsla.Unity
             }
             internal void Stop()
             {
+                Peer.Disconnect();
+                Manager.Stop();
+
                 CancellationSource.Cancel();
                 Listener.Dispose();
             }
@@ -322,13 +376,10 @@ namespace Wsla.Unity
                 Peer.Send(writer, channel, delivery);
             }
 
-            RoomInstance Room;
-            public TransportProperty(RoomInstance room, IPAddress address, ushort port)
+            RoomAPI Room;
+            public TransportProperty(RoomAPI Room)
             {
-                this.Room = room;
-
-                this.Address = address;
-                this.Port = port;
+                this.Room = Room;
 
                 Listener = new BufferListener();
 
@@ -340,7 +391,7 @@ namespace Wsla.Unity
             }
         }
 
-        public ClientsProperty Clients { get; }
+        public ClientsProperty Clients { get; private set; }
         public class ClientsProperty
         {
             public NetworkClient Master { get; private set; }
@@ -397,6 +448,13 @@ namespace Wsla.Unity
             }
             void DisconnectHandler(ref ClientDisconnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
+                while (reader.Available > 0)
+                {
+                    var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+
+                    Room.Entities.InvokeDespawn(id);
+                }
+
                 Unregister(message.ID);
             }
 
@@ -417,8 +475,7 @@ namespace Wsla.Unity
 
                 NetworkLog.Info($"Master Client Changed to {Master}");
 
-                foreach (var entity in previous.Entities)
-                    Room.Entities.Transfer(entity, current);
+                Room.Entities.SwapAuthortative(previous, current);
 
                 OnMasterChange?.Invoke(Master);
             }
@@ -436,8 +493,8 @@ namespace Wsla.Unity
                 Debug.Log($"Unregisterd Client {client}");
             }
 
-            readonly RoomInstance Room;
-            public ClientsProperty(RoomInstance room)
+            readonly RoomAPI Room;
+            public ClientsProperty(RoomAPI room)
             {
                 this.Room = room;
 
@@ -452,7 +509,7 @@ namespace Wsla.Unity
             }
         }
 
-        public EntitiesProperty Entities { get; }
+        public EntitiesProperty Entities { get; private set; }
         public class EntitiesProperty
         {
             public Dictionary<NetworkEntityID, NetworkEntity> Dictionary { get; }
@@ -468,6 +525,7 @@ namespace Wsla.Unity
                 {
                     var definition = NetworkSerializer.ReadValue<NetworkEntityDefinition>(reader);
                     var instance = Assimilate(definition);
+                    instance.InvokeTraitReader(reader);
                     list.Add(instance);
                 }
             }
@@ -475,11 +533,13 @@ namespace Wsla.Unity
             public SpawnOptions Spawn() => new SpawnOptions(Room);
             public ref struct SpawnOptions
             {
-                readonly RoomInstance Room;
+                readonly RoomAPI Room;
 
                 internal NetworkEntityID Token;
                 internal NetworkEntityResource Resource;
                 internal NetworkEntityAuthorityMode Authority;
+
+                internal NetDataWriter TraitWriter;
 
                 public SpawnOptions SetResource(NetworkEntityResource value)
                 {
@@ -489,7 +549,7 @@ namespace Wsla.Unity
                 }
                 public SpawnOptions SetPrefab(GameObject prefab)
                 {
-                    if (NetworkAPI.SyncedPrefabs.TryGet(prefab, out var value) is false)
+                    if (Room.API.SyncedPrefabs.TryGet(prefab, out var value) is false)
                     {
                         NetworkLog.Error($"prefab {prefab} not Registerd as Sync Prefab");
                         return this;
@@ -509,6 +569,12 @@ namespace Wsla.Unity
                     }
 
                     Authority = mode;
+                    return this;
+                }
+
+                public SpawnOptions WriteTrait<T>(in T value)
+                {
+                    NetworkSerializer.WriteValue(in value, TraitWriter);
                     return this;
                 }
 
@@ -535,15 +601,30 @@ namespace Wsla.Unity
                     if (Validate() is false)
                         return default;
 
-                    Token = Room.Clients.Local.RemoveSpawnToken();
+                    //Send to Server
+                    {
+                        var writer = Room.Pools.SinglePackerWriter.Take();
 
-                    var request = new SpawnPrefabEntityRequest(Token, Resource, Authority, Room.Scene.Version);
-                    Room.Transport.SendData(in request);
+                        Token = Room.Clients.Local.RemoveSpawnToken();
 
+                        var request = new SpawnPrefabEntityRequest(Token, Resource, Authority, Room.Scene.Version);
+                        NetworkSerializer.WriteHeader(in request, writer);
+
+                        //Write Attribute
+                        {
+                            var source = TraitWriter.PeekAllocatedSpan();
+                            var destination = writer.PopSpan(source.Length);
+                            source.CopyTo(destination);
+                        }
+
+                        Room.Transport.SendWriter(in writer);
+                    }
+
+                    //Spawn Local
                     return Room.Entities.SpawnLocal(this);
                 }
 
-                public SpawnOptions(RoomInstance Room)
+                public SpawnOptions(RoomAPI Room)
                 {
                     this.Room = Room;
 
@@ -552,20 +633,54 @@ namespace Wsla.Unity
                     Authority = NetworkEntityAuthorityMode.Explicit;
 
                     ResourceAssigned = false;
+
+                    TraitWriter = TraitWriterPool.Take();
                 }
+
+                static SinglePacketWriter TraitWriterPool = SinglePacketWriter.Create(512);
+            }
+
+            public void Despawn(NetworkEntity entity)
+            {
+                if (entity.IsSpawned is false)
+                    throw new InvalidOperationException($"Can Only Despawn Spawned Entities");
+
+                if (entity.Authority is NetworkEntityAuthorityMode.Authoritative && Room.Clients.Local.IsMaster is false)
+                    throw new InvalidOperationException($"Only the Master Client can Despawn {NetworkEntityAuthorityMode.Authoritative} Entities");
+
+                var request = new DespawnEntityRequest(entity.ID);
+                Transport.SendData(in request);
+
+                InvokeDespawn(entity);
             }
 
             void SpawnPrefabResponseHandler(ref SpawnPrefabEntityResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 Room.Clients.Local.AddSpawnToken(message.ReplacementToken);
 
-                if (TryGet(message.SourceToken, out var entity) is false)
+                switch (message.Behaviour)
                 {
-                    NetworkLog.Error($"No Network Entity with ID {message.SourceToken} Found");
-                    return;
-                }
+                    case SpawnPrefabEntityResponseBehaviour.Replicate:
+                    {
+                        if (TryGet(message.SourceToken, out var entity) is false)
+                        {
+                            NetworkLog.Error($"No Network Entity with ID {message.SourceToken} Found");
+                            return;
+                        }
 
-                entity.Replicate();
+                        entity.Replicate();
+                    }
+                    break;
+
+                    case SpawnPrefabEntityResponseBehaviour.Despawn:
+                    {
+                        if (TryGet(message.SourceToken, out var entity))
+                            entity.Despawn();
+                    }
+                    break;
+
+                    default: throw new NotImplementedException();
+                }
             }
             void SpawnPrefabCommandHandler(ref SpawnPrefabEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
@@ -573,8 +688,38 @@ namespace Wsla.Unity
 
                 var instance = Assimilate(definition);
 
+                instance.InvokeTraitReader(reader);
+
                 instance.Spawn();
                 instance.Replicate();
+            }
+
+            void DespawnCommandHandler(ref DespawnEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Dictionary.TryGetValue(message.ID, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {message.ID} Found");
+                    return;
+                }
+
+                InvokeDespawn(entity);
+            }
+
+            internal void InvokeDespawn(NetworkEntityID id)
+            {
+                if (Dictionary.TryGetValue(id, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {id} Found");
+                    return;
+                }
+
+                InvokeDespawn(entity);
+            }
+            internal void InvokeDespawn(NetworkEntity entity)
+            {
+                Unregister(entity);
+
+                entity.Despawn();
             }
 
             NetworkEntity Assimilate(NetworkEntityDefinition definition)
@@ -582,7 +727,6 @@ namespace Wsla.Unity
                 var instance = RetrieveInstance(definition);
 
                 instance.Assign(Room, definition);
-
                 Register(instance);
 
                 return instance;
@@ -593,6 +737,12 @@ namespace Wsla.Unity
                 var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, Room.Clients.Local.ID);
 
                 var instance = Assimilate(definition);
+
+                //Read Attribute
+                {
+                    options.TraitWriter.SetPosition(0);
+                    instance.InvokeTraitReader(options.TraitWriter);
+                }
 
                 instance.Spawn();
 
@@ -622,7 +772,7 @@ namespace Wsla.Unity
             }
             NetworkEntity InstantiatePrefab(NetworkEntityResource resource)
             {
-                if (NetworkAPI.SyncedPrefabs.TryGet(resource, out var prefab) is false)
+                if (Room.API.SyncedPrefabs.TryGet(resource, out var prefab) is false)
                     throw new ArgumentException($"No Synced Prefab found With ID {prefab}");
 
                 return InstantiatePrefab(prefab);
@@ -637,7 +787,7 @@ namespace Wsla.Unity
                 return entity;
             }
 
-            void Register(NetworkEntity entity)
+            internal void Register(NetworkEntity entity)
             {
                 Dictionary.Add(entity.ID, entity);
 
@@ -656,6 +806,19 @@ namespace Wsla.Unity
             void Unregister(NetworkEntity entity)
             {
                 Dictionary.Remove(entity.ID);
+
+                entity.Owner.UnregisterEntity(entity);
+            }
+
+            internal void SwapAuthortative(NetworkClient from, NetworkClient to)
+            {
+                foreach (var entity in from.Entities)
+                {
+                    if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
+                        continue;
+
+                    Transfer(entity, to);
+                }
             }
 
             internal void Transfer(NetworkEntity entity, NetworkClient to)
@@ -668,8 +831,8 @@ namespace Wsla.Unity
                 entity.TransferOwner(to);
             }
 
-            readonly RoomInstance Room;
-            public EntitiesProperty(RoomInstance Room)
+            readonly RoomAPI Room;
+            public EntitiesProperty(RoomAPI Room)
             {
                 this.Room = Room;
 
@@ -677,10 +840,12 @@ namespace Wsla.Unity
 
                 Transport.Dispatcher.Register<SpawnPrefabEntityCommand>(SpawnPrefabCommandHandler);
                 Transport.Dispatcher.Register<SpawnPrefabEntityResponse>(SpawnPrefabResponseHandler);
+
+                Transport.Dispatcher.Register<DespawnEntityCommand>(DespawnCommandHandler);
             }
         }
 
-        public RpcsProperty RPCs { get; }
+        public RpcsProperty RPCs { get; private set; }
         public class RpcsProperty
         {
             TransportProperty Transport => Room.Transport;
@@ -754,8 +919,8 @@ namespace Wsla.Unity
                 }
             }
 
-            readonly RoomInstance Room;
-            public RpcsProperty(RoomInstance Room)
+            readonly RoomAPI Room;
+            public RpcsProperty(RoomAPI Room)
             {
                 this.Room = Room;
 
@@ -763,7 +928,7 @@ namespace Wsla.Unity
             }
         }
 
-        public VariablesProperty Variables { get; }
+        public VariablesProperty Variables { get; private set; }
         public class VariablesProperty
         {
             TransportProperty Transport => Room.Transport;
@@ -837,8 +1002,8 @@ namespace Wsla.Unity
                 }
             }
 
-            readonly RoomInstance Room;
-            public VariablesProperty(RoomInstance Room)
+            readonly RoomAPI Room;
+            public VariablesProperty(RoomAPI Room)
             {
                 this.Room = Room;
 
@@ -846,17 +1011,16 @@ namespace Wsla.Unity
             }
         }
 
-        public SceneProperty Scene { get; }
+        public SceneProperty Scene { get; private set; }
         public class SceneProperty
         {
             public NetworkSceneID ID { get; private set; }
             public int BuildIndex => ID.Value;
 
             public NetworkSceneVersion Version { get; private set; }
+            public bool IsSpawned { get; private set; }
 
             public NetworkScene Component { get; private set; }
-
-            public bool IsLoaded => Component != null;
 
             AsyncOperation Operation;
 
@@ -873,6 +1037,7 @@ namespace Wsla.Unity
             {
                 ID = NetworkSerializer.ReadValue<NetworkSceneID>(reader);
                 Version = NetworkSerializer.ReadValue<NetworkSceneVersion>(reader);
+                IsSpawned = NetworkSerializer.ReadValue<bool>(reader);
 
                 return ChangeProcedure(ID, Version);
             }
@@ -904,7 +1069,7 @@ namespace Wsla.Unity
                 this.ID = ID;
                 this.Version = Version;
 
-                if (IsLoaded)
+                if (IsRegistered)
                     Component.Despawn();
 
                 Operation = SceneManager.LoadSceneAsync(BuildIndex);
@@ -914,16 +1079,23 @@ namespace Wsla.Unity
                     await UniTask.NextFrame();
 
                 if (Room.Clients.Local.IsMaster)
-                {
-                    var writer = Room.Pools.SinglePackerWriter.Take();
+                    RequestSpawn();
+            }
 
-                    var message = new SpawnScenenRequest();
-                    NetworkSerializer.WriteHeader(in message, writer);
+            internal void RequestSpawn()
+            {
+                var writer = Room.Pools.SinglePackerWriter.Take();
 
-                    Component.WriteRequest(writer);
+                var message = new SpawnScenenRequest();
+                NetworkSerializer.WriteHeader(in message, writer);
 
-                    Room.Transport.SendWriter(writer);
-                }
+                Component.WriteRequest(writer);
+
+                Room.Transport.SendWriter(writer);
+            }
+            internal void InvokeSpawn()
+            {
+                Component.Spawn();
             }
 
             void SpawnSceneCommandHandler(ref SpawnSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -938,43 +1110,28 @@ namespace Wsla.Unity
                     var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
                     var resource = new NetworkEntityResource(i);
                     var authority = component.Locals[i].Authority;
-                    var ownerID = (authority is NetworkEntityAuthorityMode.Authoritative) ? Room.Clients.Master.ID : NetworkSerializer.ReadValue<NetworkClientID>(reader);
+                    var ownerID = Room.Clients.Master.ID;
 
                     var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID);
 
                     entity.Assign(Room, definition);
+                    Room.Entities.Register(entity);
 
                     entity.Spawn();
                     entity.Replicate();
                 }
 
-                Room.Scene.Component.Spawn();
+                InvokeSpawn();
             }
 
-            readonly RoomInstance Room;
-            public SceneProperty(RoomInstance Room)
+            readonly RoomAPI Room;
+            public SceneProperty(RoomAPI Room)
             {
                 this.Room = Room;
 
                 Room.Transport.Dispatcher.Register<ChangeSceneCommand>(ChangeCommandHandler);
                 Room.Transport.Dispatcher.Register<SpawnSceneCommand>(SpawnSceneCommandHandler);
             }
-        }
-
-        public async UniTask<Response<WslaError>> Start(ClientConnectionRequest request)
-        {
-            //Start Transport
-            {
-                var response = await Transport.Start(request);
-                if (response.IsError)
-                    return response.Error;
-            }
-
-            return true;
-        }
-        public async UniTask Stop()
-        {
-            Transport.Stop();
         }
 
         async UniTask ReadState(ClientConnectionResponse message, NetPacketReader reader)
@@ -1008,121 +1165,13 @@ namespace Wsla.Unity
                     entity.Replicate();
                 }
 
-                //Spawn Scene
-                Scene.Component.Spawn();
+                //Handle Scene Spawning
+                if (Scene.IsSpawned)
+                    Scene.InvokeSpawn();
             }
             Transport.Listener.Resume();
 
             reader.Recycle();
-        }
-
-        public void Shutdown()
-        {
-            //TODO: Implement
-            throw new NotImplementedException();
-        }
-
-        public RoomInstance(IPAddress address, ushort port)
-        {
-            Pools = PoolsProperty.Create();
-
-            Transport = new TransportProperty(this, address, port);
-            Clients = new ClientsProperty(this);
-            Entities = new EntitiesProperty(this);
-            Scene = new SceneProperty(this);
-            RPCs = new RpcsProperty(this);
-            Variables = new VariablesProperty(this);
-        }
-    }
-
-    public abstract class NetworkClient
-    {
-        public NetworkClientID ID { get; }
-        public FixedString20 Username { get; private set; }
-
-        public bool IsLocal => this is LocalNetworkClient;
-        public bool IsRemote => IsLocal is false;
-
-        public bool IsMaster => Room.Clients.Master == this;
-
-        #region Entities
-        public ExpandList<NetworkEntity> Entities { get; }
-
-        public void RegisterEntity(NetworkEntity target)
-        {
-            target.OwnerRegisteration = Entities.Add(target);
-        }
-        public void UnregisterEntity(NetworkEntity target)
-        {
-            Entities.RemoveAt(target.OwnerRegisteration);
-        }
-        #endregion
-
-        public RoomInstance Room { get; }
-
-        public static NetworkClientID ReadID(NetPacketReader reader)
-        {
-            return NetworkSerializer.ReadValue<NetworkClientID>(reader);
-        }
-        public virtual void ReadState(NetPacketReader reader)
-        {
-            Username = NetworkSerializer.ReadValue<FixedString20>(reader);
-        }
-
-        public override string ToString() => $"(ID: {ID}, Username: {Username})";
-
-        public NetworkClient(RoomInstance Room, NetworkClientID ID)
-        {
-            this.Room = Room;
-            this.ID = ID;
-
-            Entities = new(0);
-        }
-    }
-
-    public class RemoteNetworkClient : NetworkClient
-    {
-        public static RemoteNetworkClient ReadInstance(RoomInstance room, ref NetPacketReader reader)
-        {
-            var id = ReadID(reader);
-
-            var client = new RemoteNetworkClient(room, id);
-
-            client.ReadState(reader);
-
-            return client;
-        }
-
-        public RemoteNetworkClient(RoomInstance Room, NetworkClientID ID) : base(Room, ID) { }
-    }
-    public class LocalNetworkClient : NetworkClient
-    {
-        #region Spawn Tokens
-        public Queue<NetworkEntityID> SpawnTokens { get; }
-        public byte SpawnAllowance => (byte)SpawnTokens.Count;
-
-        public void AddSpawnToken(NetworkEntityID id)
-        {
-            SpawnTokens.Enqueue(id);
-        }
-        public NetworkEntityID RemoveSpawnToken()
-        {
-            return SpawnTokens.Dequeue();
-        }
-
-        internal void ReadSpawnTokens(NetPacketReader reader, ClientConnectionResponse message)
-        {
-            for (int i = 0; i < message.SpawnTokens; i++)
-            {
-                var token = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
-                AddSpawnToken(token);
-            }
-        }
-        #endregion
-
-        public LocalNetworkClient(RoomInstance Room, NetworkClientID ID, int SpawnTokenCapacity) : base(Room, ID)
-        {
-            SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
         }
     }
 }

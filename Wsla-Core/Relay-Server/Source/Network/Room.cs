@@ -282,10 +282,22 @@ namespace Wsla.Server
                     if (client == Master)
                         ReplaceMaster();
 
-                    //Broadcast To Others
+                    //Replicate
                     {
+                        var writer = Room.Pools.SinglePackerWriter.Take();
+
                         var message = new ClientDisconnectMessage(client.ID);
-                        Transport.BroadcastData(in message, except: client);
+                        NetworkSerializer.WriteHeader(in message, writer);
+
+                        foreach (var entity in client.Entities)
+                        {
+                            if (entity.Authority is NetworkEntityAuthorityMode.Transferable)
+                                NetworkSerializer.WriteValue(entity.ID, writer);
+
+                            Room.Entities.Despawn(entity);
+                        }
+
+                        Transport.BroadcastWriter(writer, except: client);
                     }
 
                     client.Dispose();
@@ -307,8 +319,7 @@ namespace Wsla.Server
                 Master = ChooseMaster();
                 var current = Master;
 
-                foreach (var entity in previous.Entities)
-                    Room.Entities.Transfer(entity, current);
+                Room.Entities.SwapAuthortative(previous, current);
 
                 //Broadcast to All
                 {
@@ -377,6 +388,13 @@ namespace Wsla.Server
                 if (message.Scene != Room.Scene.Version)
                 {
                     NetworkLog.Warning($"Late Entity Spawn Request from {sender} for Scene Version {message.Scene}, Scene was Already Changed");
+
+                    //Respond to Sender, Necessary to send them back their spawn token to reuse
+                    {
+                        var response = new SpawnPrefabEntityResponse(message.SpawnToken, message.SpawnToken);
+                        Transport.SendData(sender, response);
+                    }
+
                     return;
                 }
 
@@ -396,6 +414,9 @@ namespace Wsla.Server
 
                 var entity = new NetworkEntity(Room, message.SpawnToken, NetworkEntityOrigin.Prefab, message.Resource, sender, message.Authority);
 
+                //Read Trait if any
+                entity.AssignTrait(reader, reader.Available);
+
                 Register(entity);
 
                 //Respond to Sender
@@ -411,29 +432,34 @@ namespace Wsla.Server
                     var command = new SpawnPrefabEntityCommand(entity.ID, entity.Resource, entity.Authority, entity.Owner.ID);
                     NetworkSerializer.WriteHeader(in command, writer);
 
+                    entity.WriteTrait(writer);
+
                     Transport.BroadcastWriter(writer, except: sender);
                 }
             }
 
-            /// <summary>
-            /// Chooses the client with the least ammount of Entities
-            /// </summary>
-            /// <returns></returns>
-            /// <exception cref="InvalidOperationException"></exception>
-            internal NetworkClient ChooseDistributableOwner()
+            void DespawnRequestHandler(NetworkClient sender, ref DespawnEntityRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                (NetworkClient? Client, int Entities) Marker = (default, int.MaxValue);
-
-                foreach (var client in Room.Clients.Collection)
+                if (Dictionary.TryGetValue(message.ID, out var entity) is false)
                 {
-                    if (client.Entities.Count < Marker.Entities)
-                        Marker = (client, Marker.Entities);
+                    NetworkLog.Warning($"Late Entity Despawn Request from {sender} for Entity {message.ID}, Entity was Already Despawned");
+                    return;
                 }
 
-                if (Marker.Client is null)
-                    throw new InvalidOperationException($"No Network Client Found to Handle Distributable Ownership");
+                if (entity.Authority is NetworkEntityAuthorityMode.Authoritative && sender.IsMaster is false)
+                {
+                    NetworkLog.Warning($"Client {sender} isn't Master Client and Can't Despawn {NetworkEntityAuthorityMode.Authoritative} Entities");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.NoAuthority));
+                    return;
+                }
 
-                return Marker.Client;
+                //Broadcast to Others
+                {
+                    var command = new DespawnEntityCommand(entity.ID);
+                    Transport.BroadcastData(in command, except: sender);
+                }
+
+                Despawn(entity);
             }
 
             internal void Register(NetworkEntity entity)
@@ -452,6 +478,19 @@ namespace Wsla.Server
                 entity.Owner.UnregisterEntity(entity);
 
                 entity.Dispose();
+            }
+
+            internal void Despawn(NetworkEntity entity) => Unregister(entity);
+
+            internal void SwapAuthortative(NetworkClient from, NetworkClient to)
+            {
+                foreach (var entity in from.Entities)
+                {
+                    if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
+                        continue;
+
+                    Transfer(entity, to);
+                }
             }
 
             internal void Transfer(NetworkEntity entity, NetworkClient to)
@@ -496,6 +535,7 @@ namespace Wsla.Server
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
 
                 Transport.Dispatcher.Register<SpawnPrefabEntityRequest>(SpawnPrefabRequestHandler);
+                Transport.Dispatcher.Register<DespawnEntityRequest>(DespawnRequestHandler);
             }
         }
 
@@ -667,6 +707,8 @@ namespace Wsla.Server
             public NetworkSceneID ID { get; private set; }
             public NetworkSceneVersion Version { get; private set; }
 
+            public bool IsSpawned { get; private set; }
+
             public TransportProperty Transport => Room.Transport;
 
             void ChangeRequestHandler(NetworkClient sender, ref ChangeSceneRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -690,6 +732,7 @@ namespace Wsla.Server
             {
                 ID = target;
                 Version = NetworkSceneVersion.Increment(Version);
+                IsSpawned = false;
             }
 
             void SpawnRequestHandler(NetworkClient sender, ref SpawnScenenRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -716,14 +759,14 @@ namespace Wsla.Server
                 {
                     var resource = new NetworkEntityResource(i);
                     var authority = NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(reader);
-                    var owner = (authority is NetworkEntityAuthorityMode.Authoritative) ? Room.Clients.Master : Room.Entities.ChooseDistributableOwner();
-
-                    var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, owner, authority);
+                    var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, sender, authority);
 
                     Room.Entities.Register(entity);
 
                     entities.Add(entity);
                 }
+
+                IsSpawned = true;
 
                 //Broadcast to Others
                 {
@@ -733,12 +776,7 @@ namespace Wsla.Server
                     NetworkSerializer.WriteHeader(in command, writer);
 
                     foreach (var entity in entities)
-                    {
                         NetworkSerializer.WriteValue(entity.ID, writer);
-
-                        if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
-                            NetworkSerializer.WriteValue(entity.Owner.ID, writer);
-                    }
 
                     Transport.BroadcastWriter(writer);
                 }
@@ -748,6 +786,7 @@ namespace Wsla.Server
             {
                 NetworkSerializer.WriteValue(ID, writer);
                 NetworkSerializer.WriteValue(Version, writer);
+                NetworkSerializer.WriteValue(IsSpawned, writer);
             }
 
             readonly Room Room;

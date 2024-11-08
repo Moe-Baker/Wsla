@@ -25,17 +25,6 @@ public class Sandbox : MonoBehaviour
         StartButton.onClick.AddListener(() => Initialize().Forget());
     }
 
-    void Call<T>()
-    {
-        var a = new Data<T>();
-        var b = new Data<float>();
-    }
-
-    struct Data<T>
-    {
-
-    }
-
     async UniTask Initialize()
     {
         var request = new ClientConnectionRequest("SAMPLE-USERNAME");
@@ -49,7 +38,6 @@ public class Sandbox : MonoBehaviour
             return;
         }
 
-        var room = response.Value;
-        Debug.Log($"Connected to Room {room}");
+        Debug.Log($"Connected to Room {NetworkAPI.Room}");
     }
 }

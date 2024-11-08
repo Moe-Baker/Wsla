@@ -1,10 +1,14 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using UnityEngine;
 
 using Wsla;
 using Wsla.Serialization;
 using Wsla.Unity;
+
+using Random = UnityEngine.Random;
 
 public partial class Player : NetworkBehaviour
 {
@@ -15,7 +19,14 @@ public partial class Player : NetworkBehaviour
     {
         base.Set(reference);
 
+        Network.Entity.AssignTraitHandler<string>(ApplyTrait);
+
         Network.Entity.OnSpawn += SpawnCallback;
+    }
+
+    void ApplyTrait(string attribute)
+    {
+        Debug.LogWarning($"Attribute is {attribute}");
     }
 
     void SpawnCallback()
@@ -30,14 +41,29 @@ public partial class Player : NetworkBehaviour
                     NetworkSerializer.WriteValue("Bye World", stream);
                 })
                 .SetChannel(0)
-                .SetDelivery(RemoteSyncDelivery.Unreliable)
                 .SetBufferMode()
                 .Broadcast();
 
             Number.Change(Random.Range(100, 1000))
-                .SetDelivery(RemoteSyncDelivery.Unreliable)
                 .SetChannel(0)
                 .Broadcast();
+
+            Respawn();
+            async void Respawn()
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), destroyCancellationToken);
+                }
+                catch (OperationCanceledException operation) when (operation.CancellationToken == destroyCancellationToken)
+                {
+                    return;
+                }
+
+                Network.Room.Entities.Despawn(Network.Entity);
+
+                Level.Instance.SpawnPlayer();
+            }
         }
     }
 

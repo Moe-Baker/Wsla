@@ -81,7 +81,7 @@ namespace Wsla.Unity
 
     public struct RpcInfo
     {
-        public RoomInstance Room { get; }
+        public RoomAPI Room { get; }
 
         NetworkClientID SenderID;
 
@@ -105,7 +105,7 @@ namespace Wsla.Unity
             return sender;
         }
 
-        public RpcInfo(RoomInstance Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        public RpcInfo(RoomAPI Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
         {
             this.Room = Room;
             this.SenderID = SenderID;
@@ -114,7 +114,7 @@ namespace Wsla.Unity
             this.IsBuffered = IsBuffered;
         }
 
-        public static RpcInfo FromRemote(RoomInstance room, ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
+        public static RpcInfo FromRemote(RoomAPI room, ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
         {
             return new RpcInfo(room, command.Sender, channel, delivery, false);
         }
@@ -126,7 +126,7 @@ namespace Wsla.Unity
             return new RpcInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static RpcInfo FromBuffer(RoomInstance room) => new RpcInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
+        public static RpcInfo FromBuffer(RoomAPI room) => new RpcInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public interface IRegisterCustomRPCs
@@ -137,7 +137,7 @@ namespace Wsla.Unity
     public struct RpcInvocationBuilder
     {
         internal readonly BaseRpcBind Bind;
-        internal readonly RoomInstance Room;
+        internal readonly RoomAPI Room;
 
         internal NetDataWriter ArgumentsWriter;
         internal NetDataWriter PacketWriter;
@@ -340,7 +340,7 @@ namespace Wsla.Unity
             Bind.Invoke(ArgumentsWriter, info);
         }
 
-        public RpcInvocationBuilder(BaseRpcBind Bind, RoomInstance Room)
+        public RpcInvocationBuilder(BaseRpcBind Bind, RoomAPI Room)
         {
             this.Bind = Bind;
             this.Room = Room;

@@ -20,7 +20,7 @@ namespace Wsla.Unity
         [Serializable]
         public class Property : ReferenceProperty<NetworkAPI>
         {
-            public NetworkAPI API => Reference;
+            internal NetworkAPI API => Reference;
         }
 
         protected override void Init()

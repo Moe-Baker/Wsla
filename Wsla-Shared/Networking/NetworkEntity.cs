@@ -126,18 +126,20 @@ namespace Wsla
     public enum NetworkEntityAuthorityMode : byte
     {
         /// <summary>
-        /// Authority is always handled by the spawning client
-        /// </summary>
-        Explicit,
-
-        /// <summary>
         /// Authority is handled by the master client
         /// </summary>
-        Authoritative,
+        Authoritative = 0,
 
         /// <summary>
-        /// Authority is distributed with the ability to transfer
+        /// Authority is always handled by the spawning client, entity lifetime is tied to said client
         /// </summary>
-        Distributable,
+        Explicit = 1,
+
+        /// <summary>
+        /// Authority is handled by the spawning client with the ability to be transfered,
+        /// prefab entity lifetime is tied to the owning client,
+        /// scene entity lifetime is tied to scene lifetime; and the entity will be transfered to the master client on owner disconnect
+        /// </summary>
+        Transferable = 2,
     }
 }

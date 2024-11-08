@@ -5,6 +5,12 @@ using Toolbox;
 
 using UnityEngine;
 
+using Wsla.Serialization;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace Wsla.Unity
 {
     public sealed class NetworkEntity : MonoBehaviour, IPreCache
@@ -31,21 +37,22 @@ namespace Wsla.Unity
         }
 
         [field: SerializeField]
-        public NetworkEntityAuthorityMode Authority { get; private set; }
+        public NetworkEntityAuthorityMode Authority { get; internal set; }
 
         void Reset()
         {
-            Authority = NetworkEntityAuthorityMode.Distributable;
+            Authority = NetworkEntityAuthorityMode.Transferable;
         }
 
-        public RoomInstance Room { get; private set; }
-        internal void Assign(RoomInstance Room, NetworkEntityDefinition definition)
+        public RoomAPI Room { get; private set; }
+        internal void Assign(RoomAPI Room, NetworkEntityDefinition definition)
         {
             this.Room = Room;
 
             ID = definition.ID;
             Origin = definition.Origin;
             Resource = definition.Resource;
+            Authority = definition.Authority;
 
             //Assign Owner
             if (definition.IsOwnedByMasterClient)
@@ -60,6 +67,31 @@ namespace Wsla.Unity
                 AssignOwner(reference);
             }
         }
+
+        #region Trait
+        Action<INetworkStream> TraitHandler;
+        public void AssignTraitHandler<T>(Action<T> handler)
+        {
+            TraitHandler = Surrogate;
+
+            void Surrogate(INetworkStream stream)
+            {
+                //Clear the handler so it can be cleared for garbage collection as it's not needed anymore
+                TraitHandler = default;
+
+                var data = NetworkSerializer.ReadValue<T>(stream);
+                handler(data);
+            }
+        }
+
+        internal void InvokeTraitReader(INetworkStream stream)
+        {
+            if (TraitHandler is null)
+                return;
+
+            TraitHandler(stream);
+        }
+        #endregion
 
         #region Spawn
         public bool IsSpawned { get; private set; }
@@ -76,9 +108,13 @@ namespace Wsla.Unity
 
         internal void Despawn()
         {
+            NetworkLog.Info($"Despawning Entity {ID}");
+
             IsSpawned = false;
 
             OnDespawn?.Invoke();
+
+            Destroy(gameObject);
         }
         public event Action OnDespawn;
         #endregion
@@ -149,7 +185,9 @@ namespace Wsla.Unity
             public MonoBehaviour Script { get; }
             public INetworkBehaviour Contract { get; }
 
-            public RoomInstance Room => Entity.Room;
+            public RoomAPI Room => Entity.Room;
+            public NetworkAPI API => NetworkAPI.Instance;
+
             public NetworkClient Owner => Entity.Owner;
             public NetworkEntityAuthorityMode Authority => Entity.Authority;
 
@@ -351,5 +389,76 @@ namespace Wsla.Unity
         {
             Behaviours = new BehavioursProperty(this);
         }
+
+#if UNITY_EDITOR
+        [CustomEditor(typeof(NetworkEntity))]
+        class Inspector : Editor
+        {
+            static Lazy<GUIStyle> InformationLabelStyle = new(() =>
+            {
+                return new GUIStyle(EditorStyles.label)
+                {
+                    normal =
+                    {
+                        textColor = Color.grey
+                    },
+                    hover =
+                    {
+                        textColor = Color.grey
+                    },
+                    active =
+                    {
+                        textColor = Color.grey
+                    },
+                    focused =
+                    {
+                        textColor = Color.grey
+                    }
+                };
+            });
+
+            public override void OnInspectorGUI()
+            {
+                base.OnInspectorGUI();
+
+                DisplayInfo();
+            }
+
+            void DisplayInfo()
+            {
+                EditorGUILayout.Space();
+
+                EditorGUILayout.LabelField("Information", EditorStyles.boldLabel);
+
+                if (Application.isPlaying is false)
+                {
+                    ShowInfo("Is Network Running", false);
+                    return;
+                }
+
+                if (serializedObject.isEditingMultipleObjects)
+                    return;
+
+                var target = base.target as NetworkEntity;
+
+                ShowInfo("Is Spawned", target.IsSpawned);
+                ShowInfo("Is Replicated", target.IsReplicated);
+
+                if (target.IsSpawned)
+                {
+                    ShowInfo("ID", target.ID.Value);
+                    ShowInfo("Owner", target.Owner);
+                    ShowInfo("Origin", target.Origin);
+                    ShowInfo("Authority", target.Authority);
+                    ShowInfo("Resource", target.Resource);
+                }
+            }
+
+            static void ShowInfo(string title, object value)
+            {
+                EditorGUILayout.LabelField(title, value.ToString(), InformationLabelStyle.Value);
+            }
+        }
+#endif
     }
 }

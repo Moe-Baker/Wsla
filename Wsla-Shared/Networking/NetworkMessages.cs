@@ -84,11 +84,36 @@ namespace Wsla
         public NetworkEntityID SourceToken;
         public NetworkEntityID ReplacementToken;
 
+        public SpawnPrefabEntityResponseBehaviour Behaviour
+        {
+            get
+            {
+                if (SourceToken == ReplacementToken)
+                    return SpawnPrefabEntityResponseBehaviour.Despawn;
+                else
+                    return SpawnPrefabEntityResponseBehaviour.Replicate;
+            }
+        }
+
         public SpawnPrefabEntityResponse(NetworkEntityID SourceToken, NetworkEntityID ReplacementToken)
         {
             this.SourceToken = SourceToken;
             this.ReplacementToken = ReplacementToken;
         }
+
+        public SpawnPrefabEntityResponse Despawn(NetworkEntityID id) => new(id, id);
+    }
+    public enum SpawnPrefabEntityResponseBehaviour : byte
+    {
+        /// <summary>
+        /// Replicate the entity on local client
+        /// </summary>
+        Replicate,
+
+        /// <summary>
+        /// Despawn the entity from the local client and re-use the spawn token
+        /// </summary>
+        Despawn,
     }
 
     public struct SpawnPrefabEntityCommand : IAutoNetworkSerialization
@@ -127,6 +152,16 @@ namespace Wsla
 
     }
 
+    [NetworkBlittable]
+    public struct DespawnEntityRequest
+    {
+        public NetworkEntityID ID;
+
+        public DespawnEntityRequest(NetworkEntityID ID)
+        {
+            this.ID = ID;
+        }
+    }
     [NetworkBlittable]
     public struct DespawnEntityCommand
     {

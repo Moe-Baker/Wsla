@@ -68,6 +68,9 @@ namespace Wsla
             Add<SpawnPrefabEntityResponse>(ref counter);
             Add<SpawnPrefabEntityCommand>(ref counter);
 
+            Add<DespawnEntityRequest>(ref counter);
+            Add<DespawnEntityCommand>(ref counter);
+
             Add<ChangeSceneRequest>(ref counter);
             Add<ChangeSceneCommand>(ref counter);
 
