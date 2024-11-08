@@ -207,4 +207,28 @@ namespace Wsla
             this.MasterID = MasterID;
         }
     }
+
+    [NetworkBlittable]
+    public struct TakeEntityOwnershipRequest
+    {
+        public NetworkEntityID ID;
+
+        public TakeEntityOwnershipRequest(NetworkEntityID Entity)
+        {
+            this.ID = Entity;
+        }
+    }
+
+    [NetworkBlittable]
+    public struct TransferEntityOwnershipCommand
+    {
+        public NetworkClientID Client;
+        public NetworkEntityID Entity;
+
+        public TransferEntityOwnershipCommand(NetworkClientID Client, NetworkEntityID Entity)
+        {
+            this.Client = Client;
+            this.Entity = Entity;
+        }
+    }
 }

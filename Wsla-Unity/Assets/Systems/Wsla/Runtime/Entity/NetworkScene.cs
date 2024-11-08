@@ -50,10 +50,10 @@ namespace Wsla.Unity
         {
             NetworkLog.Info($"Spawning Scene {BuildIndex}");
 
-            //Despawn any non-spawned scene objects as they were destroyed during gameplay
+            //Destroy any non-spawned scene objects as they were destroyed during gameplay
             for (int i = 0; i < Locals.Length; i++)
                 if (Locals[i].IsSpawned is false)
-                    Locals[i].Despawn();
+                    Locals[i].Destroy();
 
             IsSpawned = true;
             OnSpawn?.Invoke();

@@ -1,4 +1,7 @@
+using Cysharp.Threading.Tasks;
+
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Toolbox;
@@ -12,6 +15,13 @@ public class NetworkDespawnAfter : NetworkBehaviour
     [SerializeField]
     SerializedTimeSpan Duration = SerializedTimeSpan.FromSeconds(5);
 
+    CancellationToken OnDestroyCancellationToken;
+
+    void Awake()
+    {
+        OnDestroyCancellationToken = destroyCancellationToken;
+    }
+
     public override void Set(NetworkEntity.Behaviour reference)
     {
         base.Set(reference);
@@ -22,18 +32,21 @@ public class NetworkDespawnAfter : NetworkBehaviour
     void SpawnCallback()
     {
         if (Network.Room.Clients.Local.IsMaster)
-            Procedure();
+            Procedure().Forget();
 
-        async void Procedure()
+        async UniTaskVoid Procedure()
         {
             try
             {
-                await Task.Delay(Duration.Span, destroyCancellationToken);
+                await UniTask.Delay(Duration.Span, cancellationToken: OnDestroyCancellationToken);
             }
-            catch (OperationCanceledException operation) when (operation.CancellationToken == destroyCancellationToken)
+            catch (OperationCanceledException)
             {
                 return;
             }
+
+            if (OnDestroyCancellationToken.IsCancellationRequested)
+                return;
 
             Network.Room.Entities.Despawn(Network.Entity);
         }

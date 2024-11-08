@@ -87,6 +87,9 @@ namespace Wsla
             Add<NetworkVariableCommand>(ref counter);
 
             Add<ChangeMasterClientCommand>(ref counter);
+
+            Add<TakeEntityOwnershipRequest>(ref counter);
+            Add<TransferEntityOwnershipCommand>(ref counter);
         }
     }
 

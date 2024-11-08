@@ -475,7 +475,7 @@ namespace Wsla.Unity
 
                 NetworkLog.Info($"Master Client Changed to {Master}");
 
-                Room.Entities.SwapAuthortative(previous, current);
+                Room.Entities.TransferAuthoritative(previous, current);
 
                 OnMasterChange?.Invoke(Master);
             }
@@ -530,6 +530,7 @@ namespace Wsla.Unity
                 }
             }
 
+            #region Controls
             public SpawnOptions Spawn() => new SpawnOptions(Room);
             public ref struct SpawnOptions
             {
@@ -654,6 +655,22 @@ namespace Wsla.Unity
                 InvokeDespawn(entity);
             }
 
+            public void TakeOwnership(NetworkEntity entity)
+            {
+                if (entity.IsSpawned is false)
+                    throw new InvalidOperationException($"Can Only Take Ownership of Spawned Entities");
+
+                if (entity.Authority is not NetworkEntityAuthorityMode.Transferable)
+                    throw new InvalidOperationException($"Can Only Take Ownership of {NetworkEntityAuthorityMode.Transferable} Entities");
+
+                var request = new TakeEntityOwnershipRequest(entity.ID);
+                Transport.SendData(in request);
+
+                Transfer(entity, Room.Clients.Local);
+            }
+            #endregion
+
+            #region Handlers
             void SpawnPrefabResponseHandler(ref SpawnPrefabEntityResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 Room.Clients.Local.AddSpawnToken(message.ReplacementToken);
@@ -675,13 +692,14 @@ namespace Wsla.Unity
                     case SpawnPrefabEntityResponseBehaviour.Despawn:
                     {
                         if (TryGet(message.SourceToken, out var entity))
-                            entity.Despawn();
+                            InvokeDespawn(entity);
                     }
                     break;
 
                     default: throw new NotImplementedException();
                 }
             }
+
             void SpawnPrefabCommandHandler(ref SpawnPrefabEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner);
@@ -705,23 +723,25 @@ namespace Wsla.Unity
                 InvokeDespawn(entity);
             }
 
-            internal void InvokeDespawn(NetworkEntityID id)
+            void TransferOwnershipCommandHandler(ref TransferEntityOwnershipCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                if (Dictionary.TryGetValue(id, out var entity) is false)
+                if (Room.Clients.TryGet(message.Client, out var client) is false)
                 {
-                    NetworkLog.Error($"No Network Entity with ID {id} Found");
+                    NetworkLog.Error($"No Network Client with ID {message.Client} Found");
                     return;
                 }
 
-                InvokeDespawn(entity);
-            }
-            internal void InvokeDespawn(NetworkEntity entity)
-            {
-                Unregister(entity);
+                if (Dictionary.TryGetValue(message.Entity, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {message.Entity} Found");
+                    return;
+                }
 
-                entity.Despawn();
+                Transfer(entity, client);
             }
+            #endregion
 
+            #region Modifiers
             NetworkEntity Assimilate(NetworkEntityDefinition definition)
             {
                 var instance = RetrieveInstance(definition);
@@ -793,6 +813,7 @@ namespace Wsla.Unity
 
                 entity.Owner.RegisterEntity(entity);
             }
+
             void Unregister(NetworkEntityID id)
             {
                 if (Dictionary.TryGetValue(id, out var entity) is false)
@@ -810,7 +831,35 @@ namespace Wsla.Unity
                 entity.Owner.UnregisterEntity(entity);
             }
 
-            internal void SwapAuthortative(NetworkClient from, NetworkClient to)
+            internal void InvokeDespawn(NetworkEntityID id)
+            {
+                if (Dictionary.TryGetValue(id, out var entity) is false)
+                {
+                    NetworkLog.Error($"No Network Entity with ID {id} Found");
+                    return;
+                }
+
+                InvokeDespawn(entity);
+            }
+            internal void InvokeDespawn(NetworkEntity entity)
+            {
+                Unregister(entity);
+
+                entity.Despawn();
+            }
+
+            internal void DespawnAll()
+            {
+                var list = Room.Pools.EntityList.Take();
+
+                foreach (var (id, entity) in Dictionary)
+                    list.Add(entity);
+
+                foreach (var entity in list)
+                    InvokeDespawn(entity);
+            }
+
+            internal void TransferAuthoritative(NetworkClient from, NetworkClient to)
             {
                 foreach (var entity in from.Entities)
                 {
@@ -830,6 +879,7 @@ namespace Wsla.Unity
 
                 entity.TransferOwner(to);
             }
+            #endregion
 
             readonly RoomAPI Room;
             public EntitiesProperty(RoomAPI Room)
@@ -840,8 +890,8 @@ namespace Wsla.Unity
 
                 Transport.Dispatcher.Register<SpawnPrefabEntityCommand>(SpawnPrefabCommandHandler);
                 Transport.Dispatcher.Register<SpawnPrefabEntityResponse>(SpawnPrefabResponseHandler);
-
                 Transport.Dispatcher.Register<DespawnEntityCommand>(DespawnCommandHandler);
+                Transport.Dispatcher.Register<TransferEntityOwnershipCommand>(TransferOwnershipCommandHandler);
             }
         }
 
@@ -854,7 +904,7 @@ namespace Wsla.Unity
             {
                 if (Get(ref message.Parameters, out var bind) is false)
                 {
-                    Debug.LogError($"No Network RPC Found for Parameters of {message.Parameters}");
+                    NetworkLog.Error($"No Network RPC Found for Parameters of {message.Parameters}");
                     return;
                 }
 
@@ -937,7 +987,7 @@ namespace Wsla.Unity
             {
                 if (Get(ref message.Parameters, out var bind) is false)
                 {
-                    Debug.LogError($"No Network RPC Found for Parameters of {message.Parameters}");
+                    NetworkLog.Error($"No Network RPC Found for Parameters of {message.Parameters}");
                     return;
                 }
 
@@ -1053,12 +1103,19 @@ namespace Wsla.Unity
 
             void ChangeCommandHandler(ref ChangeSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
+                NetworkLog.Trace($"Changing Scene From (ID: {ID}, Version: {Version}) To (ID: {message.ID}, Version: {message.Version})");
+
                 Procedure(message).Forget();
                 async UniTask Procedure(ChangeSceneCommand message)
                 {
                     Room.Transport.Listener.Pause();
                     {
+                        Room.Entities.DespawnAll();
+
                         await ChangeProcedure(message.ID, message.Version);
+
+                        if (Room.Clients.Local.IsMaster)
+                            RequestSpawn();
                     }
                     Room.Transport.Listener.Resume();
                 }
@@ -1077,9 +1134,6 @@ namespace Wsla.Unity
 
                 while (IsRegistered is false)
                     await UniTask.NextFrame();
-
-                if (Room.Clients.Local.IsMaster)
-                    RequestSpawn();
             }
 
             internal void RequestSpawn()
@@ -1096,6 +1150,14 @@ namespace Wsla.Unity
             internal void InvokeSpawn()
             {
                 Component.Spawn();
+            }
+
+            internal void ApplyState()
+            {
+                if (IsSpawned)
+                    InvokeSpawn();
+                else if (Room.Clients.Local.IsMaster)
+                    RequestSpawn();
             }
 
             void SpawnSceneCommandHandler(ref SpawnSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -1165,9 +1227,8 @@ namespace Wsla.Unity
                     entity.Replicate();
                 }
 
-                //Handle Scene Spawning
-                if (Scene.IsSpawned)
-                    Scene.InvokeSpawn();
+                //Apply Scene State (Spawn if Spawned, else Request if Master)
+                Scene.ApplyState();
             }
             Transport.Listener.Resume();
 

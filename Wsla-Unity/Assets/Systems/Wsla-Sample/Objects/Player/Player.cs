@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using UnityEngine;
 
@@ -26,7 +24,7 @@ public partial class Player : NetworkBehaviour
 
     void ApplyTrait(string attribute)
     {
-        Debug.LogWarning($"Attribute is {attribute}");
+        NetworkLog.Trace($"Attribute is {attribute}");
     }
 
     void SpawnCallback()
@@ -47,23 +45,6 @@ public partial class Player : NetworkBehaviour
             Number.Change(Random.Range(100, 1000))
                 .SetChannel(0)
                 .Broadcast();
-
-            Respawn();
-            async void Respawn()
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(5), destroyCancellationToken);
-                }
-                catch (OperationCanceledException operation) when (operation.CancellationToken == destroyCancellationToken)
-                {
-                    return;
-                }
-
-                Network.Room.Entities.Despawn(Network.Entity);
-
-                Level.Instance.SpawnPlayer();
-            }
         }
     }
 

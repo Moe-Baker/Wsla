@@ -1,3 +1,8 @@
+using Cysharp.Threading.Tasks;
+
+using System;
+using System.Threading;
+
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -10,9 +15,13 @@ public class Level : NetworkBehaviour
 
     public static Level Instance { get; private set; }
 
+    CancellationToken OnDestroyCancellationToken;
+
     void Awake()
     {
         Instance = this;
+
+        OnDestroyCancellationToken = destroyCancellationToken;
 
         DisconnectButton.onClick.AddListener(DisconnectAction);
     }
@@ -26,22 +35,76 @@ public class Level : NetworkBehaviour
 
     void SpawnCallback()
     {
-        SpawnPlayer();
+        SpawnPlayers().Forget();
+
+        if (Network.Room.Clients.Local.IsMaster)
+            SwapScene().Forget();
     }
 
-    public void SpawnPlayer()
+    async UniTaskVoid SwapScene()
     {
-        Network.Room.Entities.Spawn()
-            .SetResource(new NetworkEntityResource(0))
-            .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-            .WriteTrait("Hello Attribute")
-            .SetAuthority(NetworkEntityAuthorityMode.Transferable)
-            .Send();
+        return;
+
+        try
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(6), cancellationToken: OnDestroyCancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (OnDestroyCancellationToken.IsCancellationRequested)
+            return;
+
+        var scene = gameObject.scene.buildIndex;
+
+        if (scene is 1)
+            scene = 2;
+        else
+            scene = 1;
+
+        Network.Room.Scene.Change(new NetworkSceneID((byte)scene));
+    }
+
+    public async UniTaskVoid SpawnPlayers()
+    {
+        while (true)
+        {
+            try
+            {
+                await UniTask.Delay(TimeSpan.FromMilliseconds(500), cancellationToken: OnDestroyCancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (OnDestroyCancellationToken.IsCancellationRequested)
+                return;
+
+            Network.Room.Entities.Spawn()
+                .SetResource(new NetworkEntityResource(0))
+                .SetAuthority(NetworkEntityAuthorityMode.Explicit)
+                .WriteTrait("Hello Attribute")
+                .SetAuthority(NetworkEntityAuthorityMode.Transferable)
+                .Send();
+
+            break;
+        }
     }
 
     void DisconnectAction()
     {
         Network.API.Room.Disconnect();
         SceneManager.LoadScene("Main Menu");
+    }
+}
+
+static class TaskExtensions
+{
+    static TaskExtensions()
+    {
+
     }
 }

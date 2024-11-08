@@ -319,7 +319,7 @@ namespace Wsla.Server
                 Master = ChooseMaster();
                 var current = Master;
 
-                Room.Entities.SwapAuthortative(previous, current);
+                Room.Entities.TransferAuthoritative(previous, current);
 
                 //Broadcast to All
                 {
@@ -385,9 +385,18 @@ namespace Wsla.Server
                     return;
                 }
 
+                if (sender.ValdiateSpawnToken(message.SpawnToken) is false)
+                {
+                    NetworkLog.Warning($"Invalid Spawn Token {message.SpawnToken} Received from {sender}");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.SpawnTokenContractBroken));
+                    return;
+                }
+
                 if (message.Scene != Room.Scene.Version)
                 {
                     NetworkLog.Warning($"Late Entity Spawn Request from {sender} for Scene Version {message.Scene}, Scene was Already Changed");
+
+                    sender.AddSpawnToken(message.SpawnToken);
 
                     //Respond to Sender, Necessary to send them back their spawn token to reuse
                     {
@@ -398,19 +407,14 @@ namespace Wsla.Server
                     return;
                 }
 
-                if (sender.ValdiateSpawnToken(message.SpawnToken) is false)
-                {
-                    NetworkLog.Warning($"Invalid Spawn Token {message.SpawnToken} Received from {sender}");
-                    Transport.Kick(sender, WslaError.From(WslaErrorCode.SpawnTokenContractBroken));
-                    return;
-                }
-
                 if (IDGenerator.TryReserve(out var replacement) is false)
                 {
                     NetworkLog.Error($"Room {Room} ran out of Entity Spawn Tokens");
                     Room.Stop();
                     return;
                 }
+
+                sender.AddSpawnToken(replacement);
 
                 var entity = new NetworkEntity(Room, message.SpawnToken, NetworkEntityOrigin.Prefab, message.Resource, sender, message.Authority);
 
@@ -462,6 +466,30 @@ namespace Wsla.Server
                 Despawn(entity);
             }
 
+            void TakeOwnershipRequestHandler(NetworkClient sender, ref TakeEntityOwnershipRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                if (Dictionary.TryGetValue(message.ID, out var entity) is false)
+                {
+                    NetworkLog.Warning($"Late Entity Take Ownership Request from {sender} for Entity {message.ID}, Entity was Already Despawned");
+                    return;
+                }
+
+                if (entity.Authority is not NetworkEntityAuthorityMode.Transferable)
+                {
+                    NetworkLog.Warning($"Client {sender} Can't Take Ownership of Entity {entity} With Authority of {entity.Authority}");
+                    Transport.Kick(sender, WslaError.From(WslaErrorCode.NoAuthority));
+                    return;
+                }
+
+                //Broadcast to Others
+                {
+                    var command = new TransferEntityOwnershipCommand(sender.ID, entity.ID);
+                    Transport.BroadcastData(in command, except: sender);
+                }
+
+                Transfer(entity, sender);
+            }
+
             internal void Register(NetworkEntity entity)
             {
                 Dictionary.Add(entity.ID, entity);
@@ -477,12 +505,25 @@ namespace Wsla.Server
                 Dictionary.Remove(entity.ID);
                 entity.Owner.UnregisterEntity(entity);
 
+                IDGenerator.Return(entity.ID);
+
                 entity.Dispose();
             }
 
             internal void Despawn(NetworkEntity entity) => Unregister(entity);
 
-            internal void SwapAuthortative(NetworkClient from, NetworkClient to)
+            internal void DespawnAll()
+            {
+                var list = Room.Pools.EntityList.Take();
+
+                foreach (var (id, entity) in Dictionary)
+                    list.Add(entity);
+
+                foreach (var entity in list)
+                    Despawn(entity);
+            }
+
+            internal void TransferAuthoritative(NetworkClient from, NetworkClient to)
             {
                 foreach (var entity in from.Entities)
                 {
@@ -536,6 +577,7 @@ namespace Wsla.Server
 
                 Transport.Dispatcher.Register<SpawnPrefabEntityRequest>(SpawnPrefabRequestHandler);
                 Transport.Dispatcher.Register<DespawnEntityRequest>(DespawnRequestHandler);
+                Transport.Dispatcher.Register<TakeEntityOwnershipRequest>(TakeOwnershipRequestHandler);
             }
         }
 
@@ -720,19 +762,20 @@ namespace Wsla.Server
                     return;
                 }
 
-                ChangeProcedure(message.Scene);
+                //Action
+                {
+                    ID = message.Scene;
+                    Version = NetworkSceneVersion.Increment(Version);
+                    IsSpawned = false;
+
+                    Room.Entities.DespawnAll();
+                }
 
                 //Broadcast to All
                 {
                     var command = new ChangeSceneCommand(ID, Version);
                     Transport.BroadcastData(in command);
                 }
-            }
-            void ChangeProcedure(NetworkSceneID target)
-            {
-                ID = target;
-                Version = NetworkSceneVersion.Increment(Version);
-                IsSpawned = false;
             }
 
             void SpawnRequestHandler(NetworkClient sender, ref SpawnScenenRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)

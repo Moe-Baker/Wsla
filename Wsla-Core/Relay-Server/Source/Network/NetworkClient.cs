@@ -32,13 +32,19 @@ namespace Wsla.Server
             return SpawnTokens.Dequeue();
         }
 
-        public bool ValdiateSpawnToken(NetworkEntityID id)
+        public bool ValdiateSpawnToken(NetworkEntityID target)
         {
             if (SpawnTokens.TryPeek(out var registerd) is false)
+            {
+                NetworkLog.Warning($"No Spawn Tokens Available");
                 return false;
+            }
 
-            if (registerd != id)
+            if (registerd != target)
+            {
+                NetworkLog.Warning($"Expected Token {registerd} Got {target}");
                 return false;
+            }
 
             RemoveSpawnToken();
             return true;

@@ -22,6 +22,16 @@ namespace Wsla.Unity
         public NetworkClient Owner { get; private set; }
         internal int OwnerRegisteration;
 
+        /// <summary>
+        /// Are you the owner of this entity? opposite of <see cref="IsRemote"/>
+        /// </summary>
+        public bool IsMine => Owner.IsLocal;
+
+        /// <summary>
+        /// Are you NOT the owner of this entity? opposite of <see cref="IsMine"/>
+        /// </summary>
+        public bool IsRemote => Owner.IsRemote;
+
         internal void AssignOwner(NetworkClient target)
         {
             Owner = target;
@@ -114,9 +124,14 @@ namespace Wsla.Unity
 
             OnDespawn?.Invoke();
 
-            Destroy(gameObject);
+            Destroy();
         }
         public event Action OnDespawn;
+
+        internal void Destroy()
+        {
+            Destroy(gameObject);
+        }
         #endregion
 
         public bool IsReplicated { get; private set; }

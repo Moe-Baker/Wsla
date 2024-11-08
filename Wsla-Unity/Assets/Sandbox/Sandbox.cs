@@ -34,10 +34,10 @@ public class Sandbox : MonoBehaviour
         var response = await NetworkAPI.Room.Connect(address, Constants.RelayManagementPort, request);
         if (response.IsError)
         {
-            Debug.LogError($"Failed to Connect to Room, Error: {response.Error}");
+            NetworkLog.Error($"Failed to Connect to Room, Error: {response.Error}");
             return;
         }
 
-        Debug.Log($"Connected to Room {NetworkAPI.Room}");
+        NetworkLog.Trace($"Connected to Room {NetworkAPI.Room}");
     }
 }

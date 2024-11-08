@@ -12,7 +12,14 @@ namespace Wsla.Unity
         public NetworkClientID ID { get; }
         public FixedString20 Username { get; private set; }
 
+        /// <summary>
+        /// Is this your local client? opposite of <see cref="IsRemote"/>
+        /// </summary>
         public bool IsLocal => this is LocalNetworkClient;
+
+        /// <summary>
+        /// Is this NOT your local client? opposite of <see cref="IsLocal"/>
+        /// </summary>
         public bool IsRemote => IsLocal is false;
 
         public bool IsMaster => Room.Clients.Master == this;
