@@ -15,12 +15,22 @@ namespace Wsla.Unity
         public RoomAPI Room { get; private set; }
 
         [field: SerializeField]
+        public ChannelsAPI Channels { get; private set; }
+
+        [field: SerializeField]
         public SyncedPrefabsAPI SyncedPrefabs { get; private set; }
 
         [Serializable]
         public class Property : ReferenceProperty<NetworkAPI>
         {
             internal NetworkAPI API => Reference;
+        }
+
+        public override ExecutionModeSelection ExecutionMode => ExecutionModeSelection.All;
+
+        void OnValidate()
+        {
+            Channels.Validate();
         }
 
         protected override void Init()
@@ -30,6 +40,8 @@ namespace Wsla.Unity
             NetworkLog.Handler = LogHandler;
 
             Room.Set(this);
+            Channels.Set(this);
+            SyncedPrefabs.Set(this);
         }
 
         [HideInCallstack]

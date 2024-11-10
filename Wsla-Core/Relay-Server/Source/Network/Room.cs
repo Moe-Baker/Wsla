@@ -141,6 +141,7 @@ namespace Wsla.Server
 
                 Manager = new NetManager(Listener);
                 Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
+                Manager.ChannelsCount = Constants.ChannelCount;
                 Manager.IPv6Enabled = false;
 
                 Dispatcher = new DispatcherProperty(this);

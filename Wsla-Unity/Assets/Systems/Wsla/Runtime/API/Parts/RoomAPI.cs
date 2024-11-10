@@ -384,8 +384,9 @@ namespace Wsla.Unity
                 Listener = new BufferListener();
 
                 Manager = new NetManager(Listener);
-                Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
                 Manager.AutoRecycle = false;
+                Manager.ChannelsCount = Constants.ChannelCount;
+                Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
 
                 Dispatcher = new DispatcherProperty(this);
             }

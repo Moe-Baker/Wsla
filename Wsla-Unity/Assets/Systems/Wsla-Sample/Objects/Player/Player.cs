@@ -19,7 +19,9 @@ public partial class Player : NetworkBehaviour
 
         Network.Entity.AssignTraitHandler<string>(ApplyTrait);
 
-        Network.Entity.OnSpawn += SpawnCallback;
+        //Network.Entity.OnSpawn += SpawnCallback;
+
+        Network.Entity.OnReplicated += SpawnCallback;
     }
 
     void ApplyTrait(string attribute)
@@ -38,12 +40,12 @@ public partial class Player : NetworkBehaviour
                 {
                     NetworkSerializer.WriteValue("Bye World", stream);
                 })
-                .SetChannel(0)
+                .SetChannel(16)
                 .SetBufferMode()
                 .Broadcast();
 
             Number.Change(Random.Range(100, 1000))
-                .SetChannel(0)
+                .SetChannel(16)
                 .Broadcast();
         }
     }

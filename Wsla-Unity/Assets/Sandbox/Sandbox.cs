@@ -3,6 +3,8 @@ using System.Net;
 
 using Cysharp.Threading.Tasks;
 
+using LiteNetLib;
+
 using Toolbox;
 
 using UnityEngine;
@@ -14,6 +16,8 @@ using Wsla.Unity;
 
 public class Sandbox : MonoBehaviour
 {
+    public NetworkChannelField Field;
+
     public Button StartButton;
 
     NetworkAPI NetworkAPI => NetworkAPI.Instance;

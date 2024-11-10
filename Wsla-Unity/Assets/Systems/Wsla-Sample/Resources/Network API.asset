@@ -12,6 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15069150ced99384289bbf16b28ca57f, type: 3}
   m_Name: Network API
   m_EditorClassIdentifier: 
+  <Channels>k__BackingField:
+    <Names>k__BackingField:
+    - C0
+    - C1
+    - C2
   <SyncedPrefabs>k__BackingField:
     <Collection>k__BackingField:
     - {fileID: 9032691475832905782, guid: 2d0fe9588da7c0a429bf9b6d3a985ec5, type: 3}

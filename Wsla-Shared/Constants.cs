@@ -10,5 +10,7 @@ namespace Wsla
         public const ushort CoordinatorServicePort = 4724;
 
         public static TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+        public const byte ChannelCount = 32;
     }
 }
