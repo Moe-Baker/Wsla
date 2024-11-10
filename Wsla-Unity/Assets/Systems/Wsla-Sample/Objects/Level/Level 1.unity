@@ -449,6 +449,7 @@ GameObject:
   m_Component:
   - component: {fileID: 488500182}
   - component: {fileID: 488500183}
+  - component: {fileID: 488500184}
   m_Layer: 0
   m_Name: Network Entity (2)
   m_TagString: Untagged
@@ -485,7 +486,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <Authority>k__BackingField: 2
   <Behaviours>k__BackingField:
-    <Components>k__BackingField: []
+    <Components>k__BackingField:
+    - {fileID: 488500184}
+--- !u!114 &488500184
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488500181}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48738686f43eed449bba19f6c1896841, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &639537021
 GameObject:
   m_ObjectHideFlags: 0
@@ -783,6 +797,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1309162357}
   - component: {fileID: 1309162358}
+  - component: {fileID: 1309162359}
   m_Layer: 0
   m_Name: Network Entity (3)
   m_TagString: Untagged
@@ -819,7 +834,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <Authority>k__BackingField: 2
   <Behaviours>k__BackingField:
-    <Components>k__BackingField: []
+    <Components>k__BackingField:
+    - {fileID: 1309162359}
+--- !u!114 &1309162359
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1309162356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48738686f43eed449bba19f6c1896841, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1737818973
 GameObject:
   m_ObjectHideFlags: 0
@@ -1030,6 +1058,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1965162667}
   - component: {fileID: 1965162668}
+  - component: {fileID: 1965162669}
   m_Layer: 0
   m_Name: Network Entity (1)
   m_TagString: Untagged
@@ -1066,7 +1095,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <Authority>k__BackingField: 2
   <Behaviours>k__BackingField:
-    <Components>k__BackingField: []
+    <Components>k__BackingField:
+    - {fileID: 1965162669}
+--- !u!114 &1965162669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965162666}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48738686f43eed449bba19f6c1896841, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &2134915789
 GameObject:
   m_ObjectHideFlags: 0
@@ -1077,6 +1119,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2134915790}
   - component: {fileID: 2134915791}
+  - component: {fileID: 2134915792}
   m_Layer: 0
   m_Name: Network Entity (4)
   m_TagString: Untagged
@@ -1113,7 +1156,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <Authority>k__BackingField: 2
   <Behaviours>k__BackingField:
-    <Components>k__BackingField: []
+    <Components>k__BackingField:
+    - {fileID: 2134915792}
+--- !u!114 &2134915792
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2134915789}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48738686f43eed449bba19f6c1896841, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

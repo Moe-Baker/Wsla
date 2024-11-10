@@ -28,6 +28,8 @@ namespace Toolbox
 
         protected abstract void Init();
 
+        protected abstract void Dispose();
+
         static class Runtime
         {
 #if UNITY_EDITOR
@@ -64,6 +66,35 @@ namespace Toolbox
                     {
                         Debug.LogError(ex);
                     }
+
+#if UNITY_EDITOR
+                    //Clear static instance to support instant play mode
+
+                    var reference = managers[i];
+
+                    if (mode.HasFlag(ExecutionModeSelection.Editor))
+                    {
+                        EditorApplication.playModeStateChanged += Callback;
+                        void Callback(PlayModeStateChange state)
+                        {
+                            if (state is not PlayModeStateChange.ExitingEditMode)
+                                return;
+
+                            EditorApplication.playModeStateChanged -= Callback;
+                            reference.Dispose();
+                        }
+                    }
+
+                    if (mode.HasFlag(ExecutionModeSelection.Runtime))
+                    {
+                        Application.quitting += Callback;
+                        void Callback()
+                        {
+                            Application.quitting -= Callback;
+                            reference.Dispose();
+                        }
+                    }
+#endif
                 }
             }
         }
@@ -80,14 +111,11 @@ namespace Toolbox
                 throw new Exception($"Duplicate Instances of Scriptable Manager ({typeof(T)}) Found, Both ({Instance}) & ({this})");
 
             Instance = (T)this;
+        }
 
-#if UNITY_EDITOR
-            //Clear static instance to support instant play mode
-            Application.quitting += () =>
-            {
-                Instance = default;
-            };
-#endif
+        protected override void Dispose()
+        {
+            Instance = default;
         }
     }
 }

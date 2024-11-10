@@ -664,8 +664,10 @@ namespace Wsla.Unity
                 if (entity.Authority is not NetworkEntityAuthorityMode.Transferable)
                     throw new InvalidOperationException($"Can Only Take Ownership of {NetworkEntityAuthorityMode.Transferable} Entities");
 
-                var request = new TakeEntityOwnershipRequest(entity.ID);
+                var request = new TakeEntityOwnershipRequest(entity.ID, entity.TransferToken);
                 Transport.SendData(in request);
+
+                entity.TransferToken = NetworkEntityTransferToken.Increment(entity.TransferToken);
 
                 Transfer(entity, Room.Clients.Local);
             }
@@ -703,7 +705,7 @@ namespace Wsla.Unity
 
             void SpawnPrefabCommandHandler(ref SpawnPrefabEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner);
+                var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner, NetworkEntityTransferToken.Zero);
 
                 var instance = Assimilate(definition);
 
@@ -738,6 +740,8 @@ namespace Wsla.Unity
                     return;
                 }
 
+                entity.AssignTransferToken(message.Token);
+
                 Transfer(entity, client);
             }
             #endregion
@@ -755,7 +759,7 @@ namespace Wsla.Unity
 
             NetworkEntity SpawnLocal(SpawnOptions options)
             {
-                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, Room.Clients.Local.ID);
+                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
 
                 var instance = Assimilate(definition);
 
@@ -1175,7 +1179,9 @@ namespace Wsla.Unity
                     var authority = component.Locals[i].Authority;
                     var ownerID = Room.Clients.Master.ID;
 
-                    var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID);
+                    var transferToken = NetworkEntityTransferToken.Zero;
+
+                    var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID, transferToken);
 
                     entity.Assign(Room, definition);
                     Room.Entities.Register(entity);

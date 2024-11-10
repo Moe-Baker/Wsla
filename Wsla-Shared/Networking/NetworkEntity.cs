@@ -85,7 +85,7 @@ namespace Wsla
 
         public NetworkClientID Owner;
 
-        public bool IsOwnedByMasterClient => Authority is NetworkEntityAuthorityMode.Authoritative;
+        public NetworkEntityTransferToken TransferToken;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -94,11 +94,14 @@ namespace Wsla
             context.Select(ref Resource);
 
             context.Select(ref Authority);
-            if (IsOwnedByMasterClient is false)
+            if (Authority is not NetworkEntityAuthorityMode.Authoritative)
                 context.Select(ref Owner);
+
+            if (Authority is NetworkEntityAuthorityMode.Transferable)
+                context.Select(ref TransferToken);
         }
 
-        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
+        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkEntityTransferToken TransferToken)
         {
             this.ID = ID;
             this.Origin = Origin;
@@ -107,6 +110,8 @@ namespace Wsla
             this.Authority = Authority;
 
             this.Owner = Owner;
+
+            this.TransferToken = TransferToken;
         }
     }
 
@@ -141,5 +146,46 @@ namespace Wsla
         /// scene entity lifetime is tied to scene lifetime; and the entity will be transfered to the master client on owner disconnect
         /// </summary>
         Transferable = 2,
+    }
+
+    [Serializable]
+    [NetworkBlittable]
+    public struct NetworkEntityTransferToken : IEquatable<NetworkEntityTransferToken>
+    {
+        public byte Value { get; private set; }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is NetworkEntityTransferToken other)
+                return Equals(other);
+
+            return false;
+        }
+        public bool Equals(NetworkEntityTransferToken other)
+        {
+            return Value == other.Value;
+        }
+
+        public override int GetHashCode() => Value;
+
+        public override string ToString() => Value.ToString();
+
+        public NetworkEntityTransferToken(byte value)
+        {
+            this.Value = value;
+        }
+
+        public static NetworkEntityTransferToken Zero { get; } = new(0);
+
+        public static bool operator ==(NetworkEntityTransferToken left, NetworkEntityTransferToken right) => left.Equals(right);
+        public static bool operator !=(NetworkEntityTransferToken left, NetworkEntityTransferToken right) => !left.Equals(right);
+
+        public static NetworkEntityTransferToken Increment(NetworkEntityTransferToken index)
+        {
+            unchecked
+            {
+                return new NetworkEntityTransferToken((byte)(index.Value + 1));
+            }
+        }
     }
 }

@@ -212,10 +212,12 @@ namespace Wsla
     public struct TakeEntityOwnershipRequest
     {
         public NetworkEntityID ID;
+        public NetworkEntityTransferToken Token;
 
-        public TakeEntityOwnershipRequest(NetworkEntityID Entity)
+        public TakeEntityOwnershipRequest(NetworkEntityID Entity, NetworkEntityTransferToken Token)
         {
             this.ID = Entity;
+            this.Token = Token;
         }
     }
 
@@ -225,10 +227,13 @@ namespace Wsla
         public NetworkClientID Client;
         public NetworkEntityID Entity;
 
-        public TransferEntityOwnershipCommand(NetworkClientID Client, NetworkEntityID Entity)
+        public NetworkEntityTransferToken Token;
+
+        public TransferEntityOwnershipCommand(NetworkClientID Client, NetworkEntityID Entity, NetworkEntityTransferToken Token)
         {
             this.Client = Client;
             this.Entity = Entity;
+            this.Token = Token;
         }
     }
 }

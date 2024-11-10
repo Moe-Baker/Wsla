@@ -49,6 +49,12 @@ namespace Wsla.Unity
         [field: SerializeField]
         public NetworkEntityAuthorityMode Authority { get; internal set; }
 
+        internal NetworkEntityTransferToken TransferToken;
+        internal void AssignTransferToken(NetworkEntityTransferToken value)
+        {
+            TransferToken = value;
+        }
+
         void Reset()
         {
             Authority = NetworkEntityAuthorityMode.Transferable;
@@ -64,8 +70,10 @@ namespace Wsla.Unity
             Resource = definition.Resource;
             Authority = definition.Authority;
 
+            TransferToken = definition.TransferToken;
+
             //Assign Owner
-            if (definition.IsOwnedByMasterClient)
+            if (definition.Authority is NetworkEntityAuthorityMode.Authoritative)
             {
                 AssignOwner(Room.Clients.Master);
             }
@@ -447,7 +455,7 @@ namespace Wsla.Unity
 
                 if (Application.isPlaying is false)
                 {
-                    ShowInfo("Is Network Running", false);
+                    DrawInfoField("Is Network Running", false);
                     return;
                 }
 
@@ -456,20 +464,21 @@ namespace Wsla.Unity
 
                 var target = base.target as NetworkEntity;
 
-                ShowInfo("Is Spawned", target.IsSpawned);
-                ShowInfo("Is Replicated", target.IsReplicated);
+                DrawInfoField("Is Spawned", target.IsSpawned);
+                DrawInfoField("Is Replicated", target.IsReplicated);
 
                 if (target.IsSpawned)
                 {
-                    ShowInfo("ID", target.ID.Value);
-                    ShowInfo("Owner", target.Owner);
-                    ShowInfo("Origin", target.Origin);
-                    ShowInfo("Authority", target.Authority);
-                    ShowInfo("Resource", target.Resource);
+                    DrawInfoField("ID", target.ID.Value);
+                    DrawInfoField("Owner", target.Owner);
+                    DrawInfoField("Origin", target.Origin);
+                    DrawInfoField("Authority", target.Authority);
+                    DrawInfoField("Resource", target.Resource);
+                    DrawInfoField("Transfer Token", target.TransferToken);
                 }
             }
 
-            static void ShowInfo(string title, object value)
+            static void DrawInfoField(string title, object value)
             {
                 EditorGUILayout.LabelField(title, value.ToString(), InformationLabelStyle.Value);
             }

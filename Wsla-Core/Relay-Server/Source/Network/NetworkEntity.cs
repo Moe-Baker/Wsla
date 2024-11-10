@@ -27,6 +27,8 @@ namespace Wsla.Server
 
         public NetworkEntityAuthorityMode Authority { get; private set; }
 
+        public NetworkEntityTransferToken TransferToken { get; internal set; }
+
         #region Remote Buffer
         internal RemoteSyncBufferCollection<NetworkRpcID> RpcBuffer;
         internal RemoteSyncBufferCollection<NetworkVariableID> VariableBuffer;
@@ -54,7 +56,7 @@ namespace Wsla.Server
 
         public void WriteDefinition(NetDataWriter writer)
         {
-            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID);
+            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID, TransferToken);
             NetworkSerializer.WriteValue(in definition, writer);
 
             WriteTrait(writer);
@@ -78,6 +80,8 @@ namespace Wsla.Server
             VariableBuffer.Dispose();
         }
 
+        public override string ToString() => $"(ID: {ID})";
+
         readonly Room Room;
         public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
         {
@@ -93,6 +97,8 @@ namespace Wsla.Server
 
             RpcBuffer = new(Room);
             VariableBuffer = new(Room);
+
+            TransferToken = new NetworkEntityTransferToken(0);
         }
     }
 }

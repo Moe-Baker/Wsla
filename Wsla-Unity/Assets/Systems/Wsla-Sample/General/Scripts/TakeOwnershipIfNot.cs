@@ -1,3 +1,8 @@
+using Cysharp.Threading.Tasks;
+
+using System;
+using System.Threading.Tasks;
+
 using Wsla.Unity;
 
 public class TakeOwnershipIfNot : NetworkBehaviour
@@ -11,7 +16,38 @@ public class TakeOwnershipIfNot : NetworkBehaviour
 
     void SpawnCallback()
     {
-        if (Network.Entity.IsRemote)
-            Network.API.Room.Entities.TakeOwnership(Network.Entity);
+        Procedure().Forget();
+    }
+
+    async UniTaskVoid Procedure()
+    {
+        var cancellation = destroyCancellationToken;
+
+        var duration = TimeSpan.FromSeconds(UnityEngine.Random.Range(10, 15));
+
+        while (true)
+        {
+            try
+            {
+                var interval = TimeSpan.FromMilliseconds(UnityEngine.Random.Range(100, 500));
+
+                duration -= interval;
+
+                await UniTask.Delay(interval, cancellationToken: cancellation);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (cancellation.IsCancellationRequested)
+                return;
+
+            if (Network.Entity.IsRemote)
+                Network.API.Room.Entities.TakeOwnership(Network.Entity);
+
+            if (duration <= TimeSpan.Zero)
+                break;
+        }
     }
 }

@@ -482,9 +482,23 @@ namespace Wsla.Server
                     return;
                 }
 
+                if (entity.TransferToken != message.Token)
+                {
+                    NetworkLog.Warning($"Late Take Ownership Request from {sender}, Request for Token {message.Token}, Entity {entity} Already at Token {entity.TransferToken}");
+
+                    //Respond to Sender to Fix State
+                    {
+                        var command = new TransferEntityOwnershipCommand(entity.Owner.ID, entity.ID, entity.TransferToken);
+                        Transport.SendData(sender, in command);
+                    }
+                }
+
+                //Increment Token
+                entity.TransferToken = NetworkEntityTransferToken.Increment(entity.TransferToken);
+
                 //Broadcast to Others
                 {
-                    var command = new TransferEntityOwnershipCommand(sender.ID, entity.ID);
+                    var command = new TransferEntityOwnershipCommand(sender.ID, entity.ID, entity.TransferToken);
                     Transport.BroadcastData(in command, except: sender);
                 }
 
