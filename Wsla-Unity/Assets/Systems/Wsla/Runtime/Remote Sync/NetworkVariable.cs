@@ -68,19 +68,36 @@ namespace Wsla.Unity
         public bool IsBuffered { get; }
 
         /// <summary>
-        /// Get the sender of the RPC, only valid on non-buffered RPCs, ie RPCs not sent to late joining clients to sync late game state
+        /// Get the sender of the Variable, only valid if this Variable's Sender is still in the Room, consider using <see cref="TryGetSender(out NetworkClient)"/> for a safer alternative
         /// </summary>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         public NetworkClient GetSender()
         {
-            if (IsBuffered)
-                throw new InvalidOperationException($"Can't Get Sender for Buffered NetworkRPC");
-
-            if (Room.Clients.TryGet(SenderID, out var sender) is false)
-                throw new Exception($"No Sender Found for RPC {SenderID}, a Replication Error, Please Report");
+            if (TryGetSender(out var sender) is false)
+                throw new InvalidOperationException($"Variable Sender Disconnected");
 
             return sender;
+        }
+
+        /// <summary>
+        /// Tries to get the sender of the Variable
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns>true if found, false if not</returns>
+        /// <exception cref="Exception"></exception>
+        public bool TryGetSender(out NetworkClient client)
+        {
+            if (SenderID == NetworkClientID.None)
+            {
+                client = default;
+                return false;
+            }
+
+            if (Room.Clients.TryGet(SenderID, out client) is false)
+                throw new Exception($"No Sender Found for Variable {SenderID}, a Replication Error, Please Report");
+
+            return true;
         }
 
         public NetworkVariableInfo(RoomAPI Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
@@ -104,7 +121,7 @@ namespace Wsla.Unity
             return new NetworkVariableInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static NetworkVariableInfo FromBuffer(RoomAPI room) => new NetworkVariableInfo(room, default, 0, DeliveryMethod.ReliableOrdered, true);
+        public static NetworkVariableInfo FromBuffer(RoomAPI room, NetworkClientID senderID) => new NetworkVariableInfo(room, senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public struct VariableInvocationBuilder

@@ -449,37 +449,84 @@ namespace Wsla.Unity
             }
             void DisconnectHandler(ref ClientDisconnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                while (reader.Available > 0)
+                //Set Master Client
+                if (message.IsMasterClientChange(out var MasterID))
                 {
-                    var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    if (TryGet(MasterID, out var current) is false)
+                    {
+                        NetworkLog.Error($"No Client with ID {MasterID} Found");
+                        Room.Shutdown();
+                        return;
+                    }
 
-                    Room.Entities.InvokeDespawn(id);
+                    Master = current;
+
+                    NetworkLog.Info($"Master Client Changed to {Master}");
                 }
 
-                Unregister(message.ID);
-            }
-
-            public delegate void MasterChangeDelegate(NetworkClient client);
-            public event MasterChangeDelegate OnMasterChange;
-            void ChangeMasterHandler(ref ChangeMasterClientCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
-            {
-                var previous = Master;
-
-                if (TryGet(message.MasterID, out var current) is false)
+                //Get Disconnected Client
+                if (TryGet(message.ClientID, out var client) is false)
                 {
-                    NetworkLog.Error($"No Client with ID {message.MasterID} Found");
+                    NetworkLog.Error($"No NetworkClient Found with ID {message.ClientID}");
                     Room.Shutdown();
                     return;
                 }
 
-                Master = current;
+                //Handle Local Entities
+                foreach (var entity in client.Entities)
+                {
+                    switch (entity.Authority)
+                    {
+                        case NetworkEntityAuthorityMode.Authoritative:
+                            entity.IncrementTransferToken();
+                            Room.Entities.Transfer(entity, Master);
+                            break;
 
-                NetworkLog.Info($"Master Client Changed to {Master}");
+                        case NetworkEntityAuthorityMode.Explicit:
+                            Room.Entities.InvokeDespawn(entity);
+                            break;
+                    }
+                }
 
-                Room.Entities.TransferAuthoritative(previous, current);
+                //Despawn Instructed Entities
+                while (reader.Available > 0)
+                {
+                    var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    var behaviour = NetworkSerializer.ReadValue<EntityDisconnectBehaviour>(reader);
 
-                OnMasterChange?.Invoke(Master);
+                    if (Room.Entities.TryGet(id, out var entity) is false)
+                    {
+                        NetworkLog.Error($"No Entity with ID {entity} Found");
+                        Room.Shutdown();
+                        return;
+                    }
+
+                    switch (behaviour)
+                    {
+                        case EntityDisconnectBehaviour.Despawn:
+                            Room.Entities.InvokeDespawn(entity);
+                            break;
+
+                        case EntityDisconnectBehaviour.Transfer:
+                        {
+                            entity.IncrementTransferToken();
+                            Room.Entities.Transfer(entity, Master);
+                        }
+                        break;
+
+                        default: throw new NotImplementedException();
+                    }
+                }
+
+                Unregister(client.ID);
+
+                //Invoke Master Change
+                if (message.IsMasterClientChange())
+                    OnChangeMaster?.Invoke(Master);
             }
+
+            public delegate void ChangeMasterDelegate(NetworkClient client);
+            public event ChangeMasterDelegate OnChangeMaster;
 
             void Register(NetworkClient client)
             {
@@ -505,8 +552,6 @@ namespace Wsla.Unity
 
                 Transport.Dispatcher.Register<ClientConnectMessage>(ConnectHandler);
                 Transport.Dispatcher.Register<ClientDisconnectMessage>(DisconnectHandler);
-
-                Transport.Dispatcher.Register<ChangeMasterClientCommand>(ChangeMasterHandler);
             }
         }
 
@@ -668,7 +713,6 @@ namespace Wsla.Unity
                 Transport.SendData(in request);
 
                 entity.TransferToken = NetworkEntityTransferToken.Increment(entity.TransferToken);
-
                 Transfer(entity, Room.Clients.Local);
             }
             #endregion
@@ -741,7 +785,6 @@ namespace Wsla.Unity
                 }
 
                 entity.AssignTransferToken(message.Token);
-
                 Transfer(entity, client);
             }
             #endregion
@@ -864,17 +907,6 @@ namespace Wsla.Unity
                     InvokeDespawn(entity);
             }
 
-            internal void TransferAuthoritative(NetworkClient from, NetworkClient to)
-            {
-                foreach (var entity in from.Entities)
-                {
-                    if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
-                        continue;
-
-                    Transfer(entity, to);
-                }
-            }
-
             internal void Transfer(NetworkEntity entity, NetworkClient to)
             {
                 var from = entity.Owner;
@@ -950,11 +982,12 @@ namespace Wsla.Unity
 
             internal void ReadState(NetPacketReader reader)
             {
-                var total = NetworkSerializer.ReadValue<ushort>(reader);
-
-                for (int x = 0; x < total; x++)
+                while (true)
                 {
                     var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    if (entityID == NetworkEntityID.None)
+                        break;
+
                     if (Room.Entities.TryGet(entityID, out var entity) is false)
                         throw new InvalidOperationException($"No Entity found With ID {entityID}");
 
@@ -965,9 +998,11 @@ namespace Wsla.Unity
                         var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
                         var rpcID = NetworkSerializer.ReadValue<NetworkRpcID>(reader);
 
+                        var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
+
                         if (Get(entity, behaviourID, rpcID, out var bind))
                         {
-                            var info = RpcInfo.FromBuffer(Room);
+                            var info = RpcInfo.FromBuffer(Room, senderID);
                             bind.Invoke(reader, info);
                         }
                     }
@@ -1033,11 +1068,12 @@ namespace Wsla.Unity
 
             internal void ReadState(NetPacketReader reader)
             {
-                var total = NetworkSerializer.ReadValue<ushort>(reader);
-
-                for (int x = 0; x < total; x++)
+                while (true)
                 {
                     var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    if (entityID == NetworkEntityID.None)
+                        break;
+
                     if (Room.Entities.TryGet(entityID, out var entity) is false)
                         throw new NotImplementedException();
 
@@ -1048,9 +1084,11 @@ namespace Wsla.Unity
                         var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
                         var variableID = NetworkSerializer.ReadValue<NetworkVariableID>(reader);
 
+                        var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
+
                         if (Get(entity, behaviourID, variableID, out var variable))
                         {
-                            var info = NetworkVariableInfo.FromBuffer(Room);
+                            var info = NetworkVariableInfo.FromBuffer(Room, senderID);
                             variable.Set(reader, info);
                         }
                     }

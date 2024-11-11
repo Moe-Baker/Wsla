@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using LiteNetLib.Utils;
@@ -39,19 +40,30 @@ namespace Wsla.Server
                 Hashcode = (Behaviour.Value << 4) | (Member.Value);
             }
         }
-        public readonly struct Payload
+        public struct Payload
         {
-            public NetDataWriter? Stream { get; }
+            public NetworkClientID SenderID;
+            public NetworkClientVersion SenderVersion;
+
+            public readonly NetDataWriter? Stream;
+
+            public void SetSender(NetworkClient sender)
+            {
+                SenderID = sender.ID;
+                SenderVersion = sender.Version;
+            }
 
             public Payload(NetDataWriter? Stream)
             {
+                Unsafe.SkipInit(out this);
+
                 this.Stream = Stream;
             }
         }
 
         public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
 
-        public void Register(NetworkBehaviourID Behaviour, TMember Member, NetDataReader Input)
+        public void Register(NetworkClient sender, NetworkBehaviourID Behaviour, TMember Member, NetDataReader Input)
         {
             if (Collection is null)
                 Collection = new(1);
@@ -72,6 +84,8 @@ namespace Wsla.Server
                     payload = new Payload(writer);
                 }
             }
+
+            payload.SetSender(sender);
 
             //Copy Buffer
             if (Input.AvailableBytes > 0 && payload.Stream is not null)
@@ -102,6 +116,14 @@ namespace Wsla.Server
                     NetworkSerializer.WriteValue(key.Member, output);
                 }
 
+                //Write Sender
+                {
+                    if (TryGetClient(payload.SenderID, payload.SenderVersion, out var client))
+                        NetworkSerializer.WriteValue(client.ID, output);
+                    else
+                        NetworkSerializer.WriteValue(NetworkClientID.None, output);
+                }
+
                 //Write Payload
                 if (payload.Stream is not null)
                 {
@@ -110,6 +132,17 @@ namespace Wsla.Server
                     source.CopyTo(destination);
                 }
             }
+        }
+
+        bool TryGetClient(NetworkClientID id, NetworkClientVersion version, out NetworkClient client)
+        {
+            if (Room.Clients.TryGet(id, out client) is false)
+                return false;
+
+            if (client.Version != version)
+                return false;
+
+            return true;
         }
 
         public void Dispose()

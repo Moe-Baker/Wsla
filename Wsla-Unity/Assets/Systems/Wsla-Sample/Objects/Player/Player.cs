@@ -57,7 +57,9 @@ public partial class Player : NetworkBehaviour
 
         if (info.IsBuffered)
         {
-            NetworkLog.Info($"Buffered RPC Called, Text: {text}");
+            info.TryGetSender(out var sender);
+
+            NetworkLog.Info($"Buffered RPC Called, Text: {text}, Sender: {sender}");
         }
         else
         {

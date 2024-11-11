@@ -49,11 +49,27 @@ namespace Wsla
     [NetworkBlittable]
     public struct ClientDisconnectMessage
     {
-        public NetworkClientID ID;
+        public NetworkClientID ClientID;
 
-        public ClientDisconnectMessage(NetworkClientID ID)
+        NetworkClientID? MasterID;
+
+        public bool IsMasterClientChange() => MasterID.HasValue;
+        public bool IsMasterClientChange(out NetworkClientID id)
         {
-            this.ID = ID;
+            if (MasterID.HasValue is false)
+            {
+                id = default;
+                return false;
+            }
+
+            id = MasterID.Value;
+            return true;
+        }
+
+        public ClientDisconnectMessage(NetworkClientID ClientID, NetworkClientID? MasterID)
+        {
+            this.ClientID = ClientID;
+            this.MasterID = MasterID;
         }
     }
 
@@ -198,17 +214,6 @@ namespace Wsla
     }
 
     [NetworkBlittable]
-    public struct ChangeMasterClientCommand
-    {
-        public NetworkClientID MasterID;
-
-        public ChangeMasterClientCommand(NetworkClientID MasterID)
-        {
-            this.MasterID = MasterID;
-        }
-    }
-
-    [NetworkBlittable]
     public struct TakeEntityOwnershipRequest
     {
         public NetworkEntityID ID;
@@ -235,5 +240,18 @@ namespace Wsla
             this.Entity = Entity;
             this.Token = Token;
         }
+    }
+
+    public enum EntityDisconnectBehaviour : byte
+    {
+        /// <summary>
+        /// Despawn the Entity
+        /// </summary>
+        Despawn,
+
+        /// <summary>
+        /// Transfer the Entity to the Master Client
+        /// </summary>
+        Transfer,
     }
 }

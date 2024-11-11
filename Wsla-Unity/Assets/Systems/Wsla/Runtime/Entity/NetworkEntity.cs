@@ -54,7 +54,7 @@ namespace Wsla.Unity
         {
             TransferToken = value;
         }
-
+        internal void IncrementTransferToken() => TransferToken = NetworkEntityTransferToken.Increment(TransferToken);
         void Reset()
         {
             Authority = NetworkEntityAuthorityMode.Transferable;
@@ -445,6 +445,7 @@ namespace Wsla.Unity
                 base.OnInspectorGUI();
 
                 DisplayInfo();
+                DisplayToolbar();
             }
 
             void DisplayInfo()
@@ -477,10 +478,44 @@ namespace Wsla.Unity
                     DrawInfoField("Transfer Token", target.TransferToken);
                 }
             }
-
             static void DrawInfoField(string title, object value)
             {
                 EditorGUILayout.LabelField(title, value.ToString(), InformationLabelStyle.Value);
+            }
+
+            void DisplayToolbar()
+            {
+                EditorGUILayout.Space();
+
+                if (Application.isPlaying is false)
+                    return;
+
+                if (serializedObject.isEditingMultipleObjects)
+                    return;
+
+                var target = base.target as NetworkEntity;
+
+                EditorGUILayout.BeginHorizontal();
+                {
+                    //Take Ownership
+                    using (new EditorGUI.DisabledGroupScope(target.IsMine))
+                    {
+                        if (GUILayout.Button("Take Ownership"))
+                        {
+                            target.Room.Entities.TakeOwnership(target);
+                        }
+                    }
+
+                    //Despawn
+                    using (new EditorGUI.DisabledGroupScope(target.IsRemote))
+                    {
+                        if (GUILayout.Button("Despawn"))
+                        {
+                            target.Room.Entities.Despawn(target);
+                        }
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
             }
         }
 #endif

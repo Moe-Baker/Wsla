@@ -32,7 +32,9 @@ namespace Wsla
         }
 
         public static NetworkClientID Min { get; } = new(byte.MinValue);
-        public static NetworkClientID Max { get; } = new(byte.MaxValue);
+        public static NetworkClientID Max { get; } = new(byte.MaxValue - 1);
+
+        public static NetworkClientID None { get; } = new(byte.MaxValue);
 
         public static bool operator ==(NetworkClientID left, NetworkClientID right) => left.Equals(right);
         public static bool operator !=(NetworkClientID left, NetworkClientID right) => !left.Equals(right);

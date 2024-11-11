@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -157,6 +158,35 @@ namespace Wsla.Server
             public byte Count => (byte)Collection.Count;
             public bool TryGet(NetworkClientID id, out NetworkClient client) => Collection.TryGet(id.Value, out client);
 
+            VersionCollection Versions;
+            struct VersionCollection
+            {
+                List<NetworkClientVersion> List;
+
+                public NetworkClientVersion Retrieve(NetworkClientID id)
+                {
+                    var index = id.Value;
+
+                    if (index + 1 > List.Count)
+                    {
+                        Span<NetworkClientVersion> buffer = stackalloc NetworkClientVersion[List.Count - index + 1];
+                        List.AddRange(buffer);
+                    }
+
+                    ref var value = ref CollectionsMarshal.AsSpan(List)[index];
+
+                    value = NetworkClientVersion.Increment(value);
+
+                    return value;
+                }
+
+                public VersionCollection() : this(0) { }
+                public VersionCollection(int capacity)
+                {
+                    List = new(capacity);
+                }
+            }
+
             public NetworkClient? Master { get; private set; }
 
             TransportProperty Transport => Room.Transport;
@@ -202,7 +232,9 @@ namespace Wsla.Server
                     return;
                 }
 
-                var client = new NetworkClient(Room, id, data.Username, spawnTokens.Length);
+                var version = Versions.Retrieve(id);
+
+                var client = new NetworkClient(Room, id, data.Username, spawnTokens.Length, version);
 
                 for (int i = 0; i < spawnTokens.Length; i++)
                     client.AddSpawnToken(spawnTokens[i]);
@@ -279,23 +311,62 @@ namespace Wsla.Server
                     foreach (var token in client.SpawnTokens)
                         Room.Entities.IDGenerator.Return(token);
 
-                    //Check Master Client
-                    if (client == Master)
-                        ReplaceMaster();
+                    var isMaster = (client == Master);
+
+                    //Replace Master Client
+                    if (isMaster) ReplaceMaster();
 
                     //Replicate
                     {
                         var writer = Room.Pools.SinglePackerWriter.Take();
 
-                        var message = new ClientDisconnectMessage(client.ID);
+                        var message = new ClientDisconnectMessage(client.ID, isMaster ? Master.ID : null);
                         NetworkSerializer.WriteHeader(in message, writer);
 
                         foreach (var entity in client.Entities)
                         {
-                            if (entity.Authority is NetworkEntityAuthorityMode.Transferable)
-                                NetworkSerializer.WriteValue(entity.ID, writer);
+                            switch (entity.Authority)
+                            {
+                                //Transfer to the new Master Client
+                                case NetworkEntityAuthorityMode.Authoritative:
+                                    Room.Entities.Transfer(entity, Master);
+                                    break;
 
-                            Room.Entities.Despawn(entity);
+                                //Despawn Locally, Remote Clients Despawn Locally as Well
+                                case NetworkEntityAuthorityMode.Explicit:
+                                    Room.Entities.Despawn(entity);
+                                    break;
+
+                                //Serialize their ID's and Despawn Explicitly on Remote Clients
+                                case NetworkEntityAuthorityMode.Transferable:
+                                {
+                                    NetworkSerializer.WriteValue(entity.ID, writer);
+
+                                    switch (entity.Origin)
+                                    {
+                                        //Despawn all Prefabs Entities
+                                        case NetworkEntityOrigin.Prefab:
+                                        {
+                                            Room.Entities.Despawn(entity);
+                                            NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Despawn, writer);
+                                        }
+                                        break;
+
+                                        //Transfer all Scene Entities back to the Master Client
+                                        case NetworkEntityOrigin.Scene:
+                                        {
+                                            Room.Entities.Transfer(entity, Master);
+                                            NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Transfer, writer);
+                                        }
+                                        break;
+
+                                        default: throw new NotImplementedException();
+                                    }
+                                }
+                                break;
+
+                                default: throw new NotImplementedException();
+                            }
                         }
 
                         Transport.BroadcastWriter(writer, except: client);
@@ -316,17 +387,7 @@ namespace Wsla.Server
 
             void ReplaceMaster()
             {
-                var previous = Master;
                 Master = ChooseMaster();
-                var current = Master;
-
-                Room.Entities.TransferAuthoritative(previous, current);
-
-                //Broadcast to All
-                {
-                    var change = new ChangeMasterClientCommand(Master.ID);
-                    Transport.BroadcastData(change);
-                }
             }
             NetworkClient ChooseMaster()
             {
@@ -355,7 +416,10 @@ namespace Wsla.Server
 
                 IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(NetworkClientID.Min, NetworkClientID.Max, 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
 
-                Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
+                const int Capacity = 10;
+
+                Collection = new ExpandArray<NetworkClient>(Capacity, NetworkClientID.Max.Value, Capacity);
+                Versions = new VersionCollection(Capacity);
 
                 Transport.Listener.ConnectionRequestEvent += RequestHandler;
                 Transport.Listener.PeerConnectedEvent += ConnectHandler;
@@ -493,16 +557,13 @@ namespace Wsla.Server
                     }
                 }
 
-                //Increment Token
-                entity.TransferToken = NetworkEntityTransferToken.Increment(entity.TransferToken);
+                Transfer(entity, sender);
 
                 //Broadcast to Others
                 {
                     var command = new TransferEntityOwnershipCommand(sender.ID, entity.ID, entity.TransferToken);
                     Transport.BroadcastData(in command, except: sender);
                 }
-
-                Transfer(entity, sender);
             }
 
             internal void Register(NetworkEntity entity)
@@ -538,41 +599,22 @@ namespace Wsla.Server
                     Despawn(entity);
             }
 
-            internal void TransferAuthoritative(NetworkClient from, NetworkClient to)
-            {
-                foreach (var entity in from.Entities)
-                {
-                    if (entity.Authority is not NetworkEntityAuthorityMode.Authoritative)
-                        continue;
-
-                    Transfer(entity, to);
-                }
-            }
-
             internal void Transfer(NetworkEntity entity, NetworkClient to)
             {
-                var from = entity.Owner;
+                //Increment Token
+                entity.TransferToken = NetworkEntityTransferToken.Increment(entity.TransferToken);
 
+                var from = entity.Owner;
                 from.UnregisterEntity(entity);
-                to.RegisterEntity(entity);
 
                 entity.TransferOwner(to);
+                to.RegisterEntity(entity);
             }
 
-            internal void WriteDefinitions(NetDataWriter writer, out (ushort variables, ushort rpcs) buffer)
+            internal void WriteDefinitions(NetDataWriter writer)
             {
-                buffer = (0, 0);
-
                 foreach (var (id, entity) in Dictionary)
-                {
-                    if (entity.RpcBuffer.Count > 0)
-                        buffer.rpcs += 1;
-
-                    if (entity.VariableBuffer.Count > 0)
-                        buffer.variables += 1;
-
                     entity.WriteDefinition(writer);
-                }
             }
 
             public void Dispose()
@@ -586,7 +628,10 @@ namespace Wsla.Server
             {
                 this.Room = room;
 
-                IDGenerator = new(NetworkEntityID.Min, NetworkEntityID.Max, 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
+                //Create ID Generator
+                {
+                    IDGenerator = new(NetworkEntityID.Min, NetworkEntityID.Max, 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
+                }
 
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
 
@@ -610,7 +655,7 @@ namespace Wsla.Server
                 }
 
                 if (message.Buffer is RemoteBufferMode.Buffer)
-                    entity.RpcBuffer.Register(message.Parameters.Behaviour, message.Parameters.RPC, reader);
+                    entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.RPC, reader);
 
                 //Send to Others
                 {
@@ -628,7 +673,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.RpcBuffer.Register(message.Parameters.Behaviour, message.Parameters.RPC, reader);
+                entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.RPC, reader);
             }
 
             void TargetRequestHandler(NetworkClient sender, ref TargetNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -667,15 +712,13 @@ namespace Wsla.Server
                 }
             }
 
-            internal void WriteState(NetDataWriter writer, ushort count)
+            internal void WriteState(NetDataWriter writer)
             {
-                NetworkSerializer.WriteValue(in count, writer);
-
-                if (count is 0)
-                    return;
-
                 foreach (var (id, entity) in Room.Entities.Dictionary)
                     entity.RpcBuffer.WriteState(id, writer);
+
+                //End of Stream
+                NetworkSerializer.WriteValue(NetworkEntityID.None, writer);
             }
 
             readonly Room Room;
@@ -702,7 +745,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(message.Parameters.Behaviour, message.Parameters.Variable, reader);
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Variable, reader);
 
                 //Send to Others
                 {
@@ -720,7 +763,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(message.Parameters.Behaviour, message.Parameters.Variable, reader);
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Variable, reader);
             }
 
             void WriteCommand(NetworkClient sender, ref NetworkVariableParameters parameters, NetPacketReader input, NetDataWriter output)
@@ -737,15 +780,13 @@ namespace Wsla.Server
                 }
             }
 
-            internal void WriteState(NetDataWriter writer, ushort count)
+            internal void WriteState(NetDataWriter writer)
             {
-                NetworkSerializer.WriteValue(in count, writer);
-
-                if (count is 0)
-                    return;
-
                 foreach (var (id, entity) in Room.Entities.Dictionary)
                     entity.VariableBuffer.WriteState(id, writer);
+
+                //End of Stream
+                NetworkSerializer.WriteValue(NetworkEntityID.None, writer);
             }
 
             readonly Room Room;
@@ -894,13 +935,13 @@ namespace Wsla.Server
             Scene.WriteState(writer);
 
             //Sync Entity Definitions
-            Entities.WriteDefinitions(writer, out var buffer);
+            Entities.WriteDefinitions(writer);
 
             //Sync Variables
-            Variables.WriteState(writer, buffer.variables);
+            Variables.WriteState(writer);
 
             //Sync RPCs
-            RPCs.WriteState(writer, buffer.rpcs);
+            RPCs.WriteState(writer);
         }
 
         public override string ToString() => $"({Name})";

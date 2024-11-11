@@ -17,6 +17,8 @@ namespace Wsla.Server
             this.Peer = value;
         }
 
+        public NetworkClientVersion Version { get; private set; }
+
         public bool IsMaster => Room.Clients.Master == this;
 
         #region Spawn Tokens
@@ -64,7 +66,6 @@ namespace Wsla.Server
         {
             target.OwnerRegisteration = Entities.Add(target);
         }
-
         public void UnregisterEntity(NetworkEntity target)
         {
             Entities.RemoveAt(target.OwnerRegisteration);
@@ -85,16 +86,59 @@ namespace Wsla.Server
         }
 
         readonly Room Room;
-        public NetworkClient(Room Room, NetworkClientID ID, FixedString20 Username, int SpawnTokenCapacity)
+        public NetworkClient(Room Room, NetworkClientID ID, FixedString20 Username, int SpawnTokenCapacity, NetworkClientVersion Version)
         {
             this.Room = Room;
 
             this.ID = ID;
             this.Username = Username;
+            this.Version = Version;
 
             SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
 
             Entities = new(0);
+        }
+    }
+
+    [Serializable]
+    [NetworkBlittable]
+    public partial struct NetworkClientVersion : IEquatable<NetworkClientVersion>
+    {
+        public uint Value { get; private set; }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is NetworkClientVersion other)
+                return Equals(other);
+
+            return false;
+        }
+        public bool Equals(NetworkClientVersion other)
+        {
+            return Value == other.Value;
+        }
+
+        public override int GetHashCode() => (int)Value;
+
+        public override string ToString() => Value.ToString();
+
+        public NetworkClientVersion(uint value)
+        {
+            this.Value = value;
+        }
+
+        public static NetworkClientVersion Min { get; } = new(uint.MinValue);
+        public static NetworkClientVersion Max { get; } = new(uint.MaxValue);
+
+        public static bool operator ==(NetworkClientVersion left, NetworkClientVersion right) => left.Equals(right);
+        public static bool operator !=(NetworkClientVersion left, NetworkClientVersion right) => !left.Equals(right);
+
+        public static NetworkClientVersion Increment(NetworkClientVersion index)
+        {
+            unchecked
+            {
+                return new NetworkClientVersion(index.Value + 1);
+            }
         }
     }
 }

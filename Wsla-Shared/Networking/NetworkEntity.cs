@@ -34,7 +34,9 @@ namespace Wsla
         }
 
         public static NetworkEntityID Min { get; } = new(ushort.MinValue);
-        public static NetworkEntityID Max { get; } = new(ushort.MaxValue);
+        public static NetworkEntityID Max { get; } = new(ushort.MaxValue - 1);
+
+        public static NetworkEntityID None { get; } = new(ushort.MaxValue);
 
         public static bool operator ==(NetworkEntityID left, NetworkEntityID right) => left.Equals(right);
         public static bool operator !=(NetworkEntityID left, NetworkEntityID right) => !left.Equals(right);
