@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 using UnityEditor;
 
@@ -30,8 +31,10 @@ namespace Toolbox
 
         protected abstract void Dispose();
 
-        static class Runtime
+        public static class Runtime
         {
+            public static ExecutionModeSelection ExecutionContext { get; private set; }
+
 #if UNITY_EDITOR
             [InitializeOnLoadMethod]
             static void OnEditorLoad()
@@ -49,6 +52,8 @@ namespace Toolbox
 
             static void Init(ExecutionModeSelection mode)
             {
+                ExecutionContext = mode;
+
                 var managers = Resources.LoadAll<ScriptableManager>("");
 
                 Array.Sort(managers, (x, y) => GeneralUtility.Compare(x.ExecutionOrder, y.ExecutionOrder));
@@ -113,9 +118,12 @@ namespace Toolbox
             Instance = (T)this;
         }
 
+        public event Action OnDispose;
         protected override void Dispose()
         {
             Instance = default;
+
+            OnDispose?.Invoke();
         }
     }
 }

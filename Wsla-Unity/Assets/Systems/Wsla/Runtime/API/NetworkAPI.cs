@@ -12,13 +12,19 @@ namespace Wsla.Unity
         public const string Path = "Wsla/";
 
         [field: SerializeField]
-        public RoomAPI Room { get; private set; }
+        public NetworkUpdateAPI NetworkUpdate { get; private set; }
+
+        [field: SerializeField]
+        public TickAPI Tick { get; private set; }
 
         [field: SerializeField]
         public ChannelsAPI Channels { get; private set; }
 
         [field: SerializeField]
         public SyncedPrefabsAPI SyncedPrefabs { get; private set; }
+
+        [field: SerializeField]
+        public RoomAPI Room { get; private set; }
 
         [Serializable]
         public class Property : ReferenceProperty<NetworkAPI>
@@ -39,9 +45,11 @@ namespace Wsla.Unity
 
             NetworkLog.Handler = LogHandler;
 
-            Room.Set(this);
+            NetworkUpdate.Set(this);
+            Tick.Set(this);
             Channels.Set(this);
             SyncedPrefabs.Set(this);
+            Room.Set(this);
         }
 
         [HideInCallstack]

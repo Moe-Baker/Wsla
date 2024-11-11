@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 
 using Cysharp.Threading.Tasks;
 
@@ -10,8 +9,6 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 
 using Toolbox;
-
-using UnityEditor.Experimental.GraphView;
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -298,7 +295,7 @@ namespace Wsla.Unity
 
             public NetPeer Peer { get; private set; }
 
-            CancellationTokenSource CancellationSource;
+            NetworkAPI API => Room.API;
 
             internal async UniTask<Response<WslaError>> Start(IPAddress address, ushort port, ClientConnectionRequest request)
             {
@@ -324,8 +321,8 @@ namespace Wsla.Unity
                     Peer = Manager.Connect(endpoint, packet);
                 }
 
-                CancellationSource = new CancellationTokenSource();
-                Poll(CancellationSource.Token).Forget();
+                API.NetworkUpdate.OnEarlyUpdate += PollEvents;
+                API.NetworkUpdate.OnLateUpdate += SendData;
 
                 var response = await operation.Task;
 
@@ -346,22 +343,14 @@ namespace Wsla.Unity
                 Peer.Disconnect();
                 Manager.Stop();
 
-                CancellationSource.Cancel();
+                API.NetworkUpdate.OnEarlyUpdate -= PollEvents;
+                API.NetworkUpdate.OnLateUpdate -= SendData;
+
                 Listener.Dispose();
             }
 
-            async UniTask Poll(CancellationToken cancellation)
-            {
-                while (true)
-                {
-                    Manager.PollEvents();
-
-                    await UniTask.NextFrame();
-
-                    if (cancellation.IsCancellationRequested)
-                        break;
-                }
-            }
+            void PollEvents() => Manager.PollEvents();
+            void SendData() => Manager.TriggerUpdate();
 
             public void SendData<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
             {
@@ -387,6 +376,7 @@ namespace Wsla.Unity
                 Manager.AutoRecycle = false;
                 Manager.ChannelsCount = Constants.ChannelCount;
                 Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
+                Manager.UpdateTime = 10_000; //Set a high number as to have send not invoked automatically by the library but manually by us instead.
 
                 Dispatcher = new DispatcherProperty(this);
             }
