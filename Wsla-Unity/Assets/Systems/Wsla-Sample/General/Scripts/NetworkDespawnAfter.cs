@@ -10,7 +10,7 @@ using UnityEngine;
 
 using Wsla.Unity;
 
-public class NetworkDespawnAfter : NetworkBehaviour
+public partial class NetworkDespawnAfter : NetworkBehaviour
 {
     [SerializeField]
     SerializedTimeSpan Duration = SerializedTimeSpan.FromSeconds(5);

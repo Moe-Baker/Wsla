@@ -121,9 +121,10 @@ namespace Toolbox
         public event Action OnDispose;
         protected override void Dispose()
         {
-            Instance = default;
-
             OnDispose?.Invoke();
+
+            OnDispose = default;
+            Instance = default;
         }
     }
 }

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 using Wsla.Unity;
 
-public class TakeOwnershipIfNot : NetworkBehaviour
+public partial class TakeOwnershipIfNot : NetworkBehaviour
 {
     public override void Set(NetworkEntity.Behaviour reference)
     {

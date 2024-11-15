@@ -38,12 +38,7 @@ namespace Wsla.Unity
                 Timer -= FixedTimeStep;
 
             if (iterations is 0)
-            {
-                NetworkLog.Error($"No Tick On Frame {Time.frameCount}");
                 return;
-            }
-
-            Debug.LogError($"Iterations: {iterations} on Frame {Time.frameCount}");
 
             //Should slightly help with floating point errors, needs to be verified?
             if (Epsilon >= Timer)
@@ -114,7 +109,7 @@ namespace Wsla.Unity
             ID = new NetworkTickID(0);
 
 #if UNITY_EDITOR
-            Application.quitting += Stop;
+            API.OnDispose += Stop;
 #endif
         }
     }

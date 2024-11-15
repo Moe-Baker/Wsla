@@ -161,7 +161,7 @@ namespace Wsla.Generator
             {
                 var builder = new CodeStringBuilder(512);
 
-                var resolvers = ResolveUsages(compilation, usages);
+                var resolvers = ResolveUsages(context, compilation, usages);
                 if (resolvers.Count is 0)
                     return;
 
@@ -236,12 +236,12 @@ namespace Wsla.Generator
             }
         }
 
-        static Dictionary<ITypeSymbol, INamedTypeSymbol> ResolveUsages(CompilationData compilation, IList<ITypeSymbol> usages)
+        static Dictionary<ITypeSymbol, INamedTypeSymbol> ResolveUsages(SourceProductionContext context, CompilationData compilation, IList<ITypeSymbol> usages)
         {
             var resolvers = new Dictionary<ITypeSymbol, INamedTypeSymbol>(usages.Count * 2, SymbolEqualityComparer.Default);
 
             foreach (var usage in usages)
-                Resolvers.Resolve(compilation, usage, resolvers);
+                Resolvers.Resolve(context, compilation, usage, resolvers);
 
             return resolvers;
         }
@@ -278,63 +278,69 @@ namespace Wsla.Generator
             public static readonly string INetworkStream = $"{Namespace}.{nameof(INetworkStream)}";
         }
 
+        public class DiagnosticCodes : GlobalNetworkGenerator.DiagnosticCodes { }
+
         public class Resolvers
         {
-            public static bool Resolve(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            public static bool Resolve(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 //Early exit for duplicates
                 if (resolvers.ContainsKey(usage))
                     return true;
 
-                if (ResolveBlittable(compilation, usage, resolvers))
+                if (ResolveBlittable(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveManual(compilation, usage, resolvers))
+                if (ResolveManual(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveAuto(compilation, usage, resolvers))
+                if (ResolveAuto(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveArray(compilation, usage, resolvers))
+                if (ResolveArray(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveArraySegment(compilation, usage, resolvers))
+                if (ResolveArraySegment(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveList(compilation, usage, resolvers))
+                if (ResolveList(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveEnum(compilation, usage, resolvers))
+                if (ResolveEnum(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveTuple(compilation, usage, resolvers))
+                if (ResolveTuple(context, compilation, usage, resolvers))
                     return true;
 
-                if (ResolveNullable(compilation, usage, resolvers))
+                if (ResolveNullable(context, compilation, usage, resolvers))
                     return true;
 
                 return false;
             }
 
-            static bool ResolveArray(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveArray(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 var array = usage as IArrayTypeSymbol;
-
                 if (array is null)
                     return false;
+
+                if (array.Rank > 1)
+                {
+                    context.ReportDiagnostic(DiagnosticCodes.MultiDimensionArraySerialization.Create());
+                    return false;
+                }
 
                 var element = array.ElementType;
 
                 resolvers[usage] = compilation.ArrayResolver.Construct(element);
 
-                Resolve(compilation, element, resolvers);
+                Resolve(context, compilation, element, resolvers);
 
                 return true;
             }
-            static bool ResolveArraySegment(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveArraySegment(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 var segment = usage as INamedTypeSymbol;
-
                 if (segment is null)
                     return false;
 
@@ -348,11 +354,11 @@ namespace Wsla.Generator
 
                 resolvers[usage] = compilation.ArraySegmentResolver.Construct(element);
 
-                Resolve(compilation, element, resolvers);
+                Resolve(context, compilation, element, resolvers);
 
                 return true;
             }
-            static bool ResolveList(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveList(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 var list = usage as INamedTypeSymbol;
 
@@ -369,12 +375,12 @@ namespace Wsla.Generator
 
                 resolvers[usage] = compilation.ListResolver.Construct(element);
 
-                Resolve(compilation, element, resolvers);
+                Resolve(context, compilation, element, resolvers);
 
                 return true;
             }
 
-            static bool ResolveManual(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveManual(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.ImplementsInterface(compilation.ManualContract) is false)
                     return false;
@@ -384,7 +390,7 @@ namespace Wsla.Generator
                 return true;
             }
 
-            static bool ResolveAuto(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveAuto(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.ImplementsInterface(compilation.AutoContract) is false)
                     return false;
@@ -394,17 +400,23 @@ namespace Wsla.Generator
                 return true;
             }
 
-            static bool ResolveBlittable(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveBlittable(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (CodeUtility.HasAttribute(usage, compilation.BlittableAttribute) is false)
                     return false;
+
+                if (usage.IsUnmanagedType is false || usage.IsValueType is false)
+                {
+                    context.ReportDiagnostic(DiagnosticCodes.BlittlableConstraint.Create(usage));
+                    return false;
+                }
 
                 resolvers[usage] = compilation.BlittableResolver.Construct(usage);
 
                 return true;
             }
 
-            static bool ResolveEnum(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveEnum(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.TypeKind != TypeKind.Enum)
                     return false;
@@ -416,7 +428,7 @@ namespace Wsla.Generator
                 return true;
             }
 
-            static bool ResolveTuple(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveTuple(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.IsValueType is false)
                     return false;
@@ -434,7 +446,7 @@ namespace Wsla.Generator
                     resolvers[usage] = compilation.TupleResolvers[arguments.Length].Construct(arguments, default);
 
                     foreach (var argument in arguments)
-                        Resolve(compilation, argument, resolvers);
+                        Resolve(context, compilation, argument, resolvers);
                 }
                 else
                 {
@@ -444,7 +456,7 @@ namespace Wsla.Generator
                 return true;
             }
 
-            static bool ResolveNullable(CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            static bool ResolveNullable(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.IsValueType is false)
                     return false;
@@ -465,7 +477,7 @@ namespace Wsla.Generator
 
                 resolvers[usage] = compilation.NullableResolver.Construct(arguments, default);
 
-                Resolve(compilation, arguments[0], resolvers);
+                Resolve(context, compilation, arguments[0], resolvers);
 
                 return true;
             }

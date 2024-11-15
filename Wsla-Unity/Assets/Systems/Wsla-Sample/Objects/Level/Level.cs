@@ -9,7 +9,7 @@ using UnityEngine.UI;
 using Wsla;
 using Wsla.Unity;
 
-public class Level : NetworkBehaviour
+public partial class Level : NetworkBehaviour
 {
     public Button DisconnectButton;
 

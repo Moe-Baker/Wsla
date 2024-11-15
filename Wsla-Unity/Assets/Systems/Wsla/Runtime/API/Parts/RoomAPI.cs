@@ -30,12 +30,11 @@ namespace Wsla.Unity
 
             Pools = PoolsProperty.Create();
 
-            Application.quitting += ApplicationQuitCallback;
+            API.OnDispose += Dispose;
         }
-
-        void ApplicationQuitCallback()
+        void Dispose()
         {
-            Application.quitting -= ApplicationQuitCallback;
+            API.OnDispose -= Dispose;
 
             if (IsConnected)
                 Disconnect();

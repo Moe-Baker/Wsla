@@ -1,9 +1,12 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 
 namespace Wsla.Generator
 {
@@ -23,7 +26,7 @@ namespace Wsla.Generator
             }
         }
 
-        public static bool DefaultEquality(this ISymbol right, ISymbol left) => SymbolEquality.Equals(right, left);
+        public static bool CompareSymbols(this ISymbol right, ISymbol left) => SymbolEquality.Equals(right, left);
 
         public static bool HasAttribute(this ISymbol parameter, INamedTypeSymbol attribute)
         {
@@ -42,7 +45,7 @@ namespace Wsla.Generator
 
             while (true)
             {
-                if (DefaultEquality(current, parent))
+                if (CompareSymbols(current, parent))
                     return true;
 
                 current = current.BaseType;
@@ -89,6 +92,33 @@ namespace Wsla.Generator
             }
 
             return false;
+        }
+
+        public static bool IsPartial(this ITypeSymbol symbol, CancellationToken cancellation = default)
+        {
+            if (symbol.DeclaringSyntaxReferences.Length is 0)
+                return false;
+
+            var declaration = symbol.DeclaringSyntaxReferences[0].GetSyntax(cancellation) as MemberDeclarationSyntax;
+            if (declaration is null)
+                return false;
+
+            foreach (var modifier in declaration.Modifiers)
+                if (modifier.IsKind(SyntaxKind.PartialKeyword))
+                    return true;
+
+            return false;
+        }
+
+        public static Diagnostic Create(this DiagnosticDescriptor descriptor) => Create(descriptor, Location.None);
+        public static Diagnostic Create(this DiagnosticDescriptor descriptor, ISymbol symbol) => Create(descriptor, symbol.Locations[0]);
+        public static Diagnostic Create(this DiagnosticDescriptor descriptor, Location location)
+        {
+            return Diagnostic.Create(descriptor, location);
+        }
+        public static Diagnostic Create(this DiagnosticDescriptor descriptor, Location location, params object[] arguments)
+        {
+            return Diagnostic.Create(descriptor, location, arguments);
         }
     }
 }

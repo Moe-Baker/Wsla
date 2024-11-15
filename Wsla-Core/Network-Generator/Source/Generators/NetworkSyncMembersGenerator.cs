@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 
 namespace Wsla.Generator
@@ -27,6 +28,8 @@ namespace Wsla.Generator
             public INamespaceSymbol GlobalNamespace;
 
             public NetworkSerializationUsagesGenerator.CompilationData SerializationCompilation;
+
+            public INamedTypeSymbol RpcInfo;
 
             public INamedTypeSymbol INetworkBehaviour;
             public INamedTypeSymbol RPCAttribute;
@@ -57,9 +60,12 @@ namespace Wsla.Generator
                 var data = new CompilationData()
                 {
                     AssemblyName = compilation.Assembly.Name,
-                    GlobalNamespace = compilation.GlobalNamespace,
+                    GlobalNamespace = compilation.Assembly.GlobalNamespace,
 
                     SerializationCompilation = NetworkSerializationUsagesGenerator.CompilationData.Create(compilation, cancellation),
+
+
+                    RpcInfo = compilation.GetTypeByMetadataName(Constants.RpcInfo),
 
                     INetworkBehaviour = compilation.GetTypeByMetadataName(Constants.INetworkBehaviour),
                     RPCAttribute = compilation.GetTypeByMetadataName(Constants.RPCAttribute),
@@ -146,26 +152,15 @@ namespace Wsla.Generator
         {
             try
             {
-                var cache = new ObjectCache()
-                {
-                    Methods = new List<IMethodSymbol>(10),
-                    Variables = new List<ISymbol>(10),
-                    Hierarchy = new List<INamespaceOrTypeSymbol>(),
-                    SerializedTypes = new List<ITypeSymbol>(),
-                };
+                var cache = ObjectCache.Create();
 
                 var builder = new CodeStringBuilder(512);
 
                 foreach (var behaviour in data.Behaviours.List)
-                    WriteBehaviour(data.Compilation, behaviour, builder, cache);
+                    WriteBehaviour(context, data.Compilation, behaviour, builder, cache);
 
                 CodeUtility.Log(builder.ToString());
                 context.AddSource("SyncMembersInterfaceImplementations.g.cs", builder.ToString());
-
-                foreach (var item in cache.SerializedTypes)
-                {
-                    CodeUtility.Log($"--------------{item}");
-                }
 
                 NetworkSerializationUsagesGenerator.WriteUsages(context, "SyncMembers", cache.SerializedTypes, data.Compilation.SerializationCompilation);
             }
@@ -177,13 +172,32 @@ namespace Wsla.Generator
 
         struct ObjectCache
         {
+            public List<INamespaceOrTypeSymbol> Hierarchy;
+
             public List<IMethodSymbol> Methods;
             public List<ISymbol> Variables;
-            public List<INamespaceOrTypeSymbol> Hierarchy;
+
             public List<ITypeSymbol> SerializedTypes;
+
+            public HashSet<string> RpcNames;
+
+            public static ObjectCache Create()
+            {
+                return new ObjectCache()
+                {
+                    Hierarchy = new List<INamespaceOrTypeSymbol>(),
+
+                    Methods = new List<IMethodSymbol>(10),
+                    Variables = new List<ISymbol>(10),
+
+                    SerializedTypes = new List<ITypeSymbol>(),
+
+                    RpcNames = new HashSet<string>(),
+                };
+            }
         }
 
-        void WriteBehaviour(CompilationData compilation, INamedTypeSymbol behaviour, CodeStringBuilder builder, ObjectCache cache)
+        void WriteBehaviour(SourceProductionContext context, CompilationData compilation, INamedTypeSymbol behaviour, CodeStringBuilder builder, ObjectCache cache)
         {
             var hierarchy = cache.Hierarchy;
 
@@ -195,6 +209,22 @@ namespace Wsla.Generator
 
                 while (true)
                 {
+                    if (current is ITypeSymbol type)
+                    {
+                        if (type.IsPartial() is false)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.BehaviourPartial.Create(current));
+                            return;
+
+                        }
+
+                        if (type.DeclaredAccessibility != Accessibility.Public)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.BehaviourPublic.Create(current));
+                            return;
+                        }
+                    }
+
                     hierarchy.Add(current);
 
                     current = (current.ContainingSymbol as INamespaceOrTypeSymbol);
@@ -215,6 +245,8 @@ namespace Wsla.Generator
                 methods.Clear();
                 variables.Clear();
 
+                cache.RpcNames.Clear();
+
                 var members = behaviour.GetMembers();
 
                 foreach (var member in members)
@@ -223,6 +255,12 @@ namespace Wsla.Generator
                     {
                         if (method.HasAttribute(compilation.RPCAttribute) is false)
                             continue;
+
+                        if (cache.RpcNames.Add(method.Name) is false)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.OverloadedRpcs.Create(method));
+                            continue;
+                        }
 
                         methods.Add(method);
                     }
@@ -297,6 +335,9 @@ namespace Wsla.Generator
                     {
                         foreach (var method in methods)
                         {
+                            if (EnsureInfoParameter(method) is false)
+                                continue;
+
                             builder.Write("list.Add(new ");
 
                             var bind = GenerateType(method);
@@ -311,6 +352,17 @@ namespace Wsla.Generator
                     }
                 }
 
+                bool EnsureInfoParameter(IMethodSymbol method)
+                {
+                    var parameters = method.Parameters;
+
+                    if (parameters.Length > 0 && CodeUtility.CompareSymbols(parameters[parameters.Length - 1].Type, compilation.RpcInfo))
+                        return true;
+
+                    context.ReportDiagnostic(DiagnosticCodes.RpcInfoLastField.Create(method));
+                    return false;
+                }
+
                 INamedTypeSymbol GenerateType(IMethodSymbol method)
                 {
                     var parameters = method.Parameters;
@@ -321,7 +373,7 @@ namespace Wsla.Generator
                     {
                         return compilation.GeneralRpcBinds[0];
                     }
-                    else if (members is 1 && CodeUtility.DefaultEquality(parameters[0].Type, compilation.INetworkStream))
+                    else if (members is 1 && CodeUtility.CompareSymbols(parameters[0].Type, compilation.INetworkStream))
                     {
                         return compilation.StreamRpcBind;
                     }
@@ -435,6 +487,10 @@ namespace Wsla.Generator
             public static readonly string StreamRpcBind = $"{Namespace}.{nameof(StreamRpcBind)}";
 
             public static readonly string IRemoteSyncMembers = $"{Namespace}.{nameof(IRemoteSyncMembers)}";
+
+            public static readonly string RpcInfo = $"{Namespace}.{nameof(RpcInfo)}";
         }
+
+        public class DiagnosticCodes : GlobalNetworkGenerator.DiagnosticCodes { }
     }
 }

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Wsla.Unity
 {
-    public class NetworkTransform : NetworkBehaviour
+    public partial class NetworkTransform : NetworkBehaviour
     {
 
     }

@@ -92,15 +92,21 @@ public partial class Player : NetworkBehaviour
     {
 
     }
+
+    [RPC]
+    void Call2(int all, RpcInfo info)
+    {
+
+    }
 }
 
 namespace N
 {
-    partial class A
+    public partial class A
     {
-        partial class B
+        public partial class B
         {
-            partial class C : NetworkBehaviour
+            public partial class C : NetworkBehaviour
             {
                 NetworkVariable<float> A;
 
@@ -113,5 +119,23 @@ namespace N
                 }
             }
         }
+    }
+}
+
+class Sample
+{
+    void Usage()
+    {
+        Consumer<A>();
+    }
+
+    struct A
+    {
+        string call;
+    }
+
+    void Consumer<[NetworkSerializationMarker] T>()
+    {
+
     }
 }
