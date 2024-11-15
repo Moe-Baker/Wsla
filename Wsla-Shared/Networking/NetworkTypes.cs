@@ -124,10 +124,10 @@ namespace Wsla
             NetworkSerializationResolver.Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
             NetworkSerializationResolver.Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
 
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString20>(x => new FixedString20(x)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString40>(x => new FixedString40(x)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString60>(x => new FixedString60(x)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString80>(x => new FixedString80(x)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString20>(span => new FixedString20(span)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString40>(span => new FixedString40(span)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString60>(span => new FixedString60(span)));
+            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString80>(span => new FixedString80(span)));
         }
     }
 }

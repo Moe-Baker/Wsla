@@ -91,6 +91,18 @@ namespace Wsla.Generator
             OnNewLine = true;
         }
 
+        public void Indent() => Indentation += 1;
+        public void Unindent() => Indentation -= 1;
+
+        public void UseNamespace(string name)
+        {
+            Write("using ");
+
+            Write(name);
+
+            EndLine();
+        }
+
         public override string ToString() => Builder.ToString();
 
         public CodeStringBuilder() : this(0) { }

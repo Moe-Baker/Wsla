@@ -1,6 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
 
 using System;
+using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 
 namespace Wsla.Generator
@@ -30,6 +32,23 @@ namespace Wsla.Generator
             foreach (var data in collection)
                 if (SymbolEquality.Equals(attribute, data.AttributeClass))
                     return true;
+
+            return false;
+        }
+
+        public static bool InheritsFrom(this ITypeSymbol child, ITypeSymbol parent)
+        {
+            var current = child;
+
+            while (true)
+            {
+                if (DefaultEquality(current, parent))
+                    return true;
+
+                current = current.BaseType;
+                if (current == null)
+                    break;
+            }
 
             return false;
         }

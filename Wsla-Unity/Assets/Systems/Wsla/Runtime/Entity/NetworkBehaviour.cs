@@ -7,7 +7,7 @@ namespace Wsla.Unity
         void Set(NetworkEntity.Behaviour reference);
     }
 
-    public abstract class NetworkBehaviour : MonoBehaviour, INetworkBehaviour
+    public abstract partial class NetworkBehaviour : MonoBehaviour, INetworkBehaviour
     {
         public NetworkEntity.Behaviour Network { get; private set; }
 

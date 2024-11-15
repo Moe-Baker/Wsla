@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -27,7 +28,7 @@ namespace Wsla.Generator
                 .Collect()
                 .Combine(compilation);
 
-            context.RegisterSourceOutput(usages, WriteUsages);
+            context.RegisterSourceOutput(usages, GenerateSourceCode);
         }
 
         public struct CompilationData : IEquatable<CompilationData>
@@ -149,99 +150,95 @@ namespace Wsla.Generator
 
         static bool IsNotNull<T>(T item) where T : class => ReferenceEquals(item, null) is false;
 
-        static void WriteUsages(SourceProductionContext context, (ImmutableArray<ITypeSymbol> Usages, CompilationData Compilation) source)
+        static void GenerateSourceCode(SourceProductionContext context, (ImmutableArray<ITypeSymbol> Usages, CompilationData Compilation) source)
+        {
+            WriteUsages(context, "Usages", source.Usages, source.Compilation);
+        }
+
+        public static void WriteUsages(SourceProductionContext context, string id, IList<ITypeSymbol> usages, CompilationData compilation)
         {
             try
             {
                 var builder = new CodeStringBuilder(512);
 
-                WriteResolverRegisteration(builder, source.Compilation, "Usages", source.Usages);
+                var resolvers = ResolveUsages(compilation, usages);
+                if (resolvers.Count is 0)
+                    return;
+
+                //Assembly attribute
+                builder.Write("[assembly: ");
+                builder.Write(Constants.NetworkSerializationResolverRegisterationAttribute);
+                builder.Write("(typeof(");
+                WriteNamespaceName();
+                builder.Write(".");
+                WriteClassName();
+                builder.Write("), 0, \"Register\")]");
+
+                builder.Newline(2);
+
+                //Namespace
+                builder.Write("namespace ");
+                WriteNamespaceName();
+
+                using (builder.CodeBlock())
+                {
+                    //Class Declaration
+                    builder.Write("class ");
+                    WriteClassName();
+
+                    using (builder.CodeBlock())
+                    {
+                        //Registeration Method
+                        builder.Write("public static void Register()");
+                        using (builder.CodeBlock())
+                        {
+                            foreach (var pair in resolvers)
+                            {
+                                builder.Write(Constants.NetworkSerializationResolver);
+                                builder.Write(".Register");
+
+                                using (builder.GenericArguments())
+                                {
+                                    builder.Write(pair.Key);
+                                    builder.Write(", ");
+                                    builder.Write(pair.Value);
+                                }
+
+                                using (builder.Parameters()) { }
+
+                                builder.EndLine();
+
+                                builder.Newline();
+                            }
+                        }
+                    }
+                }
+
+                void WriteClassName()
+                {
+                    CodeUtility.WriteAssemblyAsClass(compilation.AssemblyName, builder);
+                    builder.Write("_");
+                    builder.Write(id);
+                    builder.Write("SerializationRegisteration");
+                }
+                void WriteNamespaceName()
+                {
+                    builder.Write(Constants.Name);
+                    builder.Write(".Generated");
+                }
 
                 CodeUtility.Log(builder.ToString());
-
-                context.AddSource("UsagesNetworkSerializationRegisteration.g.cs", builder.ToString());
+                context.AddSource($"{id}NetworkSerializationRegisteration.g.cs", builder.ToString());
             }
             catch (Exception ex)
             {
                 CodeUtility.Log(ex);
             }
-
-            CodeUtility.Log("DONE");
         }
 
-        public static bool WriteResolverRegisteration(CodeStringBuilder builder, CompilationData compilation, string prefix, ImmutableArray<ITypeSymbol> usages)
+        static Dictionary<ITypeSymbol, INamedTypeSymbol> ResolveUsages(CompilationData compilation, IList<ITypeSymbol> usages)
         {
-            var resolvers = ResolveUsages(compilation, usages);
-            if (resolvers.Count is 0)
-                return false;
-
-            //Assembly attribute
-            builder.Write("[assembly: ");
-            builder.Write(Constants.NetworkSerializationResolverRegisterationAttribute);
-            builder.Write("(typeof(");
-            WriteNamespaceName();
-            builder.Write(".");
-            WriteClassName();
-            builder.Write("), 0, \"Register\")]");
-
-            builder.Newline(2);
-
-            //Namespace
-            builder.Write("namespace ");
-            WriteNamespaceName();
-
-            using (builder.CodeBlock())
-            {
-                //Class Declaration
-                builder.Write("public class ");
-                WriteClassName();
-
-                using (builder.CodeBlock())
-                {
-                    //Registeration Method
-                    builder.Write("public static void Register()");
-                    using (builder.CodeBlock())
-                    {
-                        foreach (var pair in resolvers)
-                        {
-                            builder.Write(Constants.NetworkSerializationResolver);
-                            builder.Write(".Register");
-
-                            using (builder.GenericArguments())
-                            {
-                                builder.Write(pair.Key);
-                                builder.Write(", ");
-                                builder.Write(pair.Value);
-                            }
-
-                            using (builder.Parameters()) { }
-
-                            builder.EndLine();
-
-                            builder.Newline();
-                        }
-                    }
-                }
-            }
-
-            return true;
-
-            void WriteClassName()
-            {
-                CodeUtility.WriteAssemblyAsClass(compilation.AssemblyName, builder);
-                builder.Write("_");
-                builder.Write(prefix);
-                builder.Write("SerializationRegisteration");
-            }
-            void WriteNamespaceName()
-            {
-                builder.Write(Constants.Name);
-                builder.Write(".Generated");
-            }
-        }
-        static Dictionary<ITypeSymbol, INamedTypeSymbol> ResolveUsages(CompilationData compilation, ImmutableArray<ITypeSymbol> usages)
-        {
-            var resolvers = new Dictionary<ITypeSymbol, INamedTypeSymbol>(usages.Length * 2, SymbolEqualityComparer.Default);
+            var resolvers = new Dictionary<ITypeSymbol, INamedTypeSymbol>(usages.Count * 2, SymbolEqualityComparer.Default);
 
             foreach (var usage in usages)
                 Resolvers.Resolve(compilation, usage, resolvers);
@@ -277,6 +274,8 @@ namespace Wsla.Generator
             public static readonly string TupleSerializationResolver = $"{Namespace}.{nameof(TupleSerializationResolver)}";
 
             public static readonly string NullableNetworkSerializationResolver = $"{Namespace}.{nameof(NullableNetworkSerializationResolver)}";
+
+            public static readonly string INetworkStream = $"{Namespace}.{nameof(INetworkStream)}";
         }
 
         public class Resolvers

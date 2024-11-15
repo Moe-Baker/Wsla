@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 
+using Unity.Mathematics;
+
 using UnityEngine;
 
 using Wsla;
@@ -74,17 +76,42 @@ public partial class Player : NetworkBehaviour
             NetworkLog.Info($"Realtime RPC Called, Text: {text}, Sender: {sender}");
         }
     }
-}
 
-partial class Player : IRemoteSyncMembers
-{
-    void IRemoteSyncMembers.RegisterRPCs(List<BaseRpcBind> list)
+    [RPC]
+    void MultiCall(int a, int b, int c, int e, int f, int g, RpcInfo info)
     {
-        list.Add(new StreamRpcBind(Call));
+        RoomAPI.TransportProperty t = default;
+
+        List<FixedString20> list = default;
+
+        t.SendData(list);
     }
 
-    void IRemoteSyncMembers.RegisterVariables(List<NetworkVariable> list)
+    [RPC]
+    void Assume(List<string> list, RpcInfo info)
     {
-        list.Add(Number ??= new NetworkVariable<int>(default));
+
+    }
+}
+
+namespace N
+{
+    partial class A
+    {
+        partial class B
+        {
+            partial class C : NetworkBehaviour
+            {
+                NetworkVariable<float> A;
+
+                NetworkVariable<int4x3> B;
+
+                [RPC]
+                void Call(int a, string b, RpcInfo info)
+                {
+
+                }
+            }
+        }
     }
 }

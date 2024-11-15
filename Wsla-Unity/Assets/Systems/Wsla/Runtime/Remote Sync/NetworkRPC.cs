@@ -3,7 +3,6 @@ using LiteNetLib.Utils;
 
 using System;
 using System.Collections.Generic;
-using System.Net.Sockets;
 
 using Wsla.Serialization;
 
@@ -78,6 +77,111 @@ namespace Wsla.Unity
         public RpcBind(RpcDelegate<T1> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1>(T1 arg1, RpcInfo info);
+
+    public class RpcBind<T1, T2> : BaseRpcBind<RpcDelegate<T1, T2>>
+    {
+        T1 arg1;
+        T2 arg2;
+
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg2, reader);
+
+            Method(arg1, arg2, info);
+        }
+
+        public RpcBind(RpcDelegate<T1, T2> Method) : base(Method) { }
+    }
+    public delegate void RpcDelegate<T1, T2>(T1 arg1, T2 arg2, RpcInfo info);
+
+    public class RpcBind<T1, T2, T3> : BaseRpcBind<RpcDelegate<T1, T2, T3>>
+    {
+        T1 arg1;
+        T2 arg2;
+        T3 arg3;
+
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg2, reader);
+            NetworkSerializer.ReadValue(ref arg3, reader);
+
+            Method(arg1, arg2, arg3, info);
+        }
+
+        public RpcBind(RpcDelegate<T1, T2, T3> Method) : base(Method) { }
+    }
+    public delegate void RpcDelegate<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3, RpcInfo info);
+
+    public class RpcBind<T1, T2, T3, T4> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4>>
+    {
+        T1 arg1;
+        T2 arg2;
+        T3 arg3;
+        T4 arg4;
+
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg2, reader);
+            NetworkSerializer.ReadValue(ref arg3, reader);
+            NetworkSerializer.ReadValue(ref arg4, reader);
+
+            Method(arg1, arg2, arg3, arg4, info);
+        }
+
+        public RpcBind(RpcDelegate<T1, T2, T3, T4> Method) : base(Method) { }
+    }
+    public delegate void RpcDelegate<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, RpcInfo info);
+
+    public class RpcBind<T1, T2, T3, T4, T5> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5>>
+    {
+        T1 arg1;
+        T2 arg2;
+        T3 arg3;
+        T4 arg4;
+        T5 arg5;
+
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg2, reader);
+            NetworkSerializer.ReadValue(ref arg3, reader);
+            NetworkSerializer.ReadValue(ref arg4, reader);
+            NetworkSerializer.ReadValue(ref arg5, reader);
+
+            Method(arg1, arg2, arg3, arg4, arg5, info);
+        }
+
+        public RpcBind(RpcDelegate<T1, T2, T3, T4, T5> Method) : base(Method) { }
+    }
+    public delegate void RpcDelegate<T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, RpcInfo info);
+
+    public class RpcBind<T1, T2, T3, T4, T5, T6> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5, T6>>
+    {
+        T1 arg1;
+        T2 arg2;
+        T3 arg3;
+        T4 arg4;
+        T5 arg5;
+        T6 arg6;
+
+        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        {
+            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg2, reader);
+            NetworkSerializer.ReadValue(ref arg3, reader);
+            NetworkSerializer.ReadValue(ref arg4, reader);
+            NetworkSerializer.ReadValue(ref arg5, reader);
+            NetworkSerializer.ReadValue(ref arg6, reader);
+
+            Method(arg1, arg2, arg3, arg4, arg5, arg6, info);
+        }
+
+        public RpcBind(RpcDelegate<T1, T2, T3, T4, T5, T6> Method) : base(Method) { }
+    }
+    public delegate void RpcDelegate<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, RpcInfo info);
 
     public struct RpcInfo
     {

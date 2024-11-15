@@ -10,11 +10,19 @@ namespace Wsla.Serialization
         public static void Register<TValue, TResolver>()
             where TResolver : NetworkSerializationResolver<TValue>, new()
         {
+            //Ignore Duplicates
+            if (Collection<TValue>.Instance is not null)
+                return;
+
             var resolver = new TResolver();
             Register(resolver);
         }
         public static void Register<TValue>(NetworkSerializationResolver<TValue> resolver)
         {
+            //Ignore Duplicates
+            if (Collection<TValue>.Instance is not null)
+                return;
+
             Collection<TValue>.Instance = resolver;
         }
 

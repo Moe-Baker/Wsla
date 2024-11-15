@@ -46,6 +46,7 @@ namespace Wsla.Unity
             OnSet?.Invoke(new(previous, current), info);
         }
 
+        public NetworkVariable() : this(default) { }
         public NetworkVariable(T initial)
         {
             Value_Internal = initial;
