@@ -54,6 +54,7 @@ namespace Wsla.Unity
             OnTick?.Invoke(iteration);
         }
 
+        public NetworkTickTimer Register(TickSliceRate slice) => Register(slice.Value);
         public NetworkTickTimer Register(byte Rate)
         {
             var instance = new NetworkTickTimer(Rate);
@@ -101,7 +102,7 @@ namespace Wsla.Unity
             }
         }
 
-        public NetworkTickTimer(byte Rate)
+        internal NetworkTickTimer(byte Rate)
         {
             this.Rate = Rate;
 
@@ -121,7 +122,8 @@ namespace Wsla.Unity
 
         public int Iterations { get; }
 
-        public NetworkTickID GetID(int iteration)
+        public NetworkTickID GetTick() => GetTick(0);
+        public NetworkTickID GetTick(int iteration)
         {
 #if DEBUG
             if (iteration >= Iterations || iteration < 0)

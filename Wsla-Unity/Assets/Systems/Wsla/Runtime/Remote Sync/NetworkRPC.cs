@@ -183,7 +183,7 @@ namespace Wsla.Unity
     }
     public delegate void RpcDelegate<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, RpcInfo info);
 
-    public struct RpcInfo
+    public struct RpcInfo : ISyncMemberInfo
     {
         public RoomAPI Room { get; }
 
@@ -193,11 +193,6 @@ namespace Wsla.Unity
         public byte Channel { get; }
         public bool IsBuffered { get; }
 
-        /// <summary>
-        /// Get the sender of the RPC, only valid if this RPC's Sender is still in the Room, consider using <see cref="TryGetSender(out NetworkClient)"/> for a safer alternative
-        /// </summary>
-        /// <returns></returns>
-        /// <exception cref="InvalidOperationException"></exception>
         public NetworkClient GetSender()
         {
             if (TryGetSender(out var sender) is false)
@@ -205,13 +200,6 @@ namespace Wsla.Unity
 
             return sender;
         }
-
-        /// <summary>
-        /// Tries to get the sender of the RPC
-        /// </summary>
-        /// <param name="client"></param>
-        /// <returns>true if found, false if not</returns>
-        /// <exception cref="Exception"></exception>
         public bool TryGetSender(out NetworkClient client)
         {
             if (SenderID == NetworkClientID.None)
@@ -239,14 +227,12 @@ namespace Wsla.Unity
         {
             return new RpcInfo(room, command.Sender, channel, delivery, false);
         }
-
         public static RpcInfo FromLocal(ref RpcInvocationBuilder builder)
         {
             var senderID = builder.Room.Clients.Local.ID;
 
             return new RpcInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
         }
-
         public static RpcInfo FromBuffer(RoomAPI room, NetworkClientID senderID) => new RpcInfo(room, senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 

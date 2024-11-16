@@ -22,8 +22,8 @@ namespace Toolbox
         /// </summary>
         int Position;
 
-        public T this[Index index] => this[index.GetOffset(Count)];
-        public T this[int index]
+        public ref T this[Index index] => ref this[index.GetOffset(Count)];
+        public ref T this[int index]
         {
             get
             {
@@ -33,7 +33,7 @@ namespace Toolbox
                 index = (Position - Count + index);
                 if (index < 0) index += Count;
 
-                return Items[index];
+                return ref Items[index];
             }
         }
 

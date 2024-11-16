@@ -38,4 +38,30 @@ namespace Wsla.Unity
         /// </summary>
         ReliableSequenced = DeliveryMethod.ReliableSequenced
     }
+
+    public interface ISyncMemberInfo
+    {
+        RoomAPI Room { get; }
+
+        DeliveryMethod Delivery { get; }
+
+        byte Channel { get; }
+
+        bool IsBuffered { get; }
+
+        /// <summary>
+        /// Get the sender of the SyncMember, only valid if this SyncMember's Sender is still in the Room, consider using <see cref="TryGetSender(out NetworkClient)"/> for a safer alternative
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        NetworkClient GetSender();
+
+        /// <summary>
+        /// Tries to get the sender of the SyncMember
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns>true if found, false if not</returns>
+        /// <exception cref="Exception"></exception>
+        bool TryGetSender(out NetworkClient client);
+    }
 }

@@ -58,7 +58,7 @@ namespace Wsla.Unity
         void RegisterVariables(List<NetworkVariable> list);
     }
 
-    public struct NetworkVariableInfo
+    public struct NetworkVariableInfo : ISyncMemberInfo
     {
         public RoomAPI Room { get; }
 

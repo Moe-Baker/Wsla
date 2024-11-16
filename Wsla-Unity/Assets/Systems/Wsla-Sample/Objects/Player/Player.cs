@@ -21,16 +21,7 @@ public partial class Player : NetworkBehaviour
 
         Network.Entity.AssignTraitHandler<string>(ApplyTrait);
 
-        //Network.Entity.OnSpawn += SpawnCallback;
-
-        Network.Entity.OnReplicated += SpawnCallback;
-
-        var timer = Network.API.Tick.Register(10);
-        timer.OnTick += Tick;
-        void Tick(NetworkTickInfo info)
-        {
-            Debug.Log($"Tick on Frame {Time.frameCount}, ID: {info.GetID(0)}");
-        }
+        Network.Entity.OnSpawn += SpawnCallback;
     }
 
     void ApplyTrait(string attribute)
