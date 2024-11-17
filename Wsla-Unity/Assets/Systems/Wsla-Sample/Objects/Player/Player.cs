@@ -68,26 +68,37 @@ public partial class Player : NetworkBehaviour
         }
     }
 
-    [RPC]
-    void MultiCall(int a, int b, int c, int e, int f, int g, RpcInfo info)
+    void Update()
     {
-        RoomAPI.TransportProperty t = default;
+        if (Network.Entity.IsMine is false)
+            return;
 
-        List<FixedString20> list = default;
-
-        t.SendData(list);
+        transform.position += (Vector3)(GetInput() * 10 * Time.deltaTime);
     }
 
-    [RPC]
-    void Assume(List<string> list, RpcInfo info)
+    Vector2 GetInput()
     {
+        var input = Vector2.zero;
 
-    }
+        if (Input.GetKey(KeyCode.W))
+        {
+            input.y += 1;
+        }
+        if (Input.GetKey(KeyCode.S))
+        {
+            input.y -= 1;
+        }
 
-    [RPC]
-    void Call2(int all, RpcInfo info)
-    {
+        if (Input.GetKey(KeyCode.D))
+        {
+            input.x += 1;
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            input.x -= 1;
+        }
 
+        return input.normalized;
     }
 }
 

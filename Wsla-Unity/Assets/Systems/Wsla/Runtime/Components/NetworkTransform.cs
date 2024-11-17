@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 
 using UnityEngine;
 
@@ -87,6 +88,12 @@ namespace Wsla.Unity
             }
 
             public CoordinatesData Read() => new(Position, Rotation, Scale);
+            public void Write(CoordinatesData data)
+            {
+                Position = data.Position;
+                Rotation = data.Rotation;
+                Scale = data.Scale;
+            }
 
             NetworkTransform Transform;
             public CoordinatesProperty(NetworkTransform Transform)
@@ -100,20 +107,20 @@ namespace Wsla.Unity
             public Quaternion Rotation { get; }
             public Vector3 Scale { get; }
 
-            public CoordinatesData Lerp(CoordinatesData end, float t)
-            {
-                var position = Vector3.Lerp(this.Position, end.Position, t);
-                var rotation = Quaternion.Lerp(this.Rotation, end.Rotation, t);
-                var scale = Vector3.Lerp(this.Scale, end.Scale, t);
-
-                return new(position, rotation, scale);
-            }
-
             public CoordinatesData(Vector3 Position, Quaternion Rotation, Vector3 Scale)
             {
                 this.Position = Position;
                 this.Rotation = Rotation;
                 this.Scale = Scale;
+            }
+
+            public static CoordinatesData Lerp(CoordinatesData a, CoordinatesData b, float t)
+            {
+                var position = Vector3.Lerp(a.Position, b.Position, t);
+                var rotation = Quaternion.Lerp(a.Rotation, b.Rotation, t);
+                var scale = Vector3.Lerp(a.Scale, b.Scale, t);
+
+                return new(position, rotation, scale);
             }
         }
 
@@ -232,17 +239,68 @@ namespace Wsla.Unity
 
             const int MaxBufferSize = 5;
 
-            SnapshotInterpolator<SnapshotData> Interpolator;
+            SnapshotInterpolator Interpolator;
+            [Serializable]
+            class SnapshotInterpolator : SnapshotInterpolator<SnapshotData, CoordinatesData>
+            {
+                public override CoordinatesData Lerp(SnapshotData a, SnapshotData b, float t) => CoordinatesData.Lerp(a.Value, b.Value, t);
+
+                protected override void Alter(int index, SnapshotData replacement)
+                {
+                    var change = replacement.Change & ChangeFlags.Coordinates;
+
+                    for (/* No Assignment*/ ; index < Collection.Count; index++)
+                    {
+                        //Remove duplicate changes
+                        change &= ~Collection[index].Change;
+
+                        if (change is ChangeFlags.None)
+                            return;
+                    }
+
+                    //Modify Last Snapshot
+                    {
+                        ref var last = ref Collection[^1];
+
+                        var position = last.Value.Position;
+                        var rotation = last.Value.Rotation;
+                        var scale = last.Value.Scale;
+
+                        //Position
+                        {
+                            if (change.HasFlag(ChangeFlags.PositionX)) position.x = replacement.Value.Position.x;
+                            if (change.HasFlag(ChangeFlags.PositionY)) position.y = replacement.Value.Position.y;
+                            if (change.HasFlag(ChangeFlags.PositionZ)) position.z = replacement.Value.Position.z;
+                        }
+
+                        //Rotation
+                        if (change.HasFlag(ChangeFlags.Rotation)) rotation = replacement.Value.Rotation;
+
+                        //Scale
+                        if (change.HasFlag(ChangeFlags.Scale)) scale = replacement.Value.Scale;
+
+                        change |= last.Change;
+
+                        last = new(last.Tick, last.Time, change, new(position, rotation, scale));
+                    }
+                }
+
+                public override SnapshotData Fill(CoordinatesData value, NetworkTickID tick, double time)
+                {
+                    return new SnapshotData(tick, time, ChangeFlags.None, value);
+                }
+            }
 
             internal void Init()
             {
-                Interpolator = new(BufferSize);
+                Interpolator = new();
+                Interpolator.Init(BufferSize, Transform.TickTimer);
             }
 
             internal CoordinatesData GetOrigin()
             {
-                if (Interpolator.TryGetLast(out var snapshot))
-                    return snapshot.Coordinates;
+                if (Interpolator != null && Interpolator.TryGetLast(out var snapshot))
+                    return snapshot.Value;
 
                 return Transform.Coordinates.Read();
             }
@@ -254,15 +312,10 @@ namespace Wsla.Unity
 
             public void Step()
             {
-                if (Interpolator.Step(out var snapshot) is false)
+                if (Interpolator.Step(Time.unscaledDeltaTime, out var coordinates) is false)
                     return;
 
-                var source = snapshot.Coordinates;
-                ref var destination = ref Transform.Coordinates;
-
-                destination.Position = source.Position;
-                destination.Rotation = source.Rotation;
-                destination.Scale = source.Scale;
+                Transform.Coordinates.Write(coordinates);
             }
 
             NetworkTransform Transform;
@@ -276,24 +329,24 @@ namespace Wsla.Unity
             }
         }
         [Serializable]
-        public struct SnapshotData : ISnapshot<SnapshotData>
+        public struct SnapshotData : ISnapshot<SnapshotData, CoordinatesData>
         {
-            public NetworkTickID Tick { get; }
+            public NetworkTickID Tick { get; set; }
+            public double Time { get; set; }
+
+            public ChangeFlags Change { get; set; }
             public bool Stop => Change.HasFlag(ChangeFlags.Stop);
 
-            public ChangeFlags Change { get; }
-            public CoordinatesData Coordinates { get; }
+            public bool IsPredicted => Change is ChangeFlags.None;
 
-            public SnapshotData Lerp(SnapshotData end, float t)
-            {
-                return new(Tick, Change, Coordinates.Lerp(end.Coordinates, t));
-            }
+            public CoordinatesData Value { get; set; }
 
-            public SnapshotData(NetworkTickID Tick, ChangeFlags Change, CoordinatesData Coordinates)
+            public SnapshotData(NetworkTickID Tick, double Time, ChangeFlags Change, CoordinatesData Value)
             {
                 this.Tick = Tick;
+                this.Time = Time;
                 this.Change = Change;
-                this.Coordinates = Coordinates;
+                this.Value = Value;
             }
         }
 
@@ -301,40 +354,62 @@ namespace Wsla.Unity
         {
             base.Set(reference);
 
+            TickTimer = new NetworkTickTimer(TickSlice);
+
+            MotionDetector.Init();
+            SnapshotInterpolation.Init();
+
             Network.OnSpawn += SpawnCallback;
+            Network.OnDespawn += DespawnCallback;
         }
 
         void SpawnCallback()
         {
-            TickTimer = Network.API.Tick.Register(TickSlice);
-            TickTimer.OnTick += TickCallback;
-
-            MotionDetector.Init();
-            SnapshotInterpolation.Init();
+            if (Network.Entity.IsMine)
+            {
+                TickTimer.Start();
+                TickTimer.OnTick += TickCallback;
+            }
+        }
+        void DespawnCallback()
+        {
+            if (TickTimer != null)
+            {
+                TickTimer.Stop();
+                TickTimer.OnTick -= TickCallback;
+            }
         }
 
         void TickCallback(NetworkTickInfo info)
         {
-            if (Network.Entity.IsMine)
+            if (Network.Entity.IsRemote)
+                return;
+
+            var motion = MotionDetector.Detect();
+
+            if (motion.Change.IsNone)
+                return;
+
+            //Replicate
             {
-                var motion = MotionDetector.Detect();
+                var invocation = Network.RPC.Invoke(nameof(Replicate))
+                    .SetIgnoreLocal()
+                    .GetPayloadWriter(out var writer);
 
-                if (motion.Change.IsNone)
-                    return;
+                var tick = info.GetTick();
+                WritePayload(writer, tick, motion);
 
-                //Replicate
+                if (motion.Change.Stopped)
                 {
-                    var invocation = Network.RPC.Invoke(nameof(Replicate))
-                        .GetPayloadWriter(out var writer);
-
-                    var tick = info.GetTick();
-                    WritePayload(writer, tick, motion);
-
-                    if (motion.Change.Stopped)
-                        invocation.SetBufferMode();
-
-                    invocation.Broadcast();
+                    invocation.SetBufferMode();
+                    invocation.SetDelivery(RemoteSyncDelivery.ReliableUnordered);
                 }
+                else
+                {
+                    invocation.SetDelivery(RemoteSyncDelivery.Unreliable);
+                }
+
+                invocation.Broadcast();
             }
         }
 
@@ -385,7 +460,9 @@ namespace Wsla.Unity
             //Scale
             if (change.HasFlag(ChangeFlags.Scale)) NetworkSerializer.ReadValue(stream, out scale);
 
-            return new(tick, change, new(position, rotation, scale));
+            var time = TickTimer.CalculateTime(tick);
+
+            return new(tick, time, change, new(position, rotation, scale));
         }
 
         void Update()
@@ -401,7 +478,14 @@ namespace Wsla.Unity
 
             var snapshot = ReadPayload(stream, origin);
 
-            SnapshotInterpolation.Submit(snapshot);
+            if (info.IsBuffered)
+            {
+                Coordinates.Write(snapshot.Value);
+            }
+            else
+            {
+                SnapshotInterpolation.Submit(snapshot);
+            }
         }
 
         public NetworkTransform()

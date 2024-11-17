@@ -271,6 +271,13 @@ namespace Wsla.Unity
             return this;
         }
 
+        internal bool IgnoreLocal;
+        public RpcInvocationBuilder SetIgnoreLocal()
+        {
+            IgnoreLocal = true;
+            return this;
+        }
+
         public RpcInvocationBuilder Arguments<T1>(T1 arg1)
         {
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
@@ -439,6 +446,9 @@ namespace Wsla.Unity
 
         void InvokeLocal()
         {
+            if (IgnoreLocal)
+                return;
+
             var info = RpcInfo.FromLocal(ref this);
 
             //Reset arguments writer to be read from
@@ -458,6 +468,7 @@ namespace Wsla.Unity
             Channel = 0;
             Delivery = DeliveryMethod.ReliableOrdered;
             BufferMode = RemoteBufferMode.None;
+            IgnoreLocal = false;
         }
 
         static SinglePacketWriter ArgumentWriterPool = SinglePacketWriter.Create(512);

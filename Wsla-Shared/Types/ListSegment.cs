@@ -29,7 +29,7 @@ namespace Wsla
 
         void ValidateIndex(int index)
         {
-            if (index < 0 || index > Count)
+            if (index < 0 || index >= Count)
                 throw new IndexOutOfRangeException($"Index {index} not in range of ({Offset} to {Count})");
         }
 

@@ -10,7 +10,7 @@ namespace Wsla.Unity
     public class TickAPI : NetworkAPI.Property
     {
         [field: SerializeField, Range(1, 120)]
-        public byte Rate { get; private set; } = 60;
+        public int Rate { get; private set; } = 60;
 
         public double FixedTimeStep => 1.0d / Rate;
 
@@ -53,27 +53,17 @@ namespace Wsla.Unity
         {
             OnTick?.Invoke(iteration);
         }
-
-        public NetworkTickTimer Register(TickSliceRate slice) => Register(slice.Value);
-        public NetworkTickTimer Register(byte Rate)
-        {
-            var instance = new NetworkTickTimer(Rate);
-            instance.Start();
-            return instance;
-        }
-        public void Unregister(NetworkTickTimer instance)
-        {
-            instance.Stop();
-        }
     }
 
     [Serializable]
     public class NetworkTickTimer
     {
-        public byte Rate { get; }
+        public int Slice { get; }
 
         int Counter;
         NetworkTickID ID;
+
+        public double Timestep => API.Tick.FixedTimeStep * Slice;
 
         NetworkAPI API => NetworkAPI.Instance;
 
@@ -92,19 +82,22 @@ namespace Wsla.Unity
         {
             Counter += iterations;
 
-            if (Counter >= Rate)
+            if (Counter >= Slice)
             {
-                var info = new NetworkTickInfo(ID, Counter / Rate);
+                var info = new NetworkTickInfo(ID, Counter / Slice);
                 OnTick?.Invoke(info);
 
-                Counter %= Rate;
+                Counter %= Slice;
                 ID = NetworkTickID.Increment(ID);
             }
         }
 
-        internal NetworkTickTimer(byte Rate)
+        public double CalculateTime(NetworkTickID id) => id.Value * Timestep;
+
+        internal NetworkTickTimer(TickSliceRate slice) : this(slice.Value) { }
+        internal NetworkTickTimer(int Slice)
         {
-            this.Rate = Rate;
+            this.Slice = Slice;
 
             Counter = 0;
             ID = new NetworkTickID(0);
@@ -145,7 +138,7 @@ namespace Wsla.Unity
     [NetworkBlittable]
     public partial struct NetworkTickID : IEquatable<NetworkTickID>
     {
-        public byte Value { get; private set; }
+        public uint Value { get; private set; }
 
         public override bool Equals(object obj)
         {
@@ -159,20 +152,29 @@ namespace Wsla.Unity
             return Value == other.Value;
         }
 
-        public override int GetHashCode() => Value;
+        public override int GetHashCode() => (int)Value;
 
         public override string ToString() => Value.ToString();
 
-        public NetworkTickID(byte value)
+        public NetworkTickID(uint value)
         {
             this.Value = value;
         }
 
+        public static NetworkTickID Min = new(uint.MinValue);
+        public static NetworkTickID Max = new(uint.MaxValue);
+
         public static bool operator ==(NetworkTickID left, NetworkTickID right) => left.Equals(right);
         public static bool operator !=(NetworkTickID left, NetworkTickID right) => !left.Equals(right);
 
-        public static NetworkTickID operator +(NetworkTickID left, int increment) => new NetworkTickID((byte)(left.Value + increment));
-        public static NetworkTickID operator -(NetworkTickID left, int decrement) => new NetworkTickID((byte)(left.Value - decrement));
+        public static bool operator >(NetworkTickID left, NetworkTickID right) => left.Value > right.Value;
+        public static bool operator <(NetworkTickID left, NetworkTickID right) => left.Value < right.Value;
+
+        public static bool operator >=(NetworkTickID left, NetworkTickID right) => left.Value >= right.Value;
+        public static bool operator <=(NetworkTickID left, NetworkTickID right) => left.Value <= right.Value;
+
+        public static NetworkTickID operator +(NetworkTickID left, int increment) => new NetworkTickID((uint)(left.Value + increment));
+        public static NetworkTickID operator -(NetworkTickID left, int decrement) => new NetworkTickID((uint)(left.Value - decrement));
 
         public static NetworkTickID Increment(NetworkTickID index) => index + 1;
     }

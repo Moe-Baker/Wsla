@@ -1,48 +1,77 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
+using System.Numerics;
 
 using Wsla;
 
 NetworkLog.UseConsole();
 
-var buffer = new RingBuffer<int>(30);
+var buffer = new RingBuffer<int>(4);
 
 buffer.Push(1);
 buffer.Push(2);
 buffer.Push(3);
+
 buffer.Push(4);
 buffer.Push(5);
+buffer.Push(6);
 
-buffer[0] = 20;
-buffer[^1] = 40;
+buffer.Resize(2);
 
-Console.WriteLine($"First: {buffer[0]}");
-Console.WriteLine($"Last: {buffer[^1]}");
+if (false)
+{
+    for (int i = 0; i < 3; i++)
+    {
+        var item = buffer.Pop();
+        Console.WriteLine($"Operated Item: {item}");
+    }
+}
 
 for (int i = 0; i < buffer.Count; i++)
+{
     Console.WriteLine(buffer[i]);
+}
 
 while (true)
     Console.ReadKey();
+
+[Flags]
+public enum ChangeFlags : byte
+{
+    None = 0,
+
+    PositionX = 1 << 0,
+    PositionY = 1 << 1,
+    PositionZ = 1 << 2,
+    Position = PositionX | PositionY | PositionZ,
+
+    Rotation = 1 << 3,
+
+    Scale = 1 << 4,
+
+    Coordinates = Position | Rotation | Scale,
+
+    Stop = 1 << 5,
+
+    Teleport = 1 << 6,
+}
 
 public class RingBuffer<T>
 {
     T[] Items;
 
     /// <summary>
-    /// The ammount of items that can be possibly stored at a time
+    /// The amount of items that can be possibly stored at a time
     /// </summary>
     public int Capacity => Items.Length;
 
     /// <summary>
-    /// The ammount of items currently stored
+    /// The amount of items currently stored
     /// </summary>
     public int Count { get; private set; }
     public bool IsFull => Count >= Capacity;
 
-    /// <summary>
-    /// The position of the buffer's pointer
-    /// </summary>
-    int Position;
+    int Start;
 
     public ref T this[Index index] => ref this[index.GetOffset(Count)];
     public ref T this[int index]
@@ -52,32 +81,44 @@ public class RingBuffer<T>
             if (index < 0 || index >= Count)
                 throw new ArgumentOutOfRangeException(nameof(index), index, $"Index must be between (0-{Count})");
 
-            index = (Position - Count + index);
-            if (index < 0) index += Count;
+            index = Repeat(index + Start);
 
             return ref Items[index];
         }
     }
 
+    int Repeat(int value)
+    {
+        while (value >= Capacity)
+            value -= Capacity;
+
+        while (value < 0)
+            value += Capacity;
+
+        return value;
+    }
+
     /// <summary>
-    /// Adds an item to the ring buffer, overwritting an old item if needed
+    /// Adds an item to the ring buffer, overwriting an old item if needed
     /// </summary>
     public void Push(T item)
     {
-        Items[Position] = item;
+        var position = Repeat(Start + Count);
 
-        Position += 1;
-        if (Position >= Capacity)
-            Position = 0;
+        if (Count == Capacity)
+            Start = Repeat(Start + 1);
+
+        Items[position] = item;
 
         Count += 1;
         if (Count >= Capacity)
             Count = Capacity;
     }
+
     /// <summary>
     /// Pushes an item to the ring buffer only if it's not full, so as to not override any old items
     /// </summary>
-    /// <returns>true if successfull, else false</returns>
+    /// <returns>true if successful, else false</returns>
     public bool TryPush(T item)
     {
         if (IsFull)
@@ -88,35 +129,65 @@ public class RingBuffer<T>
     }
 
     /// <summary>
-    /// Removes the last added item to the ring buffer in a LIFO like operation
+    /// Removes and returns the last added item to the ring buffer in a LIFO like operation
     /// </summary>
     /// <exception cref="InvalidOperationException"></exception>
     public T Pop()
     {
-        if (Count == 0)
+        if (TryPop(out var item) is false)
             throw new InvalidOperationException($"No More Items to Pop");
 
-        Count -= 1;
-
-        Position -= 1;
-        if (Position < 0)
-            Position = Capacity - 1;
-
-        return Items[Position];
+        return item;
     }
+
     /// <summary>
-    /// Returns the last added item if any items are available
+    /// Removes and returns the last added item if any items are available
     /// </summary>
     /// <returns>true if an item was found, else false</returns>
     public bool TryPop(out T item)
     {
-        if (Count <= 0)
+        if (Count is 0)
         {
             item = default;
             return false;
         }
 
-        item = Pop();
+        item = Items[Repeat(Start + Count - 1)];
+
+        Count -= 1;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Removes and returns the first added item to the ring buffer in a FIFO like operation
+    /// </summary>
+    /// <exception cref="InvalidOperationException"></exception>
+    public T Dequeue()
+    {
+        if (TryDequeue(out var item) is false)
+            throw new InvalidOperationException($"No More Items to Dequeue");
+
+        return item;
+    }
+
+    /// <summary>
+    /// Removes and returns the first added item if any items are available
+    /// </summary>
+    /// <returns>true if an item was found, else false</returns>
+    public bool TryDequeue(out T item)
+    {
+        if (Count is 0)
+        {
+            item = default;
+            return false;
+        }
+
+        item = Items[Start];
+
+        Start = Repeat(Start + 1);
+        Count -= 1;
+
         return true;
     }
 
@@ -125,10 +196,11 @@ public class RingBuffer<T>
     /// </summary>
     /// <returns></returns>
     public T Peek() => this[^1];
+
     /// <summary>
     /// returns the last added item without removing it
     /// </summary>
-    /// <returns>true if succesful, else false</returns>
+    /// <returns>true if successful, else false</returns>
     public bool TryPeek(out T item)
     {
         if (Count <= 0)
@@ -143,33 +215,40 @@ public class RingBuffer<T>
 
     /// <summary>
     /// Resizes the ring buffer to a desired size, 
-    /// if expanded; old items will not be impacted, 
-    /// if downsized; old items will be removed as needed, with the older values remaining
+    /// if expanded; items will not be impacted, 
+    /// if shrunk; newer elements will stay, older values will be discarded
     /// </summary>
-    /// <param name="newSize"></param>
     public void Resize(int newSize)
     {
-        var change = newSize - Capacity;
-        if (change == 0)
+        if (newSize == Capacity)
             return;
 
         if (newSize == 0)
         {
             Items = Array.Empty<T>();
-            Position = 0;
+            Start = 0;
             Count = 0;
+
+            return;
         }
-        else
+
+        var destination = new T[newSize];
+
+        if (newSize > Count) //Expand
         {
-            var destination = new T[newSize];
-
-            for (int i = 0; i < Count && i < newSize; i++)
+            for (int i = 0; i < Count; i++)
                 destination[i] = this[i];
-
-            Items = destination;
-            Position = Math.Min(Count, newSize);
-            Count = Math.Min(Count, newSize);
         }
+        else //Shrunk
+        {
+            for (int i = 0; i < newSize; i++)
+                destination[i] = this[i + Count - newSize];
+
+            Count = newSize;
+        }
+
+        Items = destination;
+        Start = 0;
     }
 
     /// <summary>
@@ -178,7 +257,7 @@ public class RingBuffer<T>
     public void Clear()
     {
         Count = 0;
-        Position = 0;
+        Start = 0;
     }
 
     public RingBuffer(int capacity)
@@ -188,14 +267,13 @@ public class RingBuffer<T>
         else
             Items = new T[capacity];
 
-        Count = 0;
-        Position = 0;
+        Count = Start = 0;
     }
     public RingBuffer(T[] items)
     {
         this.Items = items;
 
+        Start = 0;
         Count = Capacity;
-        Position = 0;
     }
 }

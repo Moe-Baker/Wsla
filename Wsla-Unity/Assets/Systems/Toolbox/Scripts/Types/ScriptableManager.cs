@@ -1,5 +1,5 @@
 using System;
-using System.Threading;
+using System.Data.SqlTypes;
 
 using UnityEditor;
 
@@ -35,6 +35,8 @@ namespace Toolbox
         {
             public static ExecutionModeSelection ExecutionContext { get; private set; }
 
+            public static ScriptableManager[] Instances { get; private set; }
+
 #if UNITY_EDITOR
             [InitializeOnLoadMethod]
             static void OnEditorLoad()
@@ -42,6 +44,34 @@ namespace Toolbox
                 //This case will be handled by OnRuntimeLoad
                 if (EditorApplication.isPlayingOrWillChangePlaymode)
                     return;
+
+                AssemblyReloadEvents.beforeAssemblyReload += () =>
+                {
+                    Dispose();
+                };
+
+                EditorApplication.playModeStateChanged += state =>
+                {
+                    switch (state)
+                    {
+                        case PlayModeStateChange.EnteredEditMode:
+                            Init(ExecutionModeSelection.Editor);
+                            break;
+
+                        case PlayModeStateChange.EnteredPlayMode:
+                            //Handled by OnRuntimeLoad
+                            break;
+
+                        case PlayModeStateChange.ExitingPlayMode:
+                            Dispose();
+                            break;
+
+                        case PlayModeStateChange.ExitingEditMode:
+                            Dispose();
+                            break;
+
+                    }
+                };
 
                 Init(ExecutionModeSelection.Editor);
             }
@@ -54,53 +84,32 @@ namespace Toolbox
             {
                 ExecutionContext = mode;
 
-                var managers = Resources.LoadAll<ScriptableManager>("");
+                Instances = Resources.LoadAll<ScriptableManager>("");
 
-                Array.Sort(managers, (x, y) => GeneralUtility.Compare(x.ExecutionOrder, y.ExecutionOrder));
+                Array.Sort(Instances, (x, y) => GeneralUtility.Compare(x.ExecutionOrder, y.ExecutionOrder));
 
-                for (int i = 0; i < managers.Length; i++)
+                for (int i = 0; i < Instances.Length; i++)
                 {
-                    if (managers[i].ExecutionMode.HasFlag(mode) == false)
+                    if (Instances[i].ExecutionMode.HasFlag(mode) == false)
                         continue;
 
                     try
                     {
-                        managers[i].Init();
+                        Instances[i].Init();
                     }
                     catch (Exception ex)
                     {
                         Debug.LogError(ex);
                     }
-
-#if UNITY_EDITOR
-                    //Clear static instance to support instant play mode
-
-                    var reference = managers[i];
-
-                    if (mode.HasFlag(ExecutionModeSelection.Editor))
-                    {
-                        EditorApplication.playModeStateChanged += Callback;
-                        void Callback(PlayModeStateChange state)
-                        {
-                            if (state is not PlayModeStateChange.ExitingEditMode)
-                                return;
-
-                            EditorApplication.playModeStateChanged -= Callback;
-                            reference.Dispose();
-                        }
-                    }
-
-                    if (mode.HasFlag(ExecutionModeSelection.Runtime))
-                    {
-                        Application.quitting += Callback;
-                        void Callback()
-                        {
-                            Application.quitting -= Callback;
-                            reference.Dispose();
-                        }
-                    }
-#endif
                 }
+            }
+
+            static void Dispose()
+            {
+                for (int i = 0; i < Instances.Length; i++)
+                    Instances[i].Dispose();
+
+                Instances = null;
             }
         }
     }

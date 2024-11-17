@@ -194,5 +194,5 @@ MonoBehaviour:
     <Scale>k__BackingField: 1
   MotionDetector:
     Epsilon: 0.01
-  Interpolation:
-    Buffer: 3
+  SnapshotInterpolation:
+    BufferSize: 5
