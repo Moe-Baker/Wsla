@@ -19,9 +19,6 @@ namespace Wsla.Unity
         protected double LocalTime;
         protected double RemoteTime;
 
-        public double MaxTime;
-        public double MinTime;
-
         protected RingBuffer<TSnapshot> Collection;
         public ref TSnapshot this[Index index] => ref Collection[index];
 
@@ -88,16 +85,12 @@ namespace Wsla.Unity
                     Collection.Push(element);
                 }
             }
-
-            NetworkLog.Trace($"Submit Tick {snapshot.Tick}");
+            else
+            {
+                LocalTime = snapshot.Time;
+            }
 
             Collection.Push(snapshot);
-
-            //Log Difference
-            {
-                var delta = snapshot.Time - RemoteTime;
-                Debug.LogError($"Remote Time Predication Difference {delta}");
-            }
 
             RemoteTime = snapshot.Time;
         }
@@ -121,9 +114,6 @@ namespace Wsla.Unity
             LocalTime += CalculateAdjustedDelta(delta);
             RemoteTime += delta;
 
-            MinTime = Collection[0].Time;
-            MaxTime = Collection[^1].Time;
-
             //Clamp to Start
             {
                 var snapshot = Collection[0];
@@ -145,10 +135,13 @@ namespace Wsla.Unity
 
                 if (LocalTime > snapshot.Time)
                 {
-                    NetworkLog.Warning($"Time Clamped To End from {LocalTime} to {snapshot.Time}");
+                    if (snapshot.Stop is false)
+                        NetworkLog.Warning($"Time Clamped To End from {LocalTime} to {snapshot.Time}");
 
                     LocalTime = snapshot.Time;
                     value = snapshot.Value;
+
+                    Collection.Clear();
 
                     return true;
                 }
@@ -163,18 +156,6 @@ namespace Wsla.Unity
             return true;
         }
 
-        public double IdealTime;
-        public float Speedup;
-        public float Slowdown;
-
-        public bool doSlow;
-        public bool doSpeed;
-
-        public double StepAllowance;
-
-        public double LatencyRate;
-        public double LatencyDiff;
-
         float CalculateAdjustedDelta(float delta)
         {
             const float MaxSpeedup = 2.0f;
@@ -185,34 +166,18 @@ namespace Wsla.Unity
 
             var prediction = LocalTime + delta;
 
-            IdealTime = RemoteTime - BufferLatency;
-
             var difference = RemoteTime - (prediction + BufferLatency);
-            LatencyDiff = difference;
-
-            StepAllowance = (RemoteTime - prediction) / TickTimer.Timestep;
 
             var rate = InverseLerp(0, BufferLatency, Mathf.Abs(delta));
-            LatencyRate = rate;
 
             if (difference > 0) //Speed Up
             {
                 var factor = Mathf.Lerp(1f, MaxSpeedup, rate);
-
-                Speedup = factor;
-                doSpeed = true;
-                doSlow = false;
-
                 return delta * factor;
             }
             else //Slow down
             {
                 var factor = Mathf.Lerp(1f, MaxSlowdown, rate);
-
-                Slowdown = factor;
-                doSlow = true;
-                doSpeed = false;
-
                 return delta * factor;
             }
         }
