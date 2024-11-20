@@ -29,11 +29,11 @@ namespace Wsla.Unity
 
         public void RegisterEntity(NetworkEntity target)
         {
-            target.OwnerRegisteration = Entities.Add(target);
+            target.OwnerRegistration = Entities.Add(target);
         }
         public void UnregisterEntity(NetworkEntity target)
         {
-            Entities.RemoveAt(target.OwnerRegisteration);
+            Entities.RemoveAt(target.OwnerRegistration);
         }
         #endregion
 

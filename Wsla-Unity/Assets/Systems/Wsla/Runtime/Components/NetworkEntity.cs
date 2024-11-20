@@ -20,7 +20,7 @@ namespace Wsla.Unity
         public NetworkEntityResource Resource { get; private set; }
 
         public NetworkClient Owner { get; private set; }
-        internal int OwnerRegisteration;
+        internal int OwnerRegistration;
 
         /// <summary>
         /// Are you the owner of this entity? opposite of <see cref="IsRemote"/>
@@ -285,7 +285,7 @@ namespace Wsla.Unity
 
                     Collector.Clear();
 
-                    //Attributed Registeration
+                    //Attributed Registration
                     if (Behaviour.Contract is IRemoteSyncMembers members)
                     {
                         members.RegisterRPCs(Collector);
@@ -297,11 +297,11 @@ namespace Wsla.Unity
                             var name = bind.GetName();
 
                             if (Names.TryAdd(name, bind) is false)
-                                throw new InvalidOperationException($"Dupliate RPCs by the Name of {name} Found on {Behaviour}, RPC Overloading is not Supported");
+                                throw new InvalidOperationException($"Duplicate RPCs by the Name of {name} Found on {Behaviour}, RPC Overloading is not Supported");
                         }
                     }
 
-                    //Custom Registeration
+                    //Custom Registration
                     if (Behaviour.Script is IRegisterCustomRPCs custom)
                     {
                         custom.RegisterRPCs(Collector);
@@ -358,13 +358,13 @@ namespace Wsla.Unity
 
                     Collector.Clear();
 
-                    //Declared Registeration
+                    //Declared Registration
                     if (Behaviour.Contract is IRemoteSyncMembers members)
                     {
                         members.RegisterVariables(Collector);
                     }
 
-                    //Custom Registeration
+                    //Custom Registration
                     if (Behaviour.Script is IRegisterCustomVariables custom)
                     {
                         custom.RegisterVariables(Collector);
@@ -398,6 +398,13 @@ namespace Wsla.Unity
 
                 Contract.Set(this);
             }
+        }
+
+        void Awake()
+        {
+#if UNITY_EDITOR
+            PreCache();
+#endif
         }
 
         public void PreCache()
