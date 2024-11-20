@@ -17,11 +17,13 @@ namespace Toolbox
 {
     public interface IPreCache
     {
+#if UNITY_EDITOR
         /// <summary>
         /// A method where you can cache all those calls you were making in Awake and Start
         /// [Warning: will be called after Awake but before Start on Scene Objects]
         /// </summary>
         void PreCache();
+#endif
     }
 
 #if UNITY_EDITOR

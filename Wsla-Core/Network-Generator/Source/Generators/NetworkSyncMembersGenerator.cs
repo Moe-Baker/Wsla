@@ -326,7 +326,7 @@ namespace Wsla.Generator
 
                 if (methods.Count is 0)
                 {
-                    builder.Write("{}");
+                    builder.Write(" {}");
                     builder.Newline();
                 }
                 else
@@ -414,7 +414,7 @@ namespace Wsla.Generator
 
                 if (variables.Count is 0)
                 {
-                    builder.Write("{}");
+                    builder.Write(" {}");
                     builder.Newline();
                 }
                 else

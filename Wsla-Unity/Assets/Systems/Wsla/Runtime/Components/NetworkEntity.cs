@@ -65,6 +65,8 @@ namespace Wsla.Unity
         {
             this.Room = Room;
 
+            Behaviours.Create();
+
             ID = definition.ID;
             Origin = definition.Origin;
             Resource = definition.Resource;
@@ -401,11 +403,6 @@ namespace Wsla.Unity
         public void PreCache()
         {
             Behaviours.PreCache();
-        }
-
-        void Awake()
-        {
-            Behaviours.Create();
         }
 
         public NetworkEntity()

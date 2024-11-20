@@ -832,6 +832,112 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1439959727}
   m_CullTransparentMesh: 1
+--- !u!1 &1525593350
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1525593353}
+  - component: {fileID: 1525593352}
+  - component: {fileID: 1525593351}
+  - component: {fileID: 1525593354}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1525593351
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1525593350}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37fc1d9a3ab6c2046acc4e51bb2a1794, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <TickSlice>k__BackingField:
+    <Value>k__BackingField: 1
+  Parameters:
+    Bools:
+    - <Name>k__BackingField: Bool 1
+    Integers:
+    - <Name>k__BackingField: Integer 1
+    Floats:
+    - <Name>k__BackingField: Float 1
+    Triggers:
+    - <Name>k__BackingField: Trigger 1
+  Layers:
+    Collection:
+    - Name: Layer 1
+--- !u!95 &1525593352
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1525593350}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: b70f2a1d2966fd74ea7faaa8994b7262, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!4 &1525593353
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1525593350}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.079173416, y: -0.7850721, z: -1.7522461}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1525593354
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1525593350}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 764966ea25ae3d24fbe9d5624c87ef25, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <TickSlice>k__BackingField:
+    <Value>k__BackingField: 1
+  Mask:
+    <PositionX>k__BackingField: 1
+    <PositionY>k__BackingField: 1
+    <PositionZ>k__BackingField: 1
+    <Rotation>k__BackingField: 1
+    <Scale>k__BackingField: 1
+  MotionDetector:
+    Epsilon: 0.01
+  SnapshotInterpolation:
+    BufferSize: 3
 --- !u!1 &1546119475
 GameObject:
   m_ObjectHideFlags: 0
@@ -921,3 +1027,4 @@ SceneRoots:
   - {fileID: 977547553}
   - {fileID: 719953648}
   - {fileID: 1546119478}
+  - {fileID: 1525593353}

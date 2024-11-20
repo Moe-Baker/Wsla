@@ -2,11 +2,10 @@ using System;
 
 using Toolbox;
 
+using UnityEngine;
 
 #if UNITY_EDITOR
 using UnityEditor;
-
-using UnityEngine;
 #endif
 
 namespace Wsla.Unity

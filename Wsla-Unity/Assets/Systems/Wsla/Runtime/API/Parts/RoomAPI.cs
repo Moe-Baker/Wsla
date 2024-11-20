@@ -779,7 +779,7 @@ namespace Wsla.Unity
             #endregion
 
             #region Modifiers
-            NetworkEntity Assimilate(NetworkEntityDefinition definition)
+            internal NetworkEntity Assimilate(NetworkEntityDefinition definition)
             {
                 var instance = RetrieveInstance(definition);
 
