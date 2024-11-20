@@ -1,5 +1,7 @@
 using System;
 
+using Toolbox;
+
 using UnityEngine;
 
 using Wsla.Serialization;
@@ -19,17 +21,11 @@ namespace Wsla.Unity
         public struct MaskProperty
         {
             [field: SerializeField]
-            public bool PositionX { get; private set; }
-            [field: SerializeField]
-            public bool PositionY { get; private set; }
-            [field: SerializeField]
-            public bool PositionZ { get; private set; }
+            public Vector3Fields<bool> Position { get; private set; }
 
-            [field: Space]
             [field: SerializeField]
             public bool Rotation { get; private set; }
 
-            [field: Space]
             [field: SerializeField]
             public bool Scale { get; private set; }
 
@@ -39,9 +35,9 @@ namespace Wsla.Unity
                 {
                     var change = ChangeFlags.None;
 
-                    if (PositionX) change |= ChangeFlags.PositionX;
-                    if (PositionY) change |= ChangeFlags.PositionY;
-                    if (PositionZ) change |= ChangeFlags.PositionZ;
+                    if (Position.X) change |= ChangeFlags.PositionX;
+                    if (Position.Y) change |= ChangeFlags.PositionY;
+                    if (Position.Z) change |= ChangeFlags.PositionZ;
 
                     if (Rotation) change |= ChangeFlags.Rotation;
 
@@ -54,12 +50,8 @@ namespace Wsla.Unity
             public MaskProperty(bool value) : this(value, value, value) { }
             public MaskProperty(bool Position, bool Rotation, bool Scale)
             {
-                PositionX = Position;
-                PositionY = Position;
-                PositionZ = Position;
-
+                this.Position = new(Position);
                 this.Rotation = Rotation;
-
                 this.Scale = Scale;
             }
         }
@@ -124,6 +116,26 @@ namespace Wsla.Unity
         }
 
         [SerializeField]
+        QuantizationProperty Quantization;
+        [Serializable]
+        public struct QuantizationProperty
+        {
+            [field: SerializeField]
+            public Vector3Fields<OptionalValue<FloatQuantizationParameters>> Position { get; private set; }
+
+            [field: SerializeField]
+            public bool Rotation { get; private set; }
+
+            [field: SerializeField]
+            public Vector3Fields<OptionalValue<FloatQuantizationParameters>> Scale { get; private set; }
+
+            public static QuantizationProperty Default = new()
+            {
+                Rotation = true,
+            };
+        }
+
+        [SerializeField]
         MotionDetectorProperty MotionDetector;
         [Serializable]
         public struct MotionDetectorProperty
@@ -149,13 +161,13 @@ namespace Wsla.Unity
 
                 //Check Position
                 {
-                    if (Mask.PositionX && Mathf.Abs(LastSnapshot.Position.x - coordinates.Position.x) > Epsilon)
+                    if (Mask.Position.X && Mathf.Abs(LastSnapshot.Position.x - coordinates.Position.x) > Epsilon)
                         change |= ChangeFlags.PositionX;
 
-                    if (Mask.PositionY && Mathf.Abs(LastSnapshot.Position.y - coordinates.Position.y) > Epsilon)
+                    if (Mask.Position.Y && Mathf.Abs(LastSnapshot.Position.y - coordinates.Position.y) > Epsilon)
                         change |= ChangeFlags.PositionY;
 
-                    if (Mask.PositionZ && Mathf.Abs(LastSnapshot.Position.z - coordinates.Position.z) > Epsilon)
+                    if (Mask.Position.Z && Mathf.Abs(LastSnapshot.Position.z - coordinates.Position.z) > Epsilon)
                         change |= ChangeFlags.PositionZ;
                 }
 
@@ -425,16 +437,67 @@ namespace Wsla.Unity
 
             //Position
             {
-                if (change.HasFlag(ChangeFlags.PositionX)) NetworkSerializer.WriteValue(motion.Position.x, stream);
-                if (change.HasFlag(ChangeFlags.PositionY)) NetworkSerializer.WriteValue(motion.Position.y, stream);
-                if (change.HasFlag(ChangeFlags.PositionZ)) NetworkSerializer.WriteValue(motion.Position.z, stream);
+                if (change.HasFlag(ChangeFlags.PositionX))
+                {
+                    if (Quantization.Position.X.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Position.x, Quantization.Position.X.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Position.x, stream);
+                }
+
+                if (change.HasFlag(ChangeFlags.PositionY))
+                {
+                    if (Quantization.Position.Y.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Position.y, Quantization.Position.Y.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Position.y, stream);
+                }
+
+                if (change.HasFlag(ChangeFlags.PositionZ))
+                {
+                    if (Quantization.Position.Z.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Position.z, Quantization.Position.Z.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Position.z, stream);
+                }
             }
 
             //Rotation
-            if (change.HasFlag(ChangeFlags.Rotation)) NetworkSerializer.WriteValue(motion.Rotation, stream);
+            if (change.HasFlag(ChangeFlags.Rotation))
+            {
+                if (Quantization.Rotation)
+                    Quantize.Rotation.Serialize(stream, motion.Rotation);
+                else
+                    NetworkSerializer.WriteValue(motion.Rotation, stream);
+            }
 
             //Scale
-            if (change.HasFlag(ChangeFlags.Scale)) NetworkSerializer.WriteValue(motion.Scale, stream);
+            if (change.HasFlag(ChangeFlags.Scale))
+            {
+                //X
+                {
+                    if (Quantization.Scale.X.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Scale.x, Quantization.Scale.X.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Scale.x, stream);
+                }
+
+                //Y
+                {
+                    if (Quantization.Scale.Y.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Scale.y, Quantization.Scale.Y.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Scale.y, stream);
+                }
+
+                //Z
+                {
+                    if (Quantization.Scale.Z.Enabled)
+                        Quantize.Float.Serialize(stream, motion.Scale.z, Quantization.Scale.Z.Value);
+                    else
+                        NetworkSerializer.WriteValue(motion.Scale.z, stream);
+                }
+            }
         }
         SnapshotData ReadPayload(INetworkStream stream, CoordinatesData origin)
         {
@@ -448,16 +511,67 @@ namespace Wsla.Unity
 
             //Position
             {
-                if (change.HasFlag(ChangeFlags.PositionX)) NetworkSerializer.ReadValue(stream, out position.x);
-                if (change.HasFlag(ChangeFlags.PositionY)) NetworkSerializer.ReadValue(stream, out position.y);
-                if (change.HasFlag(ChangeFlags.PositionZ)) NetworkSerializer.ReadValue(stream, out position.z);
+                if (change.HasFlag(ChangeFlags.PositionX))
+                {
+                    if (Quantization.Position.X.Enabled)
+                        position.x = Quantize.Float.Deserialize(stream, Quantization.Position.X.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out position.x);
+                }
+
+                if (change.HasFlag(ChangeFlags.PositionY))
+                {
+                    if (Quantization.Position.Y.Enabled)
+                        position.y = Quantize.Float.Deserialize(stream, Quantization.Position.Y.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out position.y);
+                }
+
+                if (change.HasFlag(ChangeFlags.PositionZ))
+                {
+                    if (Quantization.Position.Z.Enabled)
+                        position.z = Quantize.Float.Deserialize(stream, Quantization.Position.Z.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out position.z);
+                }
             }
 
             //Rotation
-            if (change.HasFlag(ChangeFlags.Rotation)) NetworkSerializer.ReadValue(stream, out rotation);
+            if (change.HasFlag(ChangeFlags.Rotation))
+            {
+                if (Quantization.Rotation)
+                    rotation = Quantize.Rotation.Deserialize(stream);
+                else
+                    NetworkSerializer.ReadValue(stream, out rotation);
+            }
 
             //Scale
-            if (change.HasFlag(ChangeFlags.Scale)) NetworkSerializer.ReadValue(stream, out scale);
+            if (change.HasFlag(ChangeFlags.Scale))
+            {
+                //X
+                {
+                    if (Quantization.Scale.X.Enabled)
+                        scale.x = Quantize.Float.Deserialize(stream, Quantization.Scale.X.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out scale.x);
+                }
+
+                //Y
+                {
+                    if (Quantization.Scale.Y.Enabled)
+                        scale.y = Quantize.Float.Deserialize(stream, Quantization.Scale.Y.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out scale.y);
+                }
+
+                //Z
+                {
+                    if (Quantization.Scale.Z.Enabled)
+                        scale.z = Quantize.Float.Deserialize(stream, Quantization.Scale.Z.Value);
+                    else
+                        NetworkSerializer.ReadValue(stream, out scale.z);
+                }
+            }
 
             var time = TickTimer.CalculateTime(tick);
 
@@ -493,6 +607,8 @@ namespace Wsla.Unity
             Coordinates = new CoordinatesProperty(this);
             MotionDetector = new MotionDetectorProperty(this);
             SnapshotInterpolation = new SnapshotInterpolationProperty(this);
+
+            Quantization = QuantizationProperty.Default;
         }
 
         [Flags]
@@ -514,6 +630,27 @@ namespace Wsla.Unity
             Stop = 1 << 5,
 
             Teleport = 1 << 6,
+        }
+    }
+
+    [Serializable]
+    public struct Vector3Fields<T>
+    {
+        [field: SerializeField]
+        public T X { get; private set; }
+
+        [field: SerializeField]
+        public T Y { get; private set; }
+
+        [field: SerializeField]
+        public T Z { get; private set; }
+
+        public Vector3Fields(T value) : this(value, value, value) { }
+        public Vector3Fields(T X, T Y, T Z)
+        {
+            this.X = X;
+            this.Y = Y;
+            this.Z = Z;
         }
     }
 }

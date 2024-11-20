@@ -88,6 +88,9 @@ namespace Wsla.Unity
                 [field: SerializeField]
                 public string Name { get; internal set; }
 
+                [field: SerializeField]
+                public OptionalValue<IntegerQuantizationParameters> Quantization { get; private set; }
+
                 public int Hash { get; internal set; }
 
                 public int Value { get; internal set; }
@@ -116,11 +119,17 @@ namespace Wsla.Unity
 
                 internal void WriteState(INetworkStream stream)
                 {
-                    NetworkSerializer.WriteValue(Value, stream);
+                    if (Quantization.Enabled)
+                        Quantize.Integer.Serialize(stream, Value, Quantization.Value);
+                    else
+                        NetworkSerializer.WriteValue(Value, stream);
                 }
                 internal void ReadState(INetworkStream stream)
                 {
-                    Value = NetworkSerializer.ReadValue<int>(stream);
+                    if (Quantization.Enabled)
+                        Value = Quantize.Integer.Deserialize(stream, Quantization.Value);
+                    else
+                        Value = NetworkSerializer.ReadValue<int>(stream);
 
                     Apply(Value);
                 }
@@ -140,6 +149,9 @@ namespace Wsla.Unity
             {
                 [field: SerializeField]
                 public string Name { get; internal set; }
+
+                [field: SerializeField]
+                public OptionalValue<FloatQuantizationParameters> Quantization { get; private set; }
 
                 public int Hash { get; internal set; }
 
@@ -169,11 +181,17 @@ namespace Wsla.Unity
 
                 internal void WriteState(INetworkStream stream)
                 {
-                    NetworkSerializer.WriteValue(Value, stream);
+                    if (Quantization.Enabled)
+                        Quantize.Float.Serialize(stream, Value, Quantization.Value);
+                    else
+                        NetworkSerializer.WriteValue(Value, stream);
                 }
                 internal void ReadState(INetworkStream stream)
                 {
-                    Value = NetworkSerializer.ReadValue<float>(stream);
+                    if (Quantization.Enabled)
+                        Value = Quantize.Float.Deserialize(stream, Quantization.Value);
+                    else
+                        Value = NetworkSerializer.ReadValue<int>(stream);
 
                     Apply(Value);
                 }

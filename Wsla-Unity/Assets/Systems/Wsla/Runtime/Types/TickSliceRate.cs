@@ -42,6 +42,12 @@ namespace Wsla.Unity
 
             public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
             {
+                if (API == null)
+                {
+                    EditorGUI.HelpBox(rect, $"No NetworkAPI Asset Found", MessageType.Error);
+                    return;
+                }
+
                 var Value = property.FindBackingFieldRelative(nameof(TickSliceRate.Value));
 
                 //Draw Field

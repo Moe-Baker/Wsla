@@ -107,8 +107,11 @@ namespace Wsla.Unity
         {
             if (Collection.Count < BufferSize)
             {
-                value = default;
-                return false;
+                if (TryGetLast(out var last) is false || last.Stop is false)
+                {
+                    value = default;
+                    return false;
+                }
             }
 
             LocalTime += CalculateAdjustedDelta(delta);

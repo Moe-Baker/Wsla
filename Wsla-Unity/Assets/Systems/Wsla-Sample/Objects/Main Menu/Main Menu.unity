@@ -709,7 +709,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Field:
-    <Value>k__BackingField: 1
+    <Value>k__BackingField: 0
+  quant1:
+    <Enabled>k__BackingField: 1
+    <Value>k__BackingField:
+      <Range>k__BackingField: 1
+      <Min>k__BackingField: -2
+      <Max>k__BackingField: 2
+      <Precision>k__BackingField: 0.01
+      <Bits>k__BackingField: 9
+  quant2:
+    <Enabled>k__BackingField: 1
+    <Value>k__BackingField:
+      <Range>k__BackingField: 1
+      <Min>k__BackingField: -16777216
+      <Max>k__BackingField: 16777216
+      <Bits>k__BackingField: 26
   StartButton: {fileID: 1439959729}
 --- !u!1 &1439959727
 GameObject:
@@ -850,7 +865,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1525593351
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -870,8 +885,23 @@ MonoBehaviour:
     - <Name>k__BackingField: Bool 1
     Integers:
     - <Name>k__BackingField: Integer 1
+      <Quantization>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 10
+          <Bits>k__BackingField: 4
     Floats:
     - <Name>k__BackingField: Float 1
+      <Quantization>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 2
+          <Precision>k__BackingField: 0.01
+          <Bits>k__BackingField: 8
     Triggers:
     - <Name>k__BackingField: Trigger 1
   Layers:
@@ -929,11 +959,64 @@ MonoBehaviour:
   <TickSlice>k__BackingField:
     <Value>k__BackingField: 1
   Mask:
-    <PositionX>k__BackingField: 1
-    <PositionY>k__BackingField: 1
-    <PositionZ>k__BackingField: 1
+    <Position>k__BackingField:
+      <X>k__BackingField: 1
+      <Y>k__BackingField: 1
+      <Z>k__BackingField: 1
     <Rotation>k__BackingField: 1
     <Scale>k__BackingField: 1
+  Quantization:
+    <Position>k__BackingField:
+      <X>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
+      <Y>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
+      <Z>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
+    <Rotation>k__BackingField: 1
+    <Scale>k__BackingField:
+      <X>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
+      <Y>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
+      <Z>k__BackingField:
+        <Enabled>k__BackingField: 0
+        <Value>k__BackingField:
+          <Range>k__BackingField: 0
+          <Min>k__BackingField: 0
+          <Max>k__BackingField: 0
+          <Precision>k__BackingField: 0
+          <Bits>k__BackingField: 0
   MotionDetector:
     Epsilon: 0.01
   SnapshotInterpolation:

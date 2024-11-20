@@ -185,14 +185,67 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   <TickSlice>k__BackingField:
-    <Value>k__BackingField: 2
+    <Value>k__BackingField: 1
   Mask:
-    <PositionX>k__BackingField: 1
-    <PositionY>k__BackingField: 1
-    <PositionZ>k__BackingField: 1
+    <Position>k__BackingField:
+      <X>k__BackingField: 1
+      <Y>k__BackingField: 1
+      <Z>k__BackingField: 1
     <Rotation>k__BackingField: 1
     <Scale>k__BackingField: 1
+  Quantization:
+    <Position>k__BackingField:
+      <X>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -1000
+          <Max>k__BackingField: 1000
+          <Precision>k__BackingField: 0.04
+          <Bits>k__BackingField: 16
+      <Y>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -1000
+          <Max>k__BackingField: 1000
+          <Precision>k__BackingField: 0.04
+          <Bits>k__BackingField: 16
+      <Z>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -1000
+          <Max>k__BackingField: 1000
+          <Precision>k__BackingField: 0.04
+          <Bits>k__BackingField: 16
+    <Rotation>k__BackingField: 1
+    <Scale>k__BackingField:
+      <X>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -10
+          <Max>k__BackingField: 10
+          <Precision>k__BackingField: 0.001
+          <Bits>k__BackingField: 15
+      <Y>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -10
+          <Max>k__BackingField: 10
+          <Precision>k__BackingField: 0.001
+          <Bits>k__BackingField: 15
+      <Z>k__BackingField:
+        <Enabled>k__BackingField: 1
+        <Value>k__BackingField:
+          <Range>k__BackingField: 1
+          <Min>k__BackingField: -10
+          <Max>k__BackingField: 10
+          <Precision>k__BackingField: 0.001
+          <Bits>k__BackingField: 15
   MotionDetector:
     Epsilon: 0.01
   SnapshotInterpolation:
-    BufferSize: 5
+    BufferSize: 3
