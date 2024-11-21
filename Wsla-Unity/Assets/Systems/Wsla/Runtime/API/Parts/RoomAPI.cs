@@ -80,6 +80,7 @@ namespace Wsla.Unity
         public void Stop()
         {
             Transport?.Stop();
+            Entities?.Stop();
 
             Transport = default;
             Clients = default;
@@ -904,6 +905,11 @@ namespace Wsla.Unity
                 to.RegisterEntity(entity);
 
                 entity.TransferOwner(to);
+            }
+
+            internal void Stop()
+            {
+                DespawnAll();
             }
             #endregion
 

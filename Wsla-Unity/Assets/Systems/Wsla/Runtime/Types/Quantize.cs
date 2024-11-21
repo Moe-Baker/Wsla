@@ -298,8 +298,8 @@ namespace Wsla.Unity
             public const float Min = 0f;
             public const float Max = 360f;
 
-            public const byte MaxBytes = 2;
-            public const byte MaxBits = MaxBytes * 8;
+            public const byte ByteCount = 2;
+            public const byte BitCount = ByteCount * 8;
 
             public static void Serialize(INetworkStream writer, float angle)
             {
@@ -315,11 +315,11 @@ namespace Wsla.Unity
             public static ushort Compress(float angle)
             {
                 angle = Clamp(angle);
-                return (ushort)Float.Compress(angle, Min, Max, MaxBits);
+                return (ushort)Float.Compress(angle, Min, Max, BitCount);
             }
             public static float Decompress(ushort quantization)
             {
-                return Float.Decompress(quantization, Min, Max, MaxBits);
+                return Float.Decompress(quantization, Min, Max, BitCount);
             }
 
             public static float Clamp(float angle)

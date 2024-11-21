@@ -547,6 +547,11 @@ namespace Wsla.Unity
 
                 internal bool Dirty;
 
+                //8 bits in 0-1 range = 0.005 Precision
+                const int Bits = 8;
+                const float Min = 0f;
+                const float Max = 1f;
+
                 NetworkAnimator Animator;
                 internal void Init(NetworkAnimator Animator, int Index)
                 {
@@ -564,11 +569,11 @@ namespace Wsla.Unity
 
                 internal void WriteState(INetworkStream stream)
                 {
-                    NetworkSerializer.WriteValue(Weight, stream);
+                    Quantize.Float.Serialize(stream, Weight, Min, Max, Bits);
                 }
                 internal void ReadState(INetworkStream stream)
                 {
-                    Weight = NetworkSerializer.ReadValue<float>(stream);
+                    Weight = Quantize.Float.Deserialize(stream, Min, Max, Bits);
 
                     Apply(Weight);
                 }
@@ -678,6 +683,9 @@ namespace Wsla.Unity
             Component = GetComponent<Animator>();
 
             var controller = ConvertRuntimeController(Component.runtimeAnimatorController);
+
+            if (controller is null)
+                throw new InvalidOperationException($"No Animator Controller Found on {this}");
 
             Parameters.Refresh(controller);
             Layers.Refresh(controller);

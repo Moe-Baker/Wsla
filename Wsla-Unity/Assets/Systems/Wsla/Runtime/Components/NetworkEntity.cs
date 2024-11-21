@@ -25,12 +25,12 @@ namespace Wsla.Unity
         /// <summary>
         /// Are you the owner of this entity? opposite of <see cref="IsRemote"/>
         /// </summary>
-        public bool IsMine => Owner.IsLocal;
+        public bool IsMine => IsSpawned && Owner.IsLocal;
 
         /// <summary>
         /// Are you NOT the owner of this entity? opposite of <see cref="IsMine"/>
         /// </summary>
-        public bool IsRemote => Owner.IsRemote;
+        public bool IsRemote => IsSpawned && Owner.IsRemote;
 
         internal void AssignOwner(NetworkClient target)
         {
@@ -89,19 +89,10 @@ namespace Wsla.Unity
         }
 
         #region Trait
-        Action<INetworkStream> TraitHandler;
-        public void AssignTraitHandler<T>(Action<T> handler)
+        ITraitHandler TraitHandler;
+        public void AssignTraitHandler(ITraitHandler value)
         {
-            TraitHandler = Surrogate;
-
-            void Surrogate(INetworkStream stream)
-            {
-                //Clear the handler so it can be cleared for garbage collection as it's not needed anymore
-                TraitHandler = default;
-
-                var data = NetworkSerializer.ReadValue<T>(stream);
-                handler(data);
-            }
+            TraitHandler = value;
         }
 
         internal void InvokeTraitReader(INetworkStream stream)
@@ -109,7 +100,7 @@ namespace Wsla.Unity
             if (TraitHandler is null)
                 return;
 
-            TraitHandler(stream);
+            TraitHandler.ReadTrait(stream);
         }
         #endregion
 

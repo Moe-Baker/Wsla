@@ -1,79 +1,87 @@
-using System.Collections.Generic;
-
-using Unity.Mathematics;
-
 using UnityEngine;
 
 using Wsla;
-using Wsla.Serialization;
 using Wsla.Unity;
 
-using Random = UnityEngine.Random;
-
-public partial class Player : NetworkBehaviour
+public partial class Player : NetworkBehaviour, ITraitHandler<Vector3>
 {
     [SerializeField]
-    NetworkVariable<int> Number;
+    float MovementSpeed = 5f;
+    [SerializeField]
+    float MovementAcceleration = 20f;
+
+    [SerializeField]
+    float RotationSpeed = 420f;
+
+    [SerializeField]
+    Rigidbody Rigidbody;
+
+    [SerializeField]
+    NetworkAnimator Animator;
+
+    NetworkAnimatorMemberIndex MoveIndex;
+
+    Vector3 Velocity
+    {
+        get => Rigidbody.linearVelocity;
+        set => Rigidbody.linearVelocity = value;
+    }
 
     public override void Set(NetworkEntity.Behaviour reference)
     {
         base.Set(reference);
 
-        Network.Entity.AssignTraitHandler<string>(ApplyTrait);
+        Network.Entity.AssignTraitHandler(this);
+
+        MoveIndex = Animator.IndexFloat("Move");
 
         Network.Entity.OnSpawn += SpawnCallback;
     }
 
-    void ApplyTrait(string attribute)
+    public void ApplyTrait(Vector3 value)
     {
-        NetworkLog.Trace($"Attribute is {attribute}");
+        transform.position = value;
     }
 
     void SpawnCallback()
     {
         NetworkLog.Info($"Player {Network.Entity.ID} Spawned");
-
-        if (Network.Owner.IsLocal)
-        {
-            Network.RPC.Invoke(nameof(Call))
-                .WritePayload(stream =>
-                {
-                    NetworkSerializer.WriteValue("Bye World", stream);
-                })
-                .SetChannel(16)
-                .SetBufferMode()
-                .Broadcast();
-
-            Number.Change(Random.Range(100, 1000))
-                .SetChannel(16)
-                .Broadcast();
-        }
-    }
-
-    [RPC]
-    void Call(INetworkStream stream, RpcInfo info)
-    {
-        var text = NetworkSerializer.ReadValue<string>(stream);
-
-        if (info.IsBuffered)
-        {
-            info.TryGetSender(out var sender);
-
-            NetworkLog.Info($"Buffered RPC Called, Text: {text}, Sender: {sender}");
-        }
-        else
-        {
-            var sender = info.GetSender();
-            NetworkLog.Info($"Realtime RPC Called, Text: {text}, Sender: {sender}");
-        }
     }
 
     void Update()
     {
-        if (Network.Entity.IsMine is false)
+        if (Network.Entity.IsRemote)
             return;
 
-        transform.position += (Vector3)(GetInput() * 10 * Time.deltaTime);
+        Move();
+    }
+    void Move()
+    {
+        var input = GetInput();
+
+        var horizontal = ((Vector3.forward * input.y) + (Vector3.right * input.x)) * MovementSpeed;
+        var vertical = Vector3.up * Velocity.y;
+
+        Velocity = Vector3.MoveTowards(Velocity, horizontal + vertical, MovementAcceleration * Time.deltaTime);
+
+        Rotate(horizontal);
+
+        Animate(Velocity);
+    }
+    void Rotate(Vector3 direction)
+    {
+        if (direction.magnitude < 0.2f)
+            return;
+
+        var rotation = Quaternion.LookRotation(direction);
+        Rigidbody.rotation = Quaternion.RotateTowards(Rigidbody.rotation, rotation, RotationSpeed * Time.deltaTime);
+    }
+    void Animate(Vector3 velocity)
+    {
+        velocity.y = 0f;
+
+        var value = velocity.magnitude / MovementSpeed;
+        Animator.SetFloat(MoveIndex, value);
     }
 
     Vector2 GetInput()
@@ -99,45 +107,5 @@ public partial class Player : NetworkBehaviour
         }
 
         return input.normalized;
-    }
-}
-
-namespace N
-{
-    public partial class A
-    {
-        public partial class B
-        {
-            public partial class C : NetworkBehaviour
-            {
-                NetworkVariable<float> A;
-
-                NetworkVariable<int4x3> B;
-
-                [RPC]
-                void Call(int a, string b, RpcInfo info)
-                {
-
-                }
-            }
-        }
-    }
-}
-
-class Sample
-{
-    void Usage()
-    {
-        Consumer<A>();
-    }
-
-    struct A
-    {
-        string call;
-    }
-
-    void Consumer<[NetworkSerializationMarker] T>()
-    {
-
     }
 }

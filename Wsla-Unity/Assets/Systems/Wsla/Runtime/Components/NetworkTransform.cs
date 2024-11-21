@@ -367,15 +367,15 @@ namespace Wsla.Unity
 
             TickTimer = new NetworkTickTimer(TickSlice);
 
-            MotionDetector.Init();
-            SnapshotInterpolation.Init();
-
             Network.OnSpawn += SpawnCallback;
             Network.OnDespawn += DespawnCallback;
         }
 
         void SpawnCallback()
         {
+            MotionDetector.Init();
+            SnapshotInterpolation.Init();
+
             if (Network.Entity.IsMine)
             {
                 TickTimer.Start();

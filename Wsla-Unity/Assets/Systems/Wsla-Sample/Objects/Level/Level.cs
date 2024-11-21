@@ -3,6 +3,7 @@ using Cysharp.Threading.Tasks;
 using System;
 using System.Threading;
 
+using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -86,7 +87,7 @@ public partial class Level : NetworkBehaviour
             Network.Room.Entities.Spawn()
                 .SetResource(new NetworkEntityResource(0))
                 .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-                .WriteTrait("Hello Attribute")
+                .WriteTrait(new Vector3(UnityEngine.Random.Range(-5, 5), 0, UnityEngine.Random.Range(-5, 5)))
                 .SetAuthority(NetworkEntityAuthorityMode.Transferable)
                 .Send();
 
