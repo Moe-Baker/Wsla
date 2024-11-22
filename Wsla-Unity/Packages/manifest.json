@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "com.cysharp.memorypack": "https://github.com/Cysharp/MemoryPack.git?path=src/MemoryPack.Unity/Assets/MemoryPack.Unity#1.21.3",
     "com.cysharp.unitask": "2.5.10",
     "com.eflatun.scenereference": "4.1.1",
     "com.github-glitchenzo.nugetforunity": "4.1.1",

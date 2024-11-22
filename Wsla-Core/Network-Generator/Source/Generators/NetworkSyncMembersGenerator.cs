@@ -489,6 +489,8 @@ namespace Wsla.Generator
             public static readonly string IRemoteSyncMembers = $"{Namespace}.{nameof(IRemoteSyncMembers)}";
 
             public static readonly string RpcInfo = $"{Namespace}.{nameof(RpcInfo)}";
+
+            public static readonly string NetworkBehaviourSerializationResolver = $"{Namespace}.{nameof(NetworkBehaviourSerializationResolver)}";
         }
 
         public class DiagnosticCodes : GlobalNetworkGenerator.DiagnosticCodes { }

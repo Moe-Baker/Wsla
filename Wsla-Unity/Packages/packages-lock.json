@@ -1,12 +1,5 @@
 {
   "dependencies": {
-    "com.cysharp.memorypack": {
-      "version": "https://github.com/Cysharp/MemoryPack.git?path=src/MemoryPack.Unity/Assets/MemoryPack.Unity#1.21.3",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "1e4bf883b3e4963e565774656f7de938f252c9c4"
-    },
     "com.cysharp.unitask": {
       "version": "2.5.10",
       "depth": 0,

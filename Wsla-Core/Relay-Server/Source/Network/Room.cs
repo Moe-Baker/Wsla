@@ -918,6 +918,12 @@ namespace Wsla.Server
             ThreadProcessor.Unregister(this);
 
             Dispose();
+
+            //Start New Room
+            {
+                var room = new Room("Sample Room");
+                room.Start(Program.Dispatcher);
+            }
         }
 
         public void Receive() => Transport.Receive();

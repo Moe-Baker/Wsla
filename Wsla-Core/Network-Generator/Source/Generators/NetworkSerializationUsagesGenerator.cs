@@ -19,7 +19,7 @@ namespace Wsla.Generator
             var compilation = context.CompilationProvider.Select(CompilationData.Create);
 
             var methods = context.SyntaxProvider
-                .CreateSyntaxProvider(IsInvocationSnytax, GetInvocationMethodDefinition)
+                .CreateSyntaxProvider(IsInvocationSyntax, GetInvocationMethodDefinition)
                 .Where(IsNotNull);
 
             var usages = methods.Combine(compilation)
@@ -58,6 +58,9 @@ namespace Wsla.Generator
 
             public INamedTypeSymbol[] TupleResolvers;
             public INamedTypeSymbol NullableResolver;
+
+            public INamedTypeSymbol BehaviourContract;
+            public INamedTypeSymbol BehaviourResolver;
 
             (string, INamedTypeSymbol) GetComparableFields() => (AssemblyName, MarkerAttribute);
 
@@ -112,13 +115,16 @@ namespace Wsla.Generator
                     },
 
                     NullableResolver = compilation.GetGenericTypeByMetadataName(Constants.NullableNetworkSerializationResolver, 1),
+
+                    BehaviourContract = compilation.GetTypeByMetadataName(NetworkSyncMembersGenerator.Constants.INetworkBehaviour),
+                    BehaviourResolver = compilation.GetGenericTypeByMetadataName(NetworkSyncMembersGenerator.Constants.NetworkBehaviourSerializationResolver, 1),
                 };
 
                 return data;
             }
         }
 
-        static bool IsInvocationSnytax(SyntaxNode node, CancellationToken token) => node is InvocationExpressionSyntax;
+        static bool IsInvocationSyntax(SyntaxNode node, CancellationToken token) => node is InvocationExpressionSyntax;
         static IMethodSymbol GetInvocationMethodDefinition(GeneratorSyntaxContext context, CancellationToken token)
         {
             var info = context.SemanticModel.GetSymbolInfo(context.Node, token);
@@ -315,6 +321,9 @@ namespace Wsla.Generator
                 if (ResolveNullable(context, compilation, usage, resolvers))
                     return true;
 
+                if (ResolveBehaviour(context, compilation, usage, resolvers))
+                    return true;
+
                 return false;
             }
 
@@ -478,6 +487,19 @@ namespace Wsla.Generator
                 resolvers[usage] = compilation.NullableResolver.Construct(arguments, default);
 
                 Resolve(context, compilation, arguments[0], resolvers);
+
+                return true;
+            }
+
+            static bool ResolveBehaviour(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                if (compilation.BehaviourContract is null || compilation.BehaviourResolver is null)
+                    return false;
+
+                if (usage.ImplementsInterface(compilation.BehaviourContract) is false)
+                    return false;
+
+                resolvers[usage] = compilation.BehaviourResolver.Construct(usage);
 
                 return true;
             }
