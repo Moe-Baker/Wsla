@@ -1,4 +1,6 @@
-﻿using Wsla.Serialization;
+﻿using System;
+
+using Wsla.Serialization;
 
 namespace Wsla
 {
@@ -160,7 +162,7 @@ namespace Wsla
     }
 
     [NetworkBlittable]
-    public struct SpawnScenenRequest { }
+    public struct SpawnSceneRequest { }
 
     [NetworkBlittable]
     public struct SpawnSceneCommand
@@ -253,5 +255,63 @@ namespace Wsla
         /// Transfer the Entity to the Master Client
         /// </summary>
         Transfer,
+    }
+
+    [NetworkBlittable]
+    public struct NetworkPingMessage
+    {
+        public DateTime Time { get; }
+
+        public NetworkPingMessage(DateTime Time)
+        {
+            this.Time = Time;
+        }
+
+        public static NetworkPingMessage Create() => new NetworkPingMessage(DateTime.Now);
+    }
+
+    [NetworkBlittable]
+    public struct NetworkPongMessage
+    {
+        public DateTime Time { get; }
+
+        public NetworkPongMessage(DateTime Time)
+        {
+            this.Time = Time;
+        }
+
+        public static NetworkPongMessage From(NetworkPingMessage ping) => new NetworkPongMessage(ping.Time);
+    }
+
+    public struct CreateRoomRequest : IAutoNetworkSerialization
+    {
+        public FixedString40 Name;
+        public byte Capacity;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Name);
+            context.Select(ref Capacity);
+        }
+
+        public CreateRoomRequest(FixedString40 Name, byte Capacity)
+        {
+            this.Name = Name;
+            this.Capacity = Capacity;
+        }
+    }
+    public struct CreateRoomResponse : IAutoNetworkSerialization
+    {
+        public ushort Port;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Port);
+        }
+
+        public CreateRoomResponse(ushort Port)
+        {
+            this.Port = Port;
+        }
     }
 }

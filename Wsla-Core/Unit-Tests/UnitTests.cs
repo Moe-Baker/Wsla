@@ -375,6 +375,31 @@ namespace SerializationTests
         }
     }
 
+    public class BlittableTest
+    {
+        [Fact]
+        public void GeneralTest()
+        {
+            var source = new Data()
+            {
+                x = 1,
+                y = 2,
+                z = 3,
+                w = 4,
+            };
+
+            var clone = Duplicate(source);
+
+            Assert.Equal(source, clone);
+        }
+
+        [NetworkBlittable]
+        public struct Data
+        {
+            public int x, y, z, w;
+        }
+    }
+
     public static class Utility
     {
         public static T Duplicate<[NetworkSerializationMarker] T>(T original)

@@ -53,7 +53,7 @@ namespace Wsla.Serialization
 
             public static void Load(Assembly assembly)
             {
-                var attributes = assembly.GetCustomAttributes<NetworkSerializationResolverRegisterationAttribute>();
+                var attributes = assembly.GetCustomAttributes<NetworkSerializationResolverRegistrationAttribute>();
 
                 foreach (var attribute in attributes)
                     attribute.Invoke();

@@ -10,7 +10,7 @@ namespace Wsla.Server
 {
     public class Room : IDisposable
     {
-        public string Name { get; }
+        public FixedString40 Name { get; }
 
         RoomThreadDispatcher.Processor? ThreadProcessor;
         public Room? Next { get; internal set; }
@@ -76,8 +76,8 @@ namespace Wsla.Server
 
             public void Start()
             {
-                if (Manager.StartInManualMode(Constants.RelayManagementPort) is false)
-                    throw new InvalidOperationException($"Can't Start Relay Server on Port {Constants.RelayManagementPort}");
+                if (Manager.StartInManualMode(Constants.RelayRealtimePort) is false)
+                    throw new InvalidOperationException($"Can't Start Relay Server on Port {Constants.RelayRealtimePort}");
             }
             public void Stop()
             {
@@ -834,7 +834,7 @@ namespace Wsla.Server
                 }
             }
 
-            void SpawnRequestHandler(NetworkClient sender, ref SpawnScenenRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            void SpawnRequestHandler(NetworkClient sender, ref SpawnSceneRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 if (sender.IsMaster is false)
                 {
@@ -896,7 +896,7 @@ namespace Wsla.Server
                 ID = new NetworkSceneID(1);
 
                 Transport.Dispatcher.Register<ChangeSceneRequest>(ChangeRequestHandler);
-                Transport.Dispatcher.Register<SpawnScenenRequest>(SpawnRequestHandler);
+                Transport.Dispatcher.Register<SpawnSceneRequest>(SpawnRequestHandler);
             }
         }
 
@@ -918,12 +918,6 @@ namespace Wsla.Server
             ThreadProcessor.Unregister(this);
 
             Dispose();
-
-            //Start New Room
-            {
-                var room = new Room("Sample Room");
-                room.Start(Program.Dispatcher);
-            }
         }
 
         public void Receive() => Transport.Receive();
@@ -958,9 +952,9 @@ namespace Wsla.Server
             Entities.Dispose();
         }
 
-        public Room(string Name)
+        public Room(CreateRoomRequest request)
         {
-            this.Name = Name;
+            this.Name = request.Name;
 
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);

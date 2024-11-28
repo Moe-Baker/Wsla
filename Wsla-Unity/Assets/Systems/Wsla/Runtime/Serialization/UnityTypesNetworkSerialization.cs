@@ -3,7 +3,7 @@ using UnityEngine;
 using Wsla.Serialization;
 using Wsla.Unity;
 
-[assembly: NetworkSerializationResolverRegisteration(typeof(UnityTypesNetworkSerialization), 0, "Register")]
+[assembly: NetworkSerializationResolverRegistration(typeof(UnityTypesNetworkSerialization), 0, "Register")]
 
 namespace Wsla.Unity
 {

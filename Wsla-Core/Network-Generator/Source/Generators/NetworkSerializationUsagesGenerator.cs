@@ -173,7 +173,7 @@ namespace Wsla.Generator
 
                 //Assembly attribute
                 builder.Write("[assembly: ");
-                builder.Write(Constants.NetworkSerializationResolverRegisterationAttribute);
+                builder.Write(Constants.NetworkSerializationResolverRegistrationAttribute);
                 builder.Write("(typeof(");
                 WriteNamespaceName();
                 builder.Write(".");
@@ -258,7 +258,7 @@ namespace Wsla.Generator
 
             public static readonly string NetworkSerializationResolver = $"{Namespace}.{nameof(NetworkSerializationResolver)}";
 
-            public static readonly string NetworkSerializationResolverRegisterationAttribute = $"{Namespace}.{nameof(NetworkSerializationResolverRegisterationAttribute)}";
+            public static readonly string NetworkSerializationResolverRegistrationAttribute = $"{Namespace}.{nameof(NetworkSerializationResolverRegistrationAttribute)}";
 
             public static readonly string NetworkSerializationMarkerAttribute = $"{Namespace}.{nameof(NetworkSerializationMarkerAttribute)}";
 

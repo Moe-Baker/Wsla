@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 using Wsla.Serialization;
 
-[assembly: NetworkSerializationResolverRegisteration(typeof(Wsla.WslaSerializationResolvers), 0, "Register")]
+[assembly: NetworkSerializationResolverRegistration(typeof(Wsla.WslaSerializationResolvers), 0, "Register")]
 
 namespace Wsla
 {
@@ -79,7 +79,7 @@ namespace Wsla
             Add<TargetNetworkRpcRequest>(ref counter);
             Add<NetworkRpcCommand>(ref counter);
 
-            Add<SpawnScenenRequest>(ref counter);
+            Add<SpawnSceneRequest>(ref counter);
             Add<SpawnSceneCommand>(ref counter);
 
             Add<BroadcastNetworkVariableRequest>(ref counter);
@@ -88,6 +88,9 @@ namespace Wsla
 
             Add<TakeEntityOwnershipRequest>(ref counter);
             Add<TransferEntityOwnershipCommand>(ref counter);
+
+            Add<CreateRoomRequest>(ref counter);
+            Add<CreateRoomResponse>(ref counter);
         }
     }
 

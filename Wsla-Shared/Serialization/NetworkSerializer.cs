@@ -268,7 +268,7 @@ namespace Wsla.Serialization
     public sealed class NetworkSerializationMarkerAttribute : Attribute { }
 
     [AttributeUsage(AttributeTargets.Assembly, Inherited = false, AllowMultiple = true)]
-    public sealed class NetworkSerializationResolverRegisterationAttribute : Attribute
+    public sealed class NetworkSerializationResolverRegistrationAttribute : Attribute
     {
         public Type Type { get; }
         public int Order { get; }
@@ -283,7 +283,7 @@ namespace Wsla.Serialization
             method.Invoke(null, null);
         }
 
-        public NetworkSerializationResolverRegisterationAttribute(Type Type, int Order, string Entrypoint)
+        public NetworkSerializationResolverRegistrationAttribute(Type Type, int Order, string Entrypoint)
         {
             this.Type = Type;
             this.Order = Order;

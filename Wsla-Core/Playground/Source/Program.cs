@@ -1,110 +1,136 @@
-﻿using System.Collections;
+﻿using System.Net;
+using System.Text;
 
 using Wsla;
+using Wsla.Serialization;
 
 class Program
 {
-    static void Main()
+    static async Task Main()
     {
+        NetworkTypes.Register<SamplePayload>(100);
+
         NetworkLog.UseConsole();
 
-        var stream = new BitStream(stackalloc byte[2]);
+        Console.WriteLine($"Start In Mode:");
+        Console.WriteLine("1. Server");
+        Console.WriteLine("2. Client");
+        Console.WriteLine("3. Query");
 
-        for (int i = 0; i < 16; i++)
+        Console.Write("Input: ");
+
+        var input = int.Parse(Console.ReadLine());
+
+        switch (input)
         {
-            Write(ref stream, true);
-        }
+            case 1:
+                await Server();
+                break;
 
-        stream.Reset();
+            case 2:
+                await Client();
+                break;
 
-        for (int i = 0; i < 8; i++)
-        {
-            Write(ref stream, true);
-            Write(ref stream, false);
-        }
-
-        stream.Reset();
-
-        for (int i = 0; i < 16; i++)
-        {
-            Console.WriteLine(Read(ref stream));
+            case 3:
+                await Query();
+                break;
         }
 
         while (true)
             Console.ReadKey();
     }
 
-    static void Write(ref BitStream input, bool value)
+    static async Task Server()
     {
-        ref var stream = ref input;
+        var server = new MessagingServer();
 
-        stream.Write(value);
-    }
-
-    static bool Read(ref BitStream input)
-    {
-        ref var stream = ref input;
-
-        return stream.Read();
-    }
-
-    static unsafe void PrintBits<T>(T instance)
-            where T : unmanaged
-    {
-        void* ptr = &instance;
-        var span = new Span<byte>(ptr, sizeof(T));
-        var array = span.ToArray();
-
-        var bits = new BitArray(array);
-
-        for (int i = 0; i < bits.Length; i++)
-            Console.Write(bits[i] ? "1" : "0");
-
-        Console.WriteLine();
-    }
-
-    public ref struct BitStream
-    {
-        Span<byte> Buffer { get; }
-        int Position;
-
-        public void Write(bool value)
+        server.Dispatcher.Register<SamplePayload>(MessageHandler);
+        void MessageHandler(MessagingPeer peer, ref SamplePayload message)
         {
-            var notch = Position / 8;
-            var index = Position % 8;
+            Console.WriteLine($"Message: {message.Text}");
 
-            if (value)
+            peer.Send(message);
+        }
+
+        server.Start(4040);
+    }
+
+    static async Task Client()
+    {
+        var client = new MessagingClient();
+
+        client.Dispatcher.Register<SamplePayload>(MessageHandler);
+        void MessageHandler(ref SamplePayload message)
+        {
+            Procedure(message);
+            async void Procedure(SamplePayload message)
             {
-                Buffer[notch] |= (byte)(1 << index);
+                Console.WriteLine($"Message: {message.Text}");
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+                client.Send(new SamplePayload(GetRandomString()));
             }
-            else
+        }
+
+        await client.Connect(IPAddress.Loopback, 4040);
+
+        client.Send(new SamplePayload("Hello World"));
+    }
+
+    static async Task Query()
+    {
+        using var query = new MessagingQuery();
+
+        await query.Connect(IPAddress.Loopback, 4040);
+
+        for (int i = 0; i < 10; i++)
+        {
+            //Send
             {
-                Buffer[notch] &= (byte)~(1 << index);
+                var payload = new SamplePayload(GetRandomString());
+                query.Send(payload);
             }
 
-            Position += 1;
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+            //Receive
+            {
+                var payload = await query.Receive<SamplePayload>();
+                Console.WriteLine($"Message: {payload.Text}");
+            }
         }
-        public bool Read()
+
+        query.Disconnect();
+    }
+
+    static string GetRandomString()
+    {
+        var builder = new StringBuilder();
+
+        var length = Random.Shared.Next(4, 11);
+
+        for (int i = 0; i < length; i++)
         {
-            var notch = Position / 8;
-            var index = Position % 8;
-
-            Position += 1;
-
-            return (Buffer[notch] & (1 << index)) != 0;
+            var character = (char)Random.Shared.Next(32, 123);
+            builder.Append(character);
         }
 
-        public void Reset()
+        return builder.ToString();
+    }
+
+    public struct SamplePayload : IAutoNetworkSerialization
+    {
+        public string Text;
+
+        public void Select(ref AutoSerializationContext context)
         {
-            Position = 0;
+            context.Select(ref Text);
         }
 
-        public BitStream(Span<byte> Buffer)
+        public SamplePayload(string Text)
         {
-            this.Buffer = Buffer;
-            Position = 0;
+            this.Text = Text;
         }
-
-        public static int BitsToBytes(int bits) => ((bits - 1) / 8) + 1;
     }
 }

@@ -186,17 +186,17 @@ namespace Wsla.Server
 
         public Processor Retrieve()
         {
-            (int Index, int Allocations) Marker = (0, int.MaxValue);
+            var Marker = Processors[0];
 
-            for (int i = 0; i < Processors.Length; i++)
+            for (int i = 1; i < Processors.Length; i++)
             {
                 var entry = Processors[i];
 
                 if (entry.Allocations < Marker.Allocations)
-                    Marker = (i, entry.Allocations);
+                    Marker = entry;
             }
 
-            return Processors[Marker.Index];
+            return Marker;
         }
 
         public RoomThreadDispatcher(TimeSpan TickDuration) : this(Environment.ProcessorCount, TickDuration) { }
