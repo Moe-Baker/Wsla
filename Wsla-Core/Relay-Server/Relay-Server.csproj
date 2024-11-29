@@ -20,4 +20,10 @@
 		</ProjectReference>
 	</ItemGroup>
 	
+	<ItemGroup>
+	  <None Update="Configuration.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+	
 </Project>

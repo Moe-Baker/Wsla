@@ -1,5 +1,7 @@
 ﻿using LiteNetLib;
 
+using System;
+
 using Wsla.Serialization;
 
 namespace Wsla
@@ -22,6 +24,8 @@ namespace Wsla
             else
                 return $"{Code} | {Description}";
         }
+
+        public Exception ToException() => new Exception($"Wsla Error: {this}");
 
         public WslaError(WslaErrorCode code, string description)
         {
@@ -46,7 +50,7 @@ namespace Wsla
         }
     }
 
-    public enum WslaErrorCode : ushort
+    public enum WslaErrorCode : byte
     {
         TransportFailure = 1,
         RequestDeserializationFailure = 2,

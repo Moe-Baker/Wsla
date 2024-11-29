@@ -96,7 +96,13 @@ class Program
 
             //Receive
             {
-                var payload = await query.Receive<SamplePayload>();
+                var response = await query.Receive<SamplePayload>();
+
+                if (response.IsError)
+                    throw response.Error.ToException();
+
+                var payload = response.Value;
+
                 Console.WriteLine($"Message: {payload.Text}");
             }
         }

@@ -76,8 +76,10 @@ namespace Wsla.Server
 
             public void Start()
             {
-                if (Manager.StartInManualMode(Constants.RelayRealtimePort) is false)
-                    throw new InvalidOperationException($"Can't Start Relay Server on Port {Constants.RelayRealtimePort}");
+                if (Manager.StartInManualMode(0) is false)
+                    throw new InvalidOperationException($"Can't Start Room");
+
+                NetworkLog.Trace($"Room {this} Assigned to Port {Port}");
             }
             public void Stop()
             {

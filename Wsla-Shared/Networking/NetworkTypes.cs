@@ -59,6 +59,8 @@ namespace Wsla
                 counter += 1;
             }
 
+            Add<WslaError>(ref counter);
+
             Add<ClientConnectionResponse>(ref counter);
 
             Add<ClientConnectMessage>(ref counter);
