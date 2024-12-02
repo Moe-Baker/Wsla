@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Net;
 
 using Wsla.Serialization;
 
@@ -312,6 +314,54 @@ namespace Wsla
         public CreateRoomResponse(ushort Port)
         {
             this.Port = Port;
+        }
+    }
+
+    public struct RegisterRelayRequest : IAutoNetworkSerialization
+    {
+        public ServerRegion Region;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Region);
+        }
+
+        public RegisterRelayRequest(ServerRegion Region)
+        {
+            this.Region = Region;
+        }
+    }
+    public struct RegisterRelayResponse : IAutoNetworkSerialization
+    {
+        public IPAddress Address;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Address);
+        }
+
+        public RegisterRelayResponse(IPAddress Address)
+        {
+            this.Address = Address;
+        }
+    }
+
+    public struct ListRelaysRequest : IAutoNetworkSerialization
+    {
+        public void Select(ref AutoSerializationContext context) { }
+    }
+    public struct ListRelaysResponse : IAutoNetworkSerialization
+    {
+        public Dictionary<ServerRegion, IPAddress> Regions;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Regions);
+        }
+
+        public ListRelaysResponse(Dictionary<ServerRegion, IPAddress> Regions)
+        {
+            this.Regions = Regions;
         }
     }
 }

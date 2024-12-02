@@ -7,7 +7,6 @@ namespace Wsla.Server
 {
     public static class RelayServer
     {
-        [AllowNull]
         public static ConfigurationData Configuration { get; private set; }
         public class ConfigurationData : ServerConfigurationData
         {
@@ -19,6 +18,8 @@ namespace Wsla.Server
 
             [JsonPropertyName("Realtime Thread Allowance")]
             public int RealtimeThreadAllowance { get; set; }
+
+            public ServerRegion Region { get; set; }
 
             public async Task Initialize()
             {
@@ -69,9 +70,36 @@ namespace Wsla.Server
             {
                 Server = new MessagingServer();
 
-                Server.Dispatcher.Register<CreateRoomRequest>(CreateRoomHandler);
-
                 Server.Start(Constants.RelayMessagingPort);
+            }
+        }
+
+        public static class Matchmaking
+        {
+            public static IPAddress LocalAddress { get; private set; }
+
+            public static async Task Start()
+            {
+                Messaging.Server.Dispatcher.Register<CreateRoomRequest>(CreateRoomHandler);
+
+                await Register();
+            }
+
+            async static Task Register()
+            {
+                using (var query = new MessagingQuery())
+                {
+                    var request = new RegisterRelayRequest(Configuration.Region);
+
+                    var response = await query.Transport<RegisterRelayRequest, RegisterRelayResponse>(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, request);
+
+                    if (response.IsError)
+                        throw response.Error.ToException();
+
+                    LocalAddress = response.Value.Address;
+
+                    NetworkLog.Info($"Registered with Coordinator");
+                }
             }
 
             static void CreateRoomHandler(MessagingPeer peer, ref CreateRoomRequest message)
@@ -95,6 +123,8 @@ namespace Wsla.Server
             Messaging.Start();
             Realtime.Start();
 
+            await Matchmaking.Start();
+
             while (true) Console.ReadKey();
         }
 
@@ -106,6 +136,7 @@ namespace Wsla.Server
             await Configuration.Initialize();
 
             NetworkLog.Info($"Coordinator Address: {Configuration.CoordinatorAddress}");
+            NetworkLog.Info($"Server Region: {Configuration.Region}");
         }
 
         static void ParseArguments(string[] args) { }

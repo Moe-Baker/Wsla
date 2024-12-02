@@ -372,6 +372,21 @@ namespace Wsla
         }
         #endregion
 
+        public async Task<WslaResponse<TResponse, WslaError>> Transport<[NetworkSerializationMarker] TRequest, [NetworkSerializationMarker] TResponse>(IPAddress address, ushort port, TRequest request)
+        {
+            //Connect
+            {
+                var response = await Connect(address, port);
+
+                if (response.IsError)
+                    return response.Error;
+            }
+
+            Send(request);
+
+            return await Receive<TResponse>();
+        }
+
         protected override void Reset()
         {
             base.Reset();

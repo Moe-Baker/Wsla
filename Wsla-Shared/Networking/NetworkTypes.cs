@@ -93,6 +93,12 @@ namespace Wsla
 
             Add<CreateRoomRequest>(ref counter);
             Add<CreateRoomResponse>(ref counter);
+
+            Add<RegisterRelayRequest>(ref counter);
+            Add<RegisterRelayResponse>(ref counter);
+
+            Add<ListRelaysRequest>(ref counter);
+            Add<ListRelaysResponse>(ref counter);
         }
     }
 

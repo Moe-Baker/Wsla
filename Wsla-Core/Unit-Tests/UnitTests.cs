@@ -1,5 +1,6 @@
 using LiteNetLib.Utils;
 
+using System.Net;
 using System.Text;
 
 using Wsla;
@@ -173,6 +174,27 @@ namespace SerializationTests
             Assert.Equal(original.Item6, clone.Item6);
             Assert.Equal(original.Item7, clone.Item7);
             Assert.Equal(original.Item8, clone.Item8);
+        }
+    }
+
+    public class IpAddressTests
+    {
+        [Fact]
+        public void V4Test()
+        {
+            var source = IPAddress.Loopback;
+            var clone = Duplicate(source);
+
+            Assert.True(source.Equals(clone));
+        }
+
+        [Fact]
+        public void V6Test()
+        {
+            var source = IPAddress.IPv6Loopback;
+            var clone = Duplicate(source);
+
+            Assert.True(source.Equals(clone));
         }
     }
 
@@ -366,6 +388,55 @@ namespace SerializationTests
                 "Later",
             };
             var destination = new List<string>() { "1", "2", "3", "4", "5" };
+            var marker = destination;
+
+            WriteInto(ref source, ref destination);
+
+            Assert.Equal(source, destination);
+            Assert.Same(destination, marker);
+        }
+    }
+
+    public class DictionaryTests
+    {
+        [Fact]
+        public void GeneralTest()
+        {
+            var dictionary = new Dictionary<string, string>
+            {
+                { "Hello", "World" },
+                { "Bye", "World" },
+                { "Rustle", "Mania" },
+                { "James", "Bond" },
+            };
+
+            var source = dictionary;
+            var clone = Duplicate(source);
+
+            Assert.Equal(source, clone);
+        }
+
+        [Fact]
+        public void InPlaceTest()
+        {
+            var source = new Dictionary<string, string>
+            {
+                { "Hello", "World" },
+                { "Bye", "World" },
+                { "Rustle", "Mania" },
+                { "James", "Bond" },
+            };
+
+            var destination = new Dictionary<string, string>()
+            {
+                { "1", "Bla" },
+                { "2", "Bla" },
+                { "3", "Bla" },
+                { "4", "Bla" },
+                { "5", "Bla" },
+                { "6", "Bla" },
+            };
+
             var marker = destination;
 
             WriteInto(ref source, ref destination);

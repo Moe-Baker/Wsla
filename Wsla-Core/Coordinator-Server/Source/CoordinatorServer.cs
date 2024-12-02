@@ -7,33 +7,62 @@ namespace Wsla.Server
 {
     public class CoordinatorServer
     {
-        [AllowNull]
         public static ConfigurationData Configuration { get; private set; }
         public class ConfigurationData : ServerConfigurationData
         {
-            public async Task Initialize()
-            {
-
-            }
+            public Task Initialize() => Task.CompletedTask;
         }
 
         public static class Messaging
         {
-            [AllowNull]
             public static MessagingServer Server { get; private set; }
 
             public static void Start()
             {
                 Server = new MessagingServer();
 
-                Server.Dispatcher.Register<CreateRoomRequest>(CreateRoomHandler);
-
                 Server.Start(Constants.CoordinatorMessagingPort);
             }
+        }
 
-            static void CreateRoomHandler(MessagingPeer peer, ref CreateRoomRequest message)
+        public static class Matchmaking
+        {
+            public static Dictionary<ServerRegion, IPAddress> Regions { get; private set; }
+
+            public static void Start()
             {
+                Regions = new();
 
+                Messaging.Server.Dispatcher.Register<RegisterRelayRequest>(RegisterRelayHandler);
+                Messaging.Server.Dispatcher.Register<ListRelaysRequest>(ListRelaysHandler);
+            }
+
+            static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
+            {
+                var address = (peer.Socket.RemoteEndPoint as IPEndPoint).Address;
+
+                NetworkLog.Info($"Registering ({message.Region}) Server on Address: {address}");
+
+                lock (Regions)
+                {
+                    Regions[message.Region] = address;
+                }
+
+                var response = new RegisterRelayResponse(address);
+                peer.Send(response);
+            }
+
+            static void ListRelaysHandler(MessagingPeer peer, ref ListRelaysRequest message)
+            {
+                Dictionary<ServerRegion, IPAddress> Dictionary;
+
+                lock (Regions)
+                {
+                    Dictionary = new(Regions);
+                }
+
+                var response = new ListRelaysResponse(Dictionary);
+                peer.Send(response);
             }
         }
 
@@ -46,6 +75,7 @@ namespace Wsla.Server
             ParseArguments(args);
 
             Messaging.Start();
+            Matchmaking.Start();
 
             while (true) Console.ReadKey();
         }

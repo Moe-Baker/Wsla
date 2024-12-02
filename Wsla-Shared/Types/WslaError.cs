@@ -61,5 +61,6 @@ namespace Wsla
         SyncedPrefabWithoutNetworkEntity = 7,
         NoAuthority = 8,
         NoEntityFoundInScene = 9,
+        NoRegion = 10,
     }
 }

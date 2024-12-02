@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -23,7 +22,7 @@ namespace Wsla.Generator
                 .Where(IsNotNull);
 
             var usages = methods.Combine(compilation)
-                .Select(GetGeneratorUsageType)
+                .SelectMany(GetGeneratorUsageType)
                 .Where(IsNotNull)
                 .Collect()
                 .Combine(compilation);
@@ -41,6 +40,9 @@ namespace Wsla.Generator
 
             public INamedTypeSymbol ListResolver;
             public INamedTypeSymbol ListType;
+
+            public INamedTypeSymbol DictionaryResolver;
+            public INamedTypeSymbol DictionaryType;
 
             public INamedTypeSymbol ArraySegmentResolver;
             public INamedTypeSymbol ArraySegmentType;
@@ -90,6 +92,9 @@ namespace Wsla.Generator
                     ListResolver = compilation.GetGenericTypeByMetadataName(Constants.ListNetworkSerializationResolver, 1),
                     ListType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.List", 1),
 
+                    DictionaryResolver = compilation.GetGenericTypeByMetadataName(Constants.DictionaryNetworkSerializationResolver, 2),
+                    DictionaryType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.Dictionary", 2),
+
                     ManualResolver = compilation.GetGenericTypeByMetadataName(Constants.ManualNetworkSerializationResolver, 1),
                     ManualContract = compilation.GetTypeByMetadataName(Constants.IManualNetworkSerialization),
 
@@ -132,7 +137,7 @@ namespace Wsla.Generator
             return info.Symbol as IMethodSymbol;
         }
 
-        static ITypeSymbol GetGeneratorUsageType((IMethodSymbol Method, CompilationData Compilation) input, CancellationToken token)
+        static IEnumerable<ITypeSymbol> GetGeneratorUsageType((IMethodSymbol Method, CompilationData Compilation) input, CancellationToken token)
         {
             var parameters = input.Method.TypeParameters;
             var arguments = input.Method.TypeArguments;
@@ -147,11 +152,9 @@ namespace Wsla.Generator
                     if (arguments[i] is INamedTypeSymbol named && named.IsOpenGenericType())
                         continue;
 
-                    return arguments[i];
+                    yield return arguments[i];
                 }
             }
-
-            return default;
         }
 
         static bool IsNotNull<T>(T item) where T : class => ReferenceEquals(item, null) is false;
@@ -265,6 +268,7 @@ namespace Wsla.Generator
             public static readonly string ArrayNetworkSerializationResolver = $"{Namespace}.{nameof(ArrayNetworkSerializationResolver)}";
             public static readonly string ArraySegmentNetworkSerializationResolver = $"{Namespace}.{nameof(ArraySegmentNetworkSerializationResolver)}";
             public static readonly string ListNetworkSerializationResolver = $"{Namespace}.{nameof(ListNetworkSerializationResolver)}";
+            public static readonly string DictionaryNetworkSerializationResolver = $"{Namespace}.{nameof(DictionaryNetworkSerializationResolver)}";
 
             public static readonly string ManualNetworkSerializationResolver = $"{Namespace}.{nameof(ManualNetworkSerializationResolver)}";
             public static readonly string IManualNetworkSerialization = $"{Namespace}.{nameof(IManualNetworkSerialization)}";
@@ -310,6 +314,9 @@ namespace Wsla.Generator
                     return true;
 
                 if (ResolveList(context, compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveDictionary(context, compilation, usage, resolvers))
                     return true;
 
                 if (ResolveEnum(context, compilation, usage, resolvers))
@@ -385,6 +392,29 @@ namespace Wsla.Generator
                 resolvers[usage] = compilation.ListResolver.Construct(element);
 
                 Resolve(context, compilation, element, resolvers);
+
+                return true;
+            }
+            static bool ResolveDictionary(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                var dictionary = usage as INamedTypeSymbol;
+
+                if (dictionary is null)
+                    return false;
+
+                if (dictionary.IsGenericType is false)
+                    return false;
+
+                if (CodeUtility.SymbolEquality.Equals(dictionary.ConstructedFrom, compilation.DictionaryType) is false)
+                    return false;
+
+                var key = dictionary.TypeArguments[0];
+                var value = dictionary.TypeArguments[1];
+
+                resolvers[usage] = compilation.DictionaryResolver.Construct(key, value);
+
+                Resolve(context, compilation, key, resolvers);
+                Resolve(context, compilation, value, resolvers);
 
                 return true;
             }

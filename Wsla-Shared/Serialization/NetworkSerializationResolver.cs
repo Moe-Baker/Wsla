@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 
@@ -43,7 +45,7 @@ namespace Wsla.Serialization
             internal static NetworkSerializationResolver<TValue> Instance;
         }
 
-        public static class Registeration
+        public static class Registration
         {
             public static void LoadAll()
             {
@@ -81,7 +83,9 @@ namespace Wsla.Serialization
 
             Register<string, StringNetworkSerializationResolver>();
 
-            Registeration.LoadAll();
+            Register<IPAddress, IPAddressNetworkSerializationResolver>();
+
+            Registration.LoadAll();
         }
     }
     public abstract class NetworkSerializationResolver<TValue>
@@ -159,6 +163,67 @@ namespace Wsla.Serialization
         public override void Read(ref TEnum value, INetworkStream stream)
         {
             NetworkSerializer.Helper.Blittable.Read(ref value, stream);
+        }
+    }
+
+    public class IPAddressNetworkSerializationResolver : NetworkSerializationResolver<IPAddress>
+    {
+        const int V4Size = 4;
+        const int V4ID = 1;
+
+        const int V6Size = 16;
+        const int V6ID = 2;
+
+        public override void Write(in IPAddress value, INetworkStream stream)
+        {
+            switch (value.AddressFamily)
+            {
+                case AddressFamily.InterNetwork:
+                {
+                    stream.PopByte() = V4ID;
+
+                    var span = stream.PopSpan(V4Size);
+
+                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
+                        throw new NotImplementedException();
+                }
+                break;
+
+                case AddressFamily.InterNetworkV6:
+                {
+                    stream.PopByte() = V6ID;
+
+                    var span = stream.PopSpan(V6Size);
+
+                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
+                        throw new NotImplementedException();
+                }
+                break;
+
+                default:
+                    throw new NotImplementedException("Can Only Serialize IP v4/v6 Addresses");
+            }
+        }
+        public override void Read(ref IPAddress value, INetworkStream stream)
+        {
+            var type = stream.PopByte();
+
+            switch (type)
+            {
+                case V4ID: //IPv4
+                {
+                    var span = stream.PopSpan(V4Size);
+                    value = new IPAddress(span);
+                }
+                break;
+
+                case V6ID: //IPv6
+                {
+                    var span = stream.PopSpan(V6Size);
+                    value = new IPAddress(span);
+                }
+                break;
+            }
         }
     }
 
@@ -472,6 +537,48 @@ namespace Wsla.Serialization
                 list = new List<TValue>(length);
             else if (length > list.Capacity)
                 list.Capacity = length;
+        }
+    }
+
+    public class DictionaryNetworkSerializationResolver<TKey, TValue> : NetworkSerializationResolver<Dictionary<TKey, TValue>>
+    {
+        public override void Write(in Dictionary<TKey, TValue> collection, INetworkStream stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in collection, stream))
+                return;
+
+            foreach (var (key, value) in collection)
+            {
+                NetworkSerializer.WriteValue(in key, stream);
+                NetworkSerializer.WriteValue(in value, stream);
+            }
+        }
+
+        public override void Read(ref Dictionary<TKey, TValue> collection, INetworkStream stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
+            {
+                collection = null;
+                return;
+            }
+
+            if (collection is null)
+            {
+                collection = new Dictionary<TKey, TValue>(length);
+            }
+            else
+            {
+                collection.Clear();
+                collection.EnsureCapacity(length);
+            }
+
+            for (int i = 0; i < length; i++)
+            {
+                var key = NetworkSerializer.ReadValue<TKey>(stream);
+                var value = NetworkSerializer.ReadValue<TValue>(stream);
+
+                collection.Add(key, value);
+            }
         }
     }
 

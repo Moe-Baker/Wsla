@@ -43,15 +43,14 @@ namespace Wsla.Serialization
             return buffer;
         }
 
-        public static byte PopByte<TStream>(this TStream stream)
+        public static ref byte PopByte<TStream>(this TStream stream)
             where TStream : INetworkStream
         {
-            if (stream.Available < 1)
-                throw new IndexOutOfRangeException($"No Available Byte Left to Read");
+            stream.EnsureFit(1);
 
             var buffer = stream.GetSpan(stream.Position, 1);
             stream.Position += 1;
-            return buffer[0];
+            return ref buffer[0];
         }
     }
 }
