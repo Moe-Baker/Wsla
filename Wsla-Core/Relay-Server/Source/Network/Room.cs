@@ -79,7 +79,7 @@ namespace Wsla.Server
                 if (Manager.StartInManualMode(0) is false)
                     throw new InvalidOperationException($"Can't Start Room");
 
-                NetworkLog.Trace($"Room {this} Assigned to Port {Port}");
+                NetworkLog.Info($"Room {Room} Assigned to Port {Port}");
             }
             public void Stop()
             {

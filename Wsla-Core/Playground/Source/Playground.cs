@@ -4,18 +4,21 @@ using System.Text;
 using Wsla;
 using Wsla.Serialization;
 
-class Program
+class Playground
 {
+    static IPAddress ServerAddress = IPAddress.Parse("10.0.0.10");
+
     static async Task Main()
     {
         NetworkTypes.Register<SamplePayload>(100);
 
-        NetworkLog.UseConsole();
+        NetworkLog.UseIgnore();
 
         Console.WriteLine($"Start In Mode:");
         Console.WriteLine("1. Server");
         Console.WriteLine("2. Client");
         Console.WriteLine("3. Query");
+        Console.WriteLine("4. Flood");
 
         Console.Write("Input: ");
 
@@ -34,6 +37,10 @@ class Program
             case 3:
                 await Query();
                 break;
+
+            case 4:
+                await Flood();
+                break;
         }
 
         while (true)
@@ -47,7 +54,7 @@ class Program
         server.Dispatcher.Register<SamplePayload>(MessageHandler);
         void MessageHandler(MessagingPeer peer, ref SamplePayload message)
         {
-            Console.WriteLine($"Message: {message.Text}");
+            NetworkLog.Trace($"Message: {message.Text}");
 
             peer.Send(message);
         }
@@ -65,7 +72,7 @@ class Program
             Procedure(message);
             async void Procedure(SamplePayload message)
             {
-                Console.WriteLine($"Message: {message.Text}");
+                NetworkLog.Trace($"Message: {message.Text}");
 
                 await Task.Delay(TimeSpan.FromMilliseconds(100));
 
@@ -73,7 +80,7 @@ class Program
             }
         }
 
-        await client.Connect(IPAddress.Loopback, 4040);
+        await client.Connect(ServerAddress, 4040);
 
         client.Send(new SamplePayload("Hello World"));
     }
@@ -82,32 +89,53 @@ class Program
     {
         using var query = new MessagingQuery();
 
-        await query.Connect(IPAddress.Loopback, 4040);
-
-        for (int i = 0; i < 10; i++)
+        for (int c = 0; c < 2; c++)
         {
-            //Send
+            //Connect
             {
-                var payload = new SamplePayload(GetRandomString());
-                query.Send(payload);
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-
-            //Receive
-            {
-                var response = await query.Receive<SamplePayload>();
+                var response = await query.Connect(ServerAddress, 4040);
 
                 if (response.IsError)
                     throw response.Error.ToException();
-
-                var payload = response.Value;
-
-                Console.WriteLine($"Message: {payload.Text}");
             }
-        }
 
-        query.Disconnect();
+            for (int i = 0; i < 10; i++)
+            {
+                //Send
+                {
+                    var payload = new SamplePayload(GetRandomString());
+                    query.Send(payload);
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+                //Receive
+                {
+                    var response = await query.Receive<SamplePayload>();
+
+                    if (response.IsError)
+                        throw response.Error.ToException();
+
+                    var payload = response.Value;
+
+                    NetworkLog.Trace($"Message: {payload.Text}");
+                }
+            }
+
+            await query.Disconnect();
+        }
+    }
+
+    static async Task Flood()
+    {
+        var list = new List<Task>();
+
+        for (int i = 0; i < 5_000; i++)
+            list.Add(Query());
+
+        await Task.WhenAll(list);
+
+        Console.WriteLine("Flood Finished");
     }
 
     static string GetRandomString()

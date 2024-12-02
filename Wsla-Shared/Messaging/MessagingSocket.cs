@@ -13,20 +13,36 @@ namespace Wsla
 {
     public abstract class MessagingSocket
     {
-        public Socket Socket { get; }
+        public Socket Socket { get; private set; }
 
         public bool IsConnected { get; protected set; }
 
-        public readonly CancellationTokenSource CancellationSource;
-        public CancellationToken CancellationToken => CancellationSource.Token;
+        public CancellationTokenSource CancellationSource { get; private set; }
+        public CancellationToken GetCancellationToken() => CancellationSource.Token;
 
         public const int LengthHeaderSize = 2;
+
+        protected void CreateSocket()
+        {
+            var Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+            {
+                NoDelay = true,
+            };
+
+            AssignSocket(Socket);
+        }
+        protected void AssignSocket(Socket Socket)
+        {
+            this.Socket = Socket;
+        }
 
         protected virtual void Start()
         {
             IsConnected = true;
+
+            CancellationSource = new CancellationTokenSource();
         }
-        protected virtual async void Stop()
+        protected virtual async ValueTask Stop()
         {
             if (IsConnected is false)
                 return;
@@ -41,7 +57,7 @@ namespace Wsla
             {
                 Socket.Shutdown(SocketShutdown.Both);
 
-                await DisconnectAsync(Socket);
+                await DisconnectAsync(Socket, false);
             }
             catch (SocketException ex)
             {
@@ -49,8 +65,18 @@ namespace Wsla
             }
             finally
             {
-                Socket.Close();
+                Reset();
             }
+        }
+
+        protected virtual void Reset()
+        {
+            Socket.Close();
+
+            Socket = default;
+            CancellationSource = default;
+
+            SendBuffer.Reset();
         }
 
         #region Send
@@ -60,9 +86,11 @@ namespace Wsla
 
         public async void Send<[NetworkSerializationMarker] T>(T data)
         {
+            var cancellation = GetCancellationToken();
+
             try
             {
-                await SendLock.WaitAsync(CancellationToken);
+                await SendLock.WaitAsync(cancellation);
 
                 ArraySegment<byte> LengthBuffer;
 
@@ -83,12 +111,12 @@ namespace Wsla
                 }
 
                 var memory = SendBuffer.Data.AsMemory(0, SendBuffer.Position);
-                await Socket.SendAsync(memory, SocketFlags.None, CancellationToken);
+                await Socket.SendAsync(memory, SocketFlags.None, cancellation);
             }
             catch (SocketException ex)
             {
                 NetworkLog.Error($"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}");
-                Stop();
+                await Stop();
                 return;
             }
             catch (OperationCanceledException)
@@ -105,29 +133,19 @@ namespace Wsla
 
         public override string ToString() => $"({Socket.LocalEndPoint} | {Socket.RemoteEndPoint})";
 
-        protected MessagingSocket() : this(CreateSocket()) { }
-        protected MessagingSocket(Socket Socket)
+        protected MessagingSocket()
         {
-            this.Socket = Socket;
-
             SendLock = new SemaphoreSlim(1);
             SendBuffer = new NetDataWriter(true, 128);
-
-            CancellationSource = new CancellationTokenSource();
         }
 
-        public static Socket CreateSocket() => new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-        {
-            NoDelay = true
-        };
-
-        public static async ValueTask DisconnectAsync(Socket socket)
+        public static async ValueTask DisconnectAsync(Socket socket, bool reuse)
         {
             var operation = new TaskCompletionSource<bool>();
 
             var args = new SocketAsyncEventArgs();
 
-            args.DisconnectReuseSocket = false;
+            args.DisconnectReuseSocket = reuse;
             args.Completed += (sender, args) => operation.TrySetResult(true);
 
             if (socket.DisconnectAsync(args) is false)
@@ -146,24 +164,26 @@ namespace Wsla
         }
 
         #region Receive
-        readonly NetDataWriter ReceivePacket;
+        readonly NetDataWriter ReceiveBuffer;
         int ReceiveReadLength;
 
         protected async void Receive()
         {
+            var cancellation = GetCancellationToken();
+
             while (true)
             {
                 try
                 {
-                    ReceivePacket.EnsureFit(100);
+                    ReceiveBuffer.EnsureFit(100);
 
-                    var memory = ReceivePacket.Data.AsMemory(ReceivePacket.Position);
-                    var read = await Socket.ReceiveAsync(memory, SocketFlags.None, CancellationToken);
+                    var memory = ReceiveBuffer.Data.AsMemory(ReceiveBuffer.Position);
+                    var read = await Socket.ReceiveAsync(memory, SocketFlags.None, cancellation);
 
                     if (read == 0)
                     {
-                        Stop();
-                        break;
+                        await Stop();
+                        return;
                     }
 
                     HandleReceive(read);
@@ -171,7 +191,7 @@ namespace Wsla
                 catch (SocketException ex)
                 {
                     NetworkLog.Error($"Socket Receive Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}");
-                    Stop();
+                    await Stop();
                     return;
                 }
                 catch (OperationCanceledException)
@@ -203,19 +223,19 @@ namespace Wsla
 
             //Read Length
             {
-                var buffer = ReceivePacket.PopSpan(LengthHeaderSize);
+                var buffer = ReceiveBuffer.PopSpan(LengthHeaderSize);
                 length = BitConverter.ToUInt16(buffer);
             }
 
             if (length + LengthHeaderSize > ReceiveReadLength)
             {
-                ReceivePacket.Position -= LengthHeaderSize;
+                ReceiveBuffer.Position -= LengthHeaderSize;
                 return false;
             }
 
             ReceiveReadLength -= LengthHeaderSize + length;
 
-            DispatchMessage(ReceivePacket);
+            DispatchMessage(ReceiveBuffer);
 
             return true;
         }
@@ -224,20 +244,28 @@ namespace Wsla
 
         unsafe void AlignReceiveBuffer()
         {
-            var remaining = ReceivePacket.GetSpan(ReceivePacket.Position, ReceiveReadLength);
+            var remaining = ReceiveBuffer.GetSpan(ReceiveBuffer.Position, ReceiveReadLength);
 
-            fixed (byte* ptr = ReceivePacket.Data)
+            fixed (byte* ptr = ReceiveBuffer.Data)
             {
-                Buffer.MemoryCopy((ptr + ReceivePacket.Position), ptr, ReceivePacket.Data.Length, ReceiveReadLength);
+                Buffer.MemoryCopy((ptr + ReceiveBuffer.Position), ptr, ReceiveBuffer.Data.Length, ReceiveReadLength);
             }
 
-            ReceivePacket.Position = 0;
+            ReceiveBuffer.Position = 0;
         }
         #endregion
 
-        public MessagingConnection(Socket socket) : base(socket)
+        protected override void Reset()
         {
-            ReceivePacket = new NetDataWriter(true, 128);
+            base.Reset();
+
+            ReceiveBuffer.Reset();
+        }
+
+
+        protected MessagingConnection() : base()
+        {
+            ReceiveBuffer = new NetDataWriter(true, 128);
         }
     }
 
@@ -245,12 +273,16 @@ namespace Wsla
     {
         public async Task<WslaResponse<WslaError>> Connect(IPAddress address, ushort port)
         {
+            CreateSocket();
+
             try
             {
                 await Socket.ConnectAsync(address, port);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                NetworkLog.Error($"Exception: {ex}");
+
                 return WslaError.From(WslaErrorCode.TransportFailure);
             }
 
@@ -258,16 +290,18 @@ namespace Wsla
 
             return WslaResponse<WslaError>.Success;
         }
-        public void Disconnect() => Stop();
+        public ValueTask Disconnect() => Stop();
 
         void IDisposable.Dispose() => Disconnect();
 
         #region Receive
-        readonly NetDataWriter ReceivePacket;
+        readonly NetDataWriter ReceiveBuffer;
         int ReceiveReadLength;
 
         public async Task<WslaResponse<T, WslaError>> Receive<[NetworkSerializationMarker] T>()
         {
+            var cancellation = GetCancellationToken();
+
             try
             {
                 while (true)
@@ -278,10 +312,10 @@ namespace Wsla
                         return data;
                     }
 
-                    ReceivePacket.EnsureFit(100);
+                    ReceiveBuffer.EnsureFit(100);
 
-                    var memory = ReceivePacket.Data.AsMemory(ReceivePacket.Position);
-                    var read = await Socket.ReceiveAsync(memory, SocketFlags.None, CancellationToken);
+                    var memory = ReceiveBuffer.Data.AsMemory(ReceiveBuffer.Position);
+                    var read = await Socket.ReceiveAsync(memory, SocketFlags.None, cancellation);
 
                     ReceiveReadLength += read;
                 }
@@ -289,7 +323,7 @@ namespace Wsla
             catch (SocketException ex)
             {
                 NetworkLog.Error($"Socket Receive Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}");
-                Stop();
+                await Stop();
                 throw;
             }
         }
@@ -300,25 +334,25 @@ namespace Wsla
 
             //Read Length
             {
-                var buffer = ReceivePacket.PopSpan(LengthHeaderSize);
+                var buffer = ReceiveBuffer.PopSpan(LengthHeaderSize);
                 length = BitConverter.ToUInt16(buffer);
             }
 
             if (length + LengthHeaderSize > ReceiveReadLength)
             {
-                ReceivePacket.Position -= LengthHeaderSize;
+                ReceiveBuffer.Position -= LengthHeaderSize;
                 response = default;
                 return false;
             }
 
             ReceiveReadLength -= LengthHeaderSize + length;
 
-            var type = NetworkSerializer.ReadValue<Type>(ReceivePacket);
+            var type = NetworkSerializer.ReadValue<Type>(ReceiveBuffer);
 
             if (type == typeof(T))
-                response = NetworkSerializer.ReadValue<T>(ReceivePacket);
+                response = NetworkSerializer.ReadValue<T>(ReceiveBuffer);
             else if (type == typeof(WslaError))
-                response = NetworkSerializer.ReadValue<WslaError>(ReceivePacket);
+                response = NetworkSerializer.ReadValue<WslaError>(ReceiveBuffer);
             else
                 throw new InvalidCastException($"Cannot Read Packet for Type {type} as {typeof(T)}");
 
@@ -327,20 +361,27 @@ namespace Wsla
 
         unsafe void AlignReceiveBuffer()
         {
-            var remaining = ReceivePacket.GetSpan(ReceivePacket.Position, ReceiveReadLength);
+            var remaining = ReceiveBuffer.GetSpan(ReceiveBuffer.Position, ReceiveReadLength);
 
-            fixed (byte* ptr = ReceivePacket.Data)
+            fixed (byte* ptr = ReceiveBuffer.Data)
             {
-                Buffer.MemoryCopy((ptr + ReceivePacket.Position), ptr, ReceivePacket.Data.Length, ReceiveReadLength);
+                Buffer.MemoryCopy((ptr + ReceiveBuffer.Position), ptr, ReceiveBuffer.Data.Length, ReceiveReadLength);
             }
 
-            ReceivePacket.Position = 0;
+            ReceiveBuffer.Position = 0;
         }
         #endregion
 
+        protected override void Reset()
+        {
+            base.Reset();
+
+            ReceiveBuffer.Reset();
+        }
+
         public MessagingQuery()
         {
-            ReceivePacket = new NetDataWriter(true, 128);
+            ReceiveBuffer = new NetDataWriter(true, 128);
         }
     }
 
@@ -386,17 +427,30 @@ namespace Wsla
             }
         }
 
-        public async Task Connect(IPAddress address, ushort port)
+        public async Task<WslaResponse<WslaError>> Connect(IPAddress address, ushort port)
         {
-            await Socket.ConnectAsync(address, port);
+            CreateSocket();
+
+            try
+            {
+                await Socket.ConnectAsync(address, port);
+            }
+            catch (Exception ex)
+            {
+                NetworkLog.Error($"Exception: {ex}");
+
+                return WslaError.From(WslaErrorCode.TransportFailure);
+            }
 
             Start();
+
+            return WslaResponse<WslaError>.Success;
         }
-        public void Disconnect() => Stop();
+        public ValueTask Disconnect() => Stop();
 
         protected override void DispatchMessage(NetDataWriter writer) => Dispatcher.Dispatch(writer);
 
-        public MessagingClient() : base(CreateSocket())
+        public MessagingClient() : base()
         {
             Dispatcher = new DispatcherProperty();
         }
@@ -449,6 +503,8 @@ namespace Wsla
         public void Start(int port) => Start(IPAddress.Any, port);
         public void Start(IPAddress address, int port)
         {
+            CreateSocket();
+
             var endpoint = new IPEndPoint(address, port);
             Socket.Bind(endpoint);
 
@@ -457,14 +513,12 @@ namespace Wsla
             Poll();
         }
 
-        public void End() => Stop();
-
         public async void Poll()
         {
             while (true)
             {
                 var socket = await Socket.AcceptAsync();
-                var peer = new MessagingPeer(socket, this);
+                var peer = new MessagingPeer(this, socket);
 
                 lock (Peers)
                 {
@@ -478,6 +532,18 @@ namespace Wsla
             lock (Peers)
             {
                 Peers.Remove(peer);
+            }
+        }
+
+        public ValueTask End() => Stop();
+
+        protected override void Reset()
+        {
+            base.Reset();
+
+            lock (Peers)
+            {
+                Peers.Clear();
             }
         }
 
@@ -498,19 +564,21 @@ namespace Wsla
             Stop();
         }
 
-        protected override void Stop()
+        protected override ValueTask Stop()
         {
-            base.Stop();
-
             Server.Remove(this);
+
+            return base.Stop();
         }
 
         protected override void DispatchMessage(NetDataWriter packet) => Server.Dispatcher.Dispatch(this, packet);
 
         readonly MessagingServer Server;
-        internal MessagingPeer(Socket Socket, MessagingServer Server) : base(Socket)
+        internal MessagingPeer(MessagingServer Server, Socket Socket) : base()
         {
             this.Server = Server;
+
+            AssignSocket(Socket);
 
             Start();
         }

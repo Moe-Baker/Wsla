@@ -49,5 +49,42 @@ namespace Wsla
 
         public static bool operator >(NetworkVersion left, NetworkVersion right) => left.Numerical > right.Numerical;
         public static bool operator <(NetworkVersion left, NetworkVersion right) => left.Numerical < right.Numerical;
+
+        public static bool TryParse(string text, out NetworkVersion version)
+        {
+            var parts = text.Split('.');
+
+            if (TryParseSegment(parts, 0, out var major) is false)
+            {
+                version = default;
+                return false;
+            }
+
+            if (TryParseSegment(parts, 1, out var minor) is false)
+            {
+                version = default;
+                return false;
+            }
+
+            if (TryParseSegment(parts, 2, out var patch) is false)
+            {
+                version = default;
+                return false;
+            }
+
+            static bool TryParseSegment(string[] parts, int index, out byte destination)
+            {
+                if (index >= parts.Length)
+                {
+                    destination = 0;
+                    return false;
+                }
+
+                return byte.TryParse(parts[index], out destination);
+            }
+
+            version = new NetworkVersion(major, minor, patch);
+            return true;
+        }
     }
 }

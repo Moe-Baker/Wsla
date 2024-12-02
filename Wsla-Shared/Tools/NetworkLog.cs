@@ -9,27 +9,25 @@ namespace Wsla
 
         static object ThreadLock = new object();
 
-        public static void UseConsole()
+        public static void UseConsole() => Handler = (type, item) =>
         {
-            Handler = (type, item) =>
+            lock (ThreadLock)
             {
-                lock (ThreadLock)
+                Console.ForegroundColor = type switch
                 {
-                    Console.ForegroundColor = type switch
-                    {
-                        NetworkLogType.Trace => ConsoleColor.White,
-                        NetworkLogType.Info => ConsoleColor.DarkGreen,
-                        NetworkLogType.Warning => ConsoleColor.DarkYellow,
-                        NetworkLogType.Error => ConsoleColor.DarkRed,
-                        _ => throw new NotImplementedException(),
-                    };
+                    NetworkLogType.Trace => ConsoleColor.White,
+                    NetworkLogType.Info => ConsoleColor.DarkGreen,
+                    NetworkLogType.Warning => ConsoleColor.DarkYellow,
+                    NetworkLogType.Error => ConsoleColor.DarkRed,
+                    _ => throw new NotImplementedException(),
+                };
 
-                    Console.WriteLine($"[{type}] [{DateTime.Now}]: {item}");
+                Console.WriteLine($"[{type}] [{DateTime.Now}]: {item}");
 
-                    Console.ResetColor();
-                }
-            };
-        }
+                Console.ResetColor();
+            }
+        };
+        public static void UseIgnore() => Handler = (type, item) => { };
 
         public static void Submit(NetworkLogType type, object item)
         {
