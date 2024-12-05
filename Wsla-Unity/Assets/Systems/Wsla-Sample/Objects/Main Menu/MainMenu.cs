@@ -14,21 +14,17 @@ public class MainMenu : MonoBehaviour
 
     void Start() => Initialize().Forget();
 
-    static bool IsApiInitialized;
-
     async UniTaskVoid Initialize()
     {
         Application.runInBackground = true;
 
-        if (IsApiInitialized is false)
+        if (NetworkAPI.IsPrepared is false)
         {
             StartButton.interactable = false;
             {
                 await NetworkAPI.Prepare();
             }
             StartButton.interactable = true;
-
-            IsApiInitialized = true;
         }
 
         StartButton.onClick.AddListener(() => CreateRoom().Forget());
@@ -40,7 +36,7 @@ public class MainMenu : MonoBehaviour
 
         //Create Room
         {
-            var request = new CreateRoomRequest("SAMPLE-ROOM-NAME", 10);
+            var request = new CreateRoomRequest("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
             var response = await NetworkAPI.MatchMaking.CreateRoom(ServerRegion.EU, request);
 
             if (response.IsError)
@@ -54,7 +50,7 @@ public class MainMenu : MonoBehaviour
 
         //Connect to Room
         {
-            var request = new ClientConnectionRequest("SAMPLE-USERNAME");
+            var request = new ClientConnectionRequest("SAMPLE-USERNAME", "HELLO-WORLD");
             var response = await NetworkAPI.Room.Connect(ConnectionInfo, request);
 
             if (response.IsError)

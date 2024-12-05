@@ -359,7 +359,7 @@ namespace Wsla.Unity
                     return response.Error;
                 }
 
-                Listener.OnPeerDisconnected += DisconnectCallback;
+                Listener.OnPeerDisconnected += (peer, info) => Room.Disconnect(info);
 
                 return true;
             }
@@ -372,11 +372,6 @@ namespace Wsla.Unity
                 API.NetworkUpdate.OnLateUpdate -= SendData;
 
                 Listener.Dispose();
-            }
-
-            void DisconnectCallback(NetPeer peer, DisconnectInfo info)
-            {
-                NetworkLog.Error($"Peer: {peer.Id}, Is Local: {peer == this.Peer}, Info: {info.Reason}");
             }
 
             void PollEvents() => Manager.PollEvents();

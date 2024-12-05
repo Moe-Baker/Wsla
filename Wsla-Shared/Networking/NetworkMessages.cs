@@ -9,17 +9,20 @@ namespace Wsla
     public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
         public FixedString20 Username;
+        public FixedString20 Password;
 
         public override string ToString() => $"(Username: {Username})";
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Username);
+            context.Select(ref Password);
         }
 
-        public ClientConnectionRequest(FixedString20 Username)
+        public ClientConnectionRequest(FixedString20 Username, FixedString20 Password)
         {
             this.Username = Username;
+            this.Password = Password;
         }
     }
     [NetworkBlittable]
@@ -289,17 +292,20 @@ namespace Wsla
     {
         public FixedString40 Name;
         public byte Capacity;
+        public FixedString20 Password;
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Name);
             context.Select(ref Capacity);
+            context.Select(ref Password);
         }
 
-        public CreateRoomRequest(FixedString40 Name, byte Capacity)
+        public CreateRoomRequest(FixedString40 Name, byte Capacity, FixedString20 Password)
         {
             this.Name = Name;
             this.Capacity = Capacity;
+            this.Password = Password;
         }
     }
     public struct CreateRoomResponse : IAutoNetworkSerialization

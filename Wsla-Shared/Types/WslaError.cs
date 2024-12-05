@@ -62,5 +62,7 @@ namespace Wsla
         NoAuthority = 8,
         NoEntityFoundInScene = 9,
         NoRegion = 10,
+        CapacityFull = 11,
+        InvalidPassword = 12,
     }
 }

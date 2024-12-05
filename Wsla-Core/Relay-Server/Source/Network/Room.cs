@@ -13,9 +13,54 @@ namespace Wsla.Server
         public FixedString40 Name { get; }
 
         RoomThreadDispatcher.Processor? ThreadProcessor;
-        public Room? Next { get; internal set; }
-        public Room? Previous { get; internal set; }
         internal RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
+
+        public byte Capacity { get; }
+        public byte Occupancy => Clients.Count;
+        public bool IsFull => Occupancy >= Capacity;
+
+        public bool Visible { get; private set; }
+
+        public FixedString20 Password { get; private set; }
+        public bool Private => Password.Length > 0;
+
+        public InactivityMonitorProperty InactivityMonitor { get; }
+        public class InactivityMonitorProperty
+        {
+            public bool Active { get; private set; }
+
+            TimeSpan Timer;
+            TimeSpan Duration = TimeSpan.FromSeconds(60);
+
+            public void Start()
+            {
+                Active = true;
+                Timer = TimeSpan.Zero;
+            }
+            public void Stop()
+            {
+                Active = false;
+            }
+
+            internal void Increment(TimeSpan duration)
+            {
+                if (Active is false)
+                    return;
+
+                Timer += duration;
+
+                if (Timer >= Duration)
+                    Room.Stop();
+            }
+
+            readonly Room Room;
+            public InactivityMonitorProperty(Room Room)
+            {
+                this.Room = Room;
+
+                Active = true;
+            }
+        }
 
         public TransportProperty Transport { get; }
         public class TransportProperty
@@ -83,7 +128,7 @@ namespace Wsla.Server
             }
             public void Stop()
             {
-                Manager.Stop(false);
+                Manager.Stop(true);
             }
 
             public void SendData<[NetworkSerializationMarker] T>(NetworkClient client, in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered)
@@ -197,6 +242,13 @@ namespace Wsla.Server
             {
                 NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
 
+                if (Room.IsFull)
+                {
+                    NetworkLog.Error($"Room {Room} Full, Connection Request Rejected");
+                    RejectConnection(request, WslaErrorCode.CapacityFull);
+                    return;
+                }
+
                 var reader = request.Data;
 
                 ClientConnectionRequest data;
@@ -214,12 +266,19 @@ namespace Wsla.Server
 
                 NetworkLog.Info($"Connection Request from {data}");
 
+                //Check Password
+                if (Room.Private && Room.Password != data.Password)
+                {
+                    NetworkLog.Error($"Room {Room} Client Password Mismatch, Expected ({Room.Password}) Got ({data.Password}), Connection Request Rejected");
+                    RejectConnection(request, WslaErrorCode.InvalidPassword);
+                    return;
+                }
+
                 //Reserve Client ID
                 if (IDGenerator.TryReserve(out var id) is false)
                 {
-                    NetworkLog.Error($"Room {Room} Client ID Generatror Overloaded, Connection Request Rejected");
+                    NetworkLog.Error($"Room {Room} Client ID Generator Overloaded, Connection Request Rejected");
                     RejectConnection(request, WslaErrorCode.ClientIDGeneratorOverloaded);
-
                     return;
                 }
 
@@ -257,10 +316,11 @@ namespace Wsla.Server
             void ConnectHandler(NetPeer peer)
             {
                 var client = RetrieveFromPeer(peer);
-
                 client.AssignPeer(peer);
 
                 NetworkLog.Info($"Client {client} Connected");
+
+                Room.InactivityMonitor.Stop();
 
                 Collection.Add(client.ID.Value, client);
 
@@ -381,6 +441,7 @@ namespace Wsla.Server
             NetworkClient RetrieveFromPeer(NetPeer peer)
             {
                 var client = peer.Tag as NetworkClient;
+
                 if (client is null)
                     throw new Exception($"No Client Assigned to Peer {peer}");
 
@@ -923,7 +984,12 @@ namespace Wsla.Server
         }
 
         public void Receive() => Transport.Receive();
-        public void Send(TimeSpan elapsed) => Transport.Send(elapsed);
+        public void Send(TimeSpan elapsed)
+        {
+            Transport.Send(elapsed);
+
+            InactivityMonitor.Increment(elapsed);
+        }
 
         void WriteState(NetworkClient client, NetDataWriter writer)
         {
@@ -956,8 +1022,13 @@ namespace Wsla.Server
 
         public Room(CreateRoomRequest request)
         {
-            this.Name = request.Name;
+            Name = request.Name;
+            Capacity = request.Capacity;
+            Password = request.Password;
 
+            Visible = false; //Rooms always start invisible, and turn visible optionally
+
+            InactivityMonitor = new InactivityMonitorProperty(this);
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);

@@ -166,7 +166,7 @@ namespace Wsla
         public static implicit operator FixedString20(ReadOnlySpan<char> characters) => new(characters);
 
         public static bool operator ==(FixedString20 left, FixedString20 right) => left.Equals(right);
-        public static bool operator !=(FixedString20 left, FixedString20 right) => left.Equals(right);
+        public static bool operator !=(FixedString20 left, FixedString20 right) => !left.Equals(right);
     }
     public unsafe struct FixedString40 : IFixedString, IComparable<FixedString40>, IEquatable<FixedString40>
     {
@@ -207,7 +207,7 @@ namespace Wsla
         public static implicit operator FixedString40(ReadOnlySpan<char> characters) => new(characters);
 
         public static bool operator ==(FixedString40 left, FixedString40 right) => left.Equals(right);
-        public static bool operator !=(FixedString40 left, FixedString40 right) => left.Equals(right);
+        public static bool operator !=(FixedString40 left, FixedString40 right) => !left.Equals(right);
     }
     public unsafe struct FixedString60 : IFixedString, IComparable<FixedString60>, IEquatable<FixedString60>
     {
@@ -248,7 +248,7 @@ namespace Wsla
         public static implicit operator FixedString60(ReadOnlySpan<char> characters) => new(characters);
 
         public static bool operator ==(FixedString60 left, FixedString60 right) => left.Equals(right);
-        public static bool operator !=(FixedString60 left, FixedString60 right) => left.Equals(right);
+        public static bool operator !=(FixedString60 left, FixedString60 right) => !left.Equals(right);
     }
     public unsafe struct FixedString80 : IFixedString, IComparable<FixedString80>, IEquatable<FixedString80>
     {
@@ -289,7 +289,7 @@ namespace Wsla
         public static implicit operator FixedString80(ReadOnlySpan<char> characters) => new(characters);
 
         public static bool operator ==(FixedString80 left, FixedString80 right) => left.Equals(right);
-        public static bool operator !=(FixedString80 left, FixedString80 right) => left.Equals(right);
+        public static bool operator !=(FixedString80 left, FixedString80 right) => !left.Equals(right);
     }
 
     public unsafe class FixedStringNetworkSerializationResolver<TString> : NetworkSerializationResolver<TString>

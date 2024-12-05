@@ -72,6 +72,13 @@ public partial class Level : NetworkBehaviour
     {
         while (true)
         {
+            Network.Room.Entities.Spawn()
+                .SetResource(new NetworkEntityResource(0))
+                .SetAuthority(NetworkEntityAuthorityMode.Explicit)
+                .WriteTrait(new Vector3(UnityEngine.Random.Range(-5, 5), 0, UnityEngine.Random.Range(-5, 5)))
+                .SetAuthority(NetworkEntityAuthorityMode.Transferable)
+                .Send();
+
             try
             {
                 await UniTask.Delay(TimeSpan.FromMilliseconds(500), cancellationToken: OnDestroyCancellationToken);
@@ -84,13 +91,6 @@ public partial class Level : NetworkBehaviour
             if (OnDestroyCancellationToken.IsCancellationRequested)
                 return;
 
-            Network.Room.Entities.Spawn()
-                .SetResource(new NetworkEntityResource(0))
-                .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-                .WriteTrait(new Vector3(UnityEngine.Random.Range(-5, 5), 0, UnityEngine.Random.Range(-5, 5)))
-                .SetAuthority(NetworkEntityAuthorityMode.Transferable)
-                .Send();
-
             break;
         }
     }
@@ -99,13 +99,5 @@ public partial class Level : NetworkBehaviour
     {
         Network.API.Room.Disconnect();
         SceneManager.LoadScene("Main Menu");
-    }
-}
-
-static class TaskExtensions
-{
-    static TaskExtensions()
-    {
-
     }
 }

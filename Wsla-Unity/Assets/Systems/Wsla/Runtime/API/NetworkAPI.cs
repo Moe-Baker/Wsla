@@ -106,6 +106,13 @@ namespace Wsla.Unity
             }
         }
 
+        protected override void Dispose()
+        {
+            base.Dispose();
+
+            IsPrepared = false;
+        }
+
         [HideInCallstack]
         void LogHandler(NetworkLogType type, object item)
         {
