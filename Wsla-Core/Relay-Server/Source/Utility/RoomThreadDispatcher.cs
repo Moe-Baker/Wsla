@@ -1,6 +1,5 @@
 ﻿using LiteNetLib.Utils;
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace Wsla.Server
@@ -16,14 +15,12 @@ namespace Wsla.Server
 
             internal volatile int Allocations;
 
-            readonly ConcurrentBag<Room> Registerations;
+            readonly List<Room> Registrations;
+            readonly List<Room> Collection;
 
             readonly TimeSpan TickDuration;
 
-            Room? First;
-            Room? Last;
-
-            Stopwatch Stopwatch;
+            readonly Stopwatch Stopwatch;
 
             public PoolsProperty Pools { get; }
             public struct PoolsProperty
@@ -41,23 +38,34 @@ namespace Wsla.Server
             }
 
             /// <summary>
-            /// Thread safe registeration
+            /// Thread safe registration
             /// </summary>
             public void Register(Room item)
             {
-                Registerations.Add(item);
+                lock (Registrations)
+                {
+                    Registrations.Add(item);
+                }
 
                 Interlocked.Increment(ref Allocations);
             }
-
             /// <summary>
-            /// Not thread safe unregisteration 
+            /// Not thread safe un-registration 
             /// </summary>
             public void Unregister(Room item)
             {
                 Remove(item);
 
                 Interlocked.Decrement(ref Allocations);
+            }
+
+            void Add(Room item)
+            {
+                Collection.Add(item);
+            }
+            void Remove(Room item)
+            {
+                Collection.Remove(item);
             }
 
             void Tick()
@@ -71,34 +79,27 @@ namespace Wsla.Server
                     Stopwatch.Restart();
 
                     //Add
+                    lock (Registrations)
                     {
-                        while (Registerations.TryTake(out var item))
-                            Add(item);
+                        Collection.AddRange(Registrations);
+                        Registrations.Clear();
                     }
 
                     //Receive
                     {
-                        var pointer = First;
-
-                        while (pointer is not null)
-                        {
-                            pointer.Receive();
-                            pointer = pointer.Next;
-                        }
+                        for (int i = Collection.Count - 1; i >= 0; i--)
+                            Collection[i].Receive();
                     }
 
                     //Send
                     {
-                        var pointer = First;
-
-                        while (pointer is not null)
+                        for (int i = Collection.Count - 1; i >= 0; i--)
                         {
                             var deltaTime = elapsed + Stopwatch.Elapsed;
 
                             //NetworkLog.Trace($"Delta Time: {(deltaTime}ms");
 
-                            pointer.Send(deltaTime);
-                            pointer = pointer.Next;
+                            Collection[i].Send(deltaTime);
                         }
                     }
 
@@ -122,58 +123,13 @@ namespace Wsla.Server
                 }
             }
 
-            void Add(Room item)
-            {
-                if (First is null)
-                {
-                    First = item;
-                    Last = item;
-                }
-                else
-                {
-                    Last.Next = item;
-                    Last = item;
-                }
-            }
-            void Remove(Room item)
-            {
-                if (item == First)
-                {
-                    if (First == Last)
-                    {
-                        First = null;
-                        Last = null;
-                    }
-                    else
-                    {
-                        First = item.Next;
-                        First.Previous = default;
-                    }
-                }
-                else if (item == Last)
-                {
-                    Last = item.Previous;
-                    Last.Next = null;
-                }
-                else
-                {
-                    var previous = item.Previous;
-                    var next = item.Next;
-
-                    previous.Next = next;
-                    next.Previous = previous;
-                }
-
-                item.Next = null;
-                item.Previous = null;
-            }
-
             public Processor(int ID, TimeSpan TickDuration)
             {
                 this.ID = ID;
                 this.TickDuration = TickDuration;
 
-                Registerations = new ConcurrentBag<Room>();
+                Registrations = new List<Room>();
+                Collection = new List<Room>();
 
                 Stopwatch = new Stopwatch();
 

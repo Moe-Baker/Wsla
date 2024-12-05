@@ -5,6 +5,10 @@ using Toolbox;
 
 using UnityEngine;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace Wsla.Unity
 {
     [Serializable]
@@ -46,5 +50,30 @@ namespace Wsla.Unity
                     throw new InvalidOperationException($"Duplicate Prefab ({prefab}) Found in SyncedAssets");
             }
         }
+
+#if UNITY_EDITOR
+        [CustomPropertyDrawer(typeof(SyncedPrefabsAPI))]
+        class Drawer : PropertyDrawer
+        {
+            void Init(SerializedProperty property, out SerializedProperty names)
+            {
+                names = property.FindBackingFieldRelative(nameof(SyncedPrefabsAPI.Collection));
+            }
+
+            public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+            {
+                Init(property, out var names);
+
+                return EditorGUI.GetPropertyHeight(names, label, true);
+            }
+
+            public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
+            {
+                Init(property, out var names);
+
+                EditorGUI.PropertyField(rect, names, label, true);
+            }
+        }
+#endif
     }
 }

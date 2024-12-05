@@ -296,7 +296,7 @@ namespace Wsla.Server
             {
                 var client = RetrieveFromPeer(peer);
 
-                NetworkLog.Info($"Client {client} Disconnected");
+                NetworkLog.Info($"Client {client} Disconnected, Reason: {info.Reason}");
 
                 Collection.Remove(client.ID.Value);
 

@@ -1,7 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Net.Sockets;
-using System.Net;
-using System.Text.Json.Serialization;
+﻿using System.Net;
 
 namespace Wsla.Server
 {
@@ -17,10 +14,13 @@ namespace Wsla.Server
         {
             public static MessagingServer Server { get; private set; }
 
-            public static void Start()
+            public static void Initialize()
             {
                 Server = new MessagingServer();
+            }
 
+            public static void Start()
+            {
                 Server.Start(Constants.CoordinatorMessagingPort);
             }
         }
@@ -29,7 +29,7 @@ namespace Wsla.Server
         {
             public static Dictionary<ServerRegion, IPAddress> Regions { get; private set; }
 
-            public static void Start()
+            public static void Initialize()
             {
                 Regions = new();
 
@@ -74,8 +74,16 @@ namespace Wsla.Server
 
             ParseArguments(args);
 
-            Messaging.Start();
-            Matchmaking.Start();
+            //Initialize
+            {
+                Messaging.Initialize();
+                Matchmaking.Initialize();
+            }
+
+            //Start
+            {
+                Messaging.Start();
+            }
 
             while (true) Console.ReadKey();
         }

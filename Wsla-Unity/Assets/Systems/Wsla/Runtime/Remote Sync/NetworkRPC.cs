@@ -16,6 +16,8 @@ namespace Wsla.Unity
         public NetworkEntity.Behaviour Behaviour { get; private set; }
         public NetworkEntity Entity => Behaviour.Entity;
 
+        public abstract int ParameterCount { get; }
+
         public NetworkRpcID ID { get; private set; }
 
         internal void Set(NetworkRpcID ID, NetworkEntity.Behaviour Behaviour)
@@ -44,6 +46,8 @@ namespace Wsla.Unity
 
     public class RpcBind : BaseRpcBind<RpcDelegate>
     {
+        public override int ParameterCount => 0;
+
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
             Method(info);
@@ -55,6 +59,8 @@ namespace Wsla.Unity
 
     public class StreamRpcBind : BaseRpcBind<RpcDelegate<INetworkStream>>
     {
+        public override int ParameterCount => 1;
+
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
             Method.Invoke(reader, info);
@@ -66,6 +72,8 @@ namespace Wsla.Unity
     public class RpcBind<T1> : BaseRpcBind<RpcDelegate<T1>>
     {
         T1 arg1;
+
+        public override int ParameterCount => 1;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -82,6 +90,8 @@ namespace Wsla.Unity
     {
         T1 arg1;
         T2 arg2;
+
+        public override int ParameterCount => 2;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -100,6 +110,8 @@ namespace Wsla.Unity
         T1 arg1;
         T2 arg2;
         T3 arg3;
+
+        public override int ParameterCount => 3;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -120,6 +132,8 @@ namespace Wsla.Unity
         T2 arg2;
         T3 arg3;
         T4 arg4;
+
+        public override int ParameterCount => 4;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -142,6 +156,8 @@ namespace Wsla.Unity
         T3 arg3;
         T4 arg4;
         T5 arg5;
+
+        public override int ParameterCount => 5;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -166,6 +182,8 @@ namespace Wsla.Unity
         T4 arg4;
         T5 arg5;
         T6 arg6;
+
+        public override int ParameterCount => 6;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -278,14 +296,26 @@ namespace Wsla.Unity
             return this;
         }
 
+        void ValidateParameterCount(int count)
+        {
+            if (Bind.ParameterCount == count)
+                return;
+
+            throw new ArgumentException($"Parameter Count Mismatch, Expected {Bind.ParameterCount}; Got {count}");
+        }
+
         public RpcInvocationBuilder Arguments<T1>(T1 arg1)
         {
+            ValidateParameterCount(1);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
 
             return this;
         }
         public RpcInvocationBuilder Arguments<T1, T2>(T1 arg1, T2 arg2)
         {
+            ValidateParameterCount(2);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
 
@@ -293,6 +323,8 @@ namespace Wsla.Unity
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
+            ValidateParameterCount(3);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
@@ -301,6 +333,8 @@ namespace Wsla.Unity
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
         {
+            ValidateParameterCount(4);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
@@ -310,6 +344,8 @@ namespace Wsla.Unity
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
         {
+            ValidateParameterCount(5);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
@@ -320,6 +356,8 @@ namespace Wsla.Unity
         }
         public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
         {
+            ValidateParameterCount(6);
+
             NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
             NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
@@ -354,7 +392,7 @@ namespace Wsla.Unity
             }
         }
 
-        void ValidateReplicationSettings()
+        void ValidateFinalConfiguration()
         {
             if (Bind.Entity.IsReplicated is false)
             {
@@ -370,6 +408,9 @@ namespace Wsla.Unity
                     NetworkLog.Warning($"Can only Send on channel {Channel} via {Bind.Entity} while it's not Replicated");
                 }
             }
+
+            if (ArgumentsWriter.Length is 0 && Bind.ParameterCount is not 0)
+                throw new InvalidOperationException($"No Arguments Provided for RPC Expecting {Bind.ParameterCount} Parameters");
         }
 
         /// <summary>
@@ -377,7 +418,7 @@ namespace Wsla.Unity
         /// </summary>
         public void Broadcast()
         {
-            ValidateReplicationSettings();
+            ValidateFinalConfiguration();
 
             //Remote
             {
@@ -400,7 +441,7 @@ namespace Wsla.Unity
         /// </summary>
         public void Buffer()
         {
-            ValidateReplicationSettings();
+            ValidateFinalConfiguration();
 
             var parameters = GetParameters();
             var request = new BufferNetworkRpcRequest(BufferMode, parameters);
@@ -423,7 +464,7 @@ namespace Wsla.Unity
         /// <param name="Target"></param>
         public void Target(NetworkClientID Target)
         {
-            ValidateReplicationSettings();
+            ValidateFinalConfiguration();
 
             if (BufferMode is not RemoteBufferMode.None)
                 NetworkLog.Warning($"Target RPCs Cannot be Buffered, Assigned Buffering Mode will be Ignored");

@@ -12,6 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15069150ced99384289bbf16b28ca57f, type: 3}
   m_Name: Network API
   m_EditorClassIdentifier: 
+  <CoordinatorAddress>k__BackingField:
+    <Hostname>k__BackingField: 10.0.0.10
+  <GameID>k__BackingField:
+    <Override>k__BackingField: 0
+    Manual: 
+  <GameVersion>k__BackingField:
+    <Override>k__BackingField: 0
+    Major: 0
+    Minor: 0
+    Patch: 0
   <Tick>k__BackingField:
     <Rate>k__BackingField: 60
   <Channels>k__BackingField:

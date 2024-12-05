@@ -1,10 +1,4 @@
-using System.Net;
-
 using Cysharp.Threading.Tasks;
-
-using LiteNetLib.Utils;
-
-using Toolbox;
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,28 +6,30 @@ using UnityEngine.UI;
 using Wsla;
 using Wsla.Unity;
 
-public class Sandbox : MonoBehaviour
+public class MainMenu : MonoBehaviour
 {
     public Button StartButton;
-
-    public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
-    {
-        return ButtonFieldOperation.None;
-    });
 
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
 
     void Start() => Initialize().Forget();
 
+    static bool IsApiInitialized;
+
     async UniTaskVoid Initialize()
     {
         Application.runInBackground = true;
 
-        StartButton.interactable = false;
+        if (IsApiInitialized is false)
         {
-            await NetworkAPI.Prepare();
+            StartButton.interactable = false;
+            {
+                await NetworkAPI.Prepare();
+            }
+            StartButton.interactable = true;
+
+            IsApiInitialized = true;
         }
-        StartButton.interactable = true;
 
         StartButton.onClick.AddListener(() => CreateRoom().Forget());
     }

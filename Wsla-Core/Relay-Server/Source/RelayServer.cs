@@ -1,5 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
 using System.Text.Json.Serialization;
 
@@ -10,14 +9,16 @@ namespace Wsla.Server
         public static ConfigurationData Configuration { get; private set; }
         public class ConfigurationData : ServerConfigurationData
         {
-            [JsonInclude, JsonPropertyName("Coordinator Hostname"), AllowNull]
+            [JsonInclude, JsonPropertyName("Coordinator Hostname")]
             string CoordinatorHostname;
 
-            [AllowNull]
             public IPAddress CoordinatorAddress { get; private set; }
 
             [JsonPropertyName("Realtime Thread Allowance")]
             public int RealtimeThreadAllowance { get; set; }
+
+            [JsonPropertyName("Realtime Fixed Time")]
+            public ushort RealtimeFixedTime { get; set; }
 
             public ServerRegion Region { get; set; }
 
@@ -41,14 +42,14 @@ namespace Wsla.Server
 
         public static class Realtime
         {
-            [AllowNull]
             public static RoomThreadDispatcher ThreadDispatcher { get; private set; }
 
-            public static void Start()
+            public static void Initialize()
             {
                 NetworkLog.Info($"Realtime Thread Allowance: {Configuration.RealtimeThreadAllowance}");
+                NetworkLog.Info($"Realtime Fixed Time: {Configuration.RealtimeFixedTime}ms");
 
-                ThreadDispatcher = new RoomThreadDispatcher(Configuration.RealtimeThreadAllowance, TimeSpan.FromMilliseconds(10));
+                ThreadDispatcher = new RoomThreadDispatcher(Configuration.RealtimeThreadAllowance, TimeSpan.FromMilliseconds(Configuration.RealtimeFixedTime));
             }
 
             public static Room CreateRoom(CreateRoomRequest request)
@@ -63,13 +64,15 @@ namespace Wsla.Server
 
         public static class Messaging
         {
-            [AllowNull]
             public static MessagingServer Server { get; private set; }
+
+            public static void Initialize()
+            {
+                Server = new MessagingServer();
+            }
 
             public static void Start()
             {
-                Server = new MessagingServer();
-
                 Server.Start(Constants.RelayMessagingPort);
             }
         }
@@ -120,8 +123,16 @@ namespace Wsla.Server
 
             ParseArguments(args);
 
-            Messaging.Start();
-            Realtime.Start();
+            //Initialize
+            {
+                Messaging.Initialize();
+                Realtime.Initialize();
+            }
+
+            //Start
+            {
+                Messaging.Start();
+            }
 
             await Matchmaking.Start();
 

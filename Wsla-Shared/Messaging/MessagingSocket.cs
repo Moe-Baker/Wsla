@@ -382,9 +382,16 @@ namespace Wsla
                     return response.Error;
             }
 
-            Send(request);
+            //Send, Receive & Disconnect
+            {
+                Send(request);
 
-            return await Receive<TResponse>();
+                var response = await Receive<TResponse>();
+
+                await Disconnect();
+
+                return response;
+            }
         }
 
         protected override void Reset()

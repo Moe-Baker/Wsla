@@ -1,3 +1,5 @@
+using System;
+
 using UnityEngine;
 
 using Wsla.Serialization;
@@ -20,6 +22,110 @@ namespace Wsla.Unity
 
             NetworkSerializationResolver.Register<Vector3, BlittableNetworkSerializationResolver<Vector3>>();
             NetworkSerializationResolver.Register<Vector3Int, BlittableNetworkSerializationResolver<Vector3Int>>();
+
+            NetworkSerializationResolver.Register<NetworkClient, NetworkClientSerializationResolver>();
+            NetworkSerializationResolver.Register<NetworkEntity, NetworkEntitySerializationResolver>();
+        }
+    }
+
+    public class NetworkClientSerializationResolver : NetworkSerializationResolver<NetworkClient>
+    {
+        NetworkAPI API => NetworkAPI.Instance;
+
+        public override void Write(in NetworkClient value, INetworkStream stream)
+        {
+            if (value == null)
+                NetworkSerializer.WriteValue(NetworkClientID.None, stream);
+            else
+                NetworkSerializer.WriteValue(value.ID, stream);
+        }
+
+        public override void Read(ref NetworkClient value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(stream, out NetworkClientID id);
+
+            if (id == NetworkClientID.None)
+            {
+                value = null;
+            }
+            else
+            {
+                if (API.Room.Clients.TryGet(id, out value) is false)
+                    throw new InvalidOperationException($"No Network Client with ID {id} Found");
+            }
+        }
+    }
+
+    public class NetworkEntitySerializationResolver : NetworkSerializationResolver<NetworkEntity>
+    {
+        NetworkAPI API => NetworkAPI.Instance;
+
+        public override void Write(in NetworkEntity value, INetworkStream stream)
+        {
+            if (value == null)
+            {
+                NetworkSerializer.WriteValue(NetworkEntityID.None, stream);
+            }
+            else
+            {
+                if (value.IsSpawned is false)
+                    throw new InvalidOperationException($"Can't Serialize Entity {value} Since it's not Spawned");
+
+                NetworkSerializer.WriteValue(value.ID, stream);
+            }
+        }
+
+        public override void Read(ref NetworkEntity value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(stream, out NetworkEntityID id);
+
+            if (id == NetworkEntityID.None)
+            {
+                value = null;
+            }
+            else
+            {
+                if (API.Room.Entities.TryGet(id, out value) is false)
+                    throw new InvalidOperationException($"No Network Entity with ID {id} Found");
+            }
+        }
+    }
+
+    public class NetworkBehaviourSerializationResolver<T> : NetworkSerializationResolver<T>
+        where T : class, INetworkBehaviour
+    {
+        public override void Write(in T value, INetworkStream stream)
+        {
+            if (value == null)
+            {
+                NetworkSerializer.WriteValue(NetworkBehaviourID.None, stream);
+            }
+            else
+            {
+                NetworkSerializer.WriteValue(value.Network.ID, stream);
+                NetworkSerializer.WriteValue(value.Network.Entity, stream);
+            }
+        }
+
+        public override void Read(ref T value, INetworkStream stream)
+        {
+            NetworkSerializer.ReadValue(stream, out NetworkBehaviourID id);
+
+            if (id == NetworkBehaviourID.None)
+            {
+                value = null;
+                return;
+            }
+
+            NetworkSerializer.ReadValue(stream, out NetworkEntity entity);
+
+            if (entity.Behaviours.TryGet(id, out var behaviour) is false)
+                throw new InvalidOperationException($"No Behaviour with ID {id} Found on Entity ({entity})");
+
+            value = behaviour.Script as T;
+
+            if (value == null)
+                throw new InvalidCastException($"Can't Cast Behaviour ({behaviour.Script}) as Type ({typeof(T).Name})");
         }
     }
 }

@@ -207,6 +207,16 @@ namespace Wsla.Unity
             public NetworkClient Owner => Entity.Owner;
             public NetworkEntityAuthorityMode Authority => Entity.Authority;
 
+            /// <summary>
+            /// <inheritdoc cref="NetworkEntity.IsMine"/>
+            /// </summary>
+            public bool IsMine => Entity.IsMine;
+
+            /// <summary>
+            /// <inheritdoc cref="NetworkEntity.IsRemote"/>
+            /// </summary>
+            public bool IsRemote => Entity.IsRemote;
+
             public bool IsSpawned => Entity.IsSpawned;
             public event Action OnSpawn
             {

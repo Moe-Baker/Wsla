@@ -8,8 +8,6 @@ using Cysharp.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
-using Toolbox;
-
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -40,10 +38,16 @@ namespace Wsla.Unity
                 Disconnect();
         }
 
-        public async UniTask<Response<WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
+        public UniTask<WslaResponse<WslaError>> Connect(RoomConnectionInfo info, ClientConnectionRequest request)
+        {
+            return Connect(info.Address, info.Port, request);
+        }
+        public async UniTask<WslaResponse<WslaError>> Connect(IPAddress address, ushort port, ClientConnectionRequest request)
         {
             if (IsConnected is true)
                 throw new InvalidOperationException($"Client Already Connected to A Room");
+
+            Application.runInBackground = true;
 
             //Assign Properties
             {
@@ -58,9 +62,10 @@ namespace Wsla.Unity
             //Start Transport
             {
                 var response = await Transport.Start(address, port, request);
+
                 if (response.IsError)
                 {
-                    Stop();
+                    Disconnect(DisconnectReason.InvalidProtocol);
                     return response.Error;
                 }
             }
@@ -69,30 +74,48 @@ namespace Wsla.Unity
 
             return true;
         }
+
         public void Disconnect()
         {
-            if (IsConnected is false)
-                throw new InvalidOperationException($"Client not Connected to A Room");
-
-            Stop();
+            Disconnect(DisconnectReason.DisconnectPeerCalled);
         }
-
-        public void Stop()
+        public void Disconnect(DisconnectReason reason)
         {
-            Transport?.Stop();
-            Entities?.Stop();
+            var info = new DisconnectInfo()
+            {
+                Reason = reason,
+            };
 
-            Transport = default;
-            Clients = default;
-            Entities = default;
-            Scene = default;
-            RPCs = default;
-            Variables = default;
+            Disconnect(info);
+        }
+        void Disconnect(DisconnectInfo info)
+        {
+            if (IsConnected is false)
+            {
+                NetworkLog.Error("Client not Connected to a Room");
+                return;
+            }
 
-            IsConnected = false;
+            //Stop
+            {
+                Transport?.Stop();
+                Entities?.Stop();
+
+                Transport = default;
+                Clients = default;
+                Entities = default;
+                Scene = default;
+                RPCs = default;
+                Variables = default;
+
+                IsConnected = false;
+            }
+
+            OnDisconnect?.Invoke(info.Reason);
         }
 
-        public void Shutdown() => Stop(); //TODO: Fully Implement
+        public event DisconnectDelegate OnDisconnect;
+        public delegate void DisconnectDelegate(DisconnectReason reason);
 
         internal PoolsProperty Pools;
         public struct PoolsProperty
@@ -297,11 +320,11 @@ namespace Wsla.Unity
 
             NetworkAPI API => Room.API;
 
-            internal async UniTask<Response<WslaError>> Start(IPAddress address, ushort port, ClientConnectionRequest request)
+            internal async UniTask<WslaResponse<WslaError>> Start(IPAddress address, ushort port, ClientConnectionRequest request)
             {
                 Manager.Start();
 
-                var operation = new UniTaskCompletionSource<Response<WslaError>>();
+                var operation = new UniTaskCompletionSource<WslaResponse<WslaError>>();
 
                 //Register Hooks
                 Listener.OnPeerConnected += Connected;
@@ -336,6 +359,8 @@ namespace Wsla.Unity
                     return response.Error;
                 }
 
+                Listener.OnPeerDisconnected += DisconnectCallback;
+
                 return true;
             }
             internal void Stop()
@@ -347,6 +372,11 @@ namespace Wsla.Unity
                 API.NetworkUpdate.OnLateUpdate -= SendData;
 
                 Listener.Dispose();
+            }
+
+            void DisconnectCallback(NetPeer peer, DisconnectInfo info)
+            {
+                NetworkLog.Error($"Peer: {peer.Id}, Is Local: {peer == this.Peer}, Info: {info.Reason}");
             }
 
             void PollEvents() => Manager.PollEvents();
@@ -445,7 +475,7 @@ namespace Wsla.Unity
                     if (TryGet(MasterID, out var current) is false)
                     {
                         NetworkLog.Error($"No Client with ID {MasterID} Found");
-                        Room.Shutdown();
+                        Room.Disconnect(DisconnectReason.InvalidProtocol);
                         return;
                     }
 
@@ -458,7 +488,7 @@ namespace Wsla.Unity
                 if (TryGet(message.ClientID, out var client) is false)
                 {
                     NetworkLog.Error($"No NetworkClient Found with ID {message.ClientID}");
-                    Room.Shutdown();
+                    Room.Disconnect(DisconnectReason.InvalidProtocol);
                     return;
                 }
 
@@ -487,7 +517,7 @@ namespace Wsla.Unity
                     if (Room.Entities.TryGet(id, out var entity) is false)
                     {
                         NetworkLog.Error($"No Entity with ID {entity} Found");
-                        Room.Shutdown();
+                        Room.Disconnect(DisconnectReason.InvalidProtocol);
                         return;
                     }
 
@@ -1178,7 +1208,7 @@ namespace Wsla.Unity
             {
                 var writer = Room.Pools.SinglePackerWriter.Take();
 
-                var message = new SpawnScenenRequest();
+                var message = new SpawnSceneRequest();
                 NetworkSerializer.WriteHeader(in message, writer);
 
                 Component.WriteRequest(writer);
@@ -1273,6 +1303,18 @@ namespace Wsla.Unity
             Transport.Listener.Resume();
 
             reader.Recycle();
+        }
+    }
+
+    public struct RoomConnectionInfo
+    {
+        public IPAddress Address { get; }
+        public ushort Port { get; }
+
+        public RoomConnectionInfo(IPAddress Address, ushort Port)
+        {
+            this.Address = Address;
+            this.Port = Port;
         }
     }
 }

@@ -5,5 +5,7 @@
   //Thread Count for Realtime Communication, 0 equals System Processor Count
   "Realtime Thread Allowance": 0,
 
+  "Realtime Fixed Time": 5,
+
   "Region": "EU"
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 using Toolbox;
 
@@ -10,6 +11,22 @@ namespace Wsla.Unity
     public partial class NetworkAPI : ScriptableManager<NetworkAPI>
     {
         public const string Path = "Wsla/";
+
+        [field: SerializeField]
+        public CoordinatorAddressProperty CoordinatorAddress { get; private set; }
+
+        [field: Space]
+
+        [field: SerializeField]
+        public GameIDProperty GameID { get; private set; }
+
+        [field: SerializeField]
+        public GameVersionProperty GameVersion { get; private set; }
+
+        [field: SerializeField]
+        public MatchMakingAPI MatchMaking { get; private set; }
+
+        [field: Space]
 
         [field: SerializeField]
         public NetworkUpdateAPI NetworkUpdate { get; private set; }
@@ -45,11 +62,48 @@ namespace Wsla.Unity
 
             NetworkLog.Handler = LogHandler;
 
+            GameVersion = GameVersion.Initialize();
+            GameID = GameID.Initialize();
+
+            MatchMaking.Set(this);
             NetworkUpdate.Set(this);
             Tick.Set(this);
             Channels.Set(this);
             SyncedPrefabs.Set(this);
             Room.Set(this);
+        }
+
+        public bool IsPrepared { get; private set; }
+        public async Task Prepare()
+        {
+            if (IsPrepared)
+            {
+                NetworkLog.Error($"Network API Already Prepared/Preparing");
+                return;
+            }
+
+            IsPrepared = true;
+
+            try
+            {
+                CoordinatorAddress = await CoordinatorAddress.Prepare();
+
+                //Update Regions
+                {
+                    var response = await MatchMaking.UpdateRegions();
+
+                    if (response.IsError)
+                    {
+                        IsPrepared = false;
+                        return;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                IsPrepared = false;
+                throw;
+            }
         }
 
         [HideInCallstack]
