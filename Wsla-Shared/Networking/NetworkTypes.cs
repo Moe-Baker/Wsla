@@ -91,14 +91,17 @@ namespace Wsla
             Add<TakeEntityOwnershipRequest>(ref counter);
             Add<TransferEntityOwnershipCommand>(ref counter);
 
+            Add<CreateRoomCommand>(ref counter);
+            Add<CreateRoomConfirmation>(ref counter);
+
             Add<CreateRoomRequest>(ref counter);
             Add<CreateRoomResponse>(ref counter);
 
             Add<RegisterRelayRequest>(ref counter);
             Add<RegisterRelayResponse>(ref counter);
 
-            Add<ListRelaysRequest>(ref counter);
-            Add<ListRelaysResponse>(ref counter);
+            Add<ListRegionsRequest>(ref counter);
+            Add<ListRegionsResponse>(ref counter);
         }
     }
 

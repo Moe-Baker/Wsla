@@ -36,7 +36,7 @@ public class MainMenu : MonoBehaviour
 
         //Create Room
         {
-            var request = new CreateRoomRequest("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
+            var request = new CreateRoomCommand("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
             var response = await NetworkAPI.MatchMaking.CreateRoom(ServerRegion.EU, request);
 
             if (response.IsError)

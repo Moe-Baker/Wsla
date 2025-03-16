@@ -513,8 +513,8 @@ namespace Wsla
                 handler(peer, packet);
             }
 
-            public delegate void TypeDelegate<T>(MessagingPeer peer, ref T message);
-            public void Register<[NetworkSerializationMarker] T>(TypeDelegate<T> handler)
+            public delegate void SyncTypeDelegate<T>(MessagingPeer peer, ref T message);
+            public void RegisterSync<[NetworkSerializationMarker] T>(SyncTypeDelegate<T> handler)
             {
                 var id = NetworkTypes.Get<T>();
 
@@ -524,6 +524,20 @@ namespace Wsla
                 {
                     var data = NetworkSerializer.ReadValue<T>(reader);
                     handler(peer, ref data);
+                }
+            }
+
+            public delegate Task AsyncTypeDelegate<T>(MessagingPeer peer, T message);
+            public void RegisterAsync<[NetworkSerializationMarker] T>(AsyncTypeDelegate<T> handler)
+            {
+                var id = NetworkTypes.Get<T>();
+
+                Handlers[id] = Surrogate;
+
+                async void Surrogate(MessagingPeer peer, NetDataWriter reader)
+                {
+                    var data = NetworkSerializer.ReadValue<T>(reader);
+                    await handler(peer, data);
                 }
             }
 

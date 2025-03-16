@@ -6,37 +6,96 @@ namespace Wsla.Server
 {
     public static class RelayServer
     {
-        public static ConfigurationData Configuration { get; private set; }
-        public class ConfigurationData : ServerConfigurationData
+        public static ConfigurationProperty Configuration { get; private set; }
+        public class ConfigurationProperty : ServerConfigurationData
         {
-            [JsonInclude, JsonPropertyName("Coordinator Hostname")]
-            string CoordinatorHostname;
+            public IPAddress CoordinatorAddress { get; init; }
 
-            public IPAddress CoordinatorAddress { get; private set; }
+            public int RealtimeThreadAllowance { get; init; }
+            public ushort RealtimeFixedTime { get; init; }
 
-            [JsonPropertyName("Realtime Thread Allowance")]
-            public int RealtimeThreadAllowance { get; set; }
+            public ServerRegion Region { get; init; }
+            public int ID { get; init; }
 
-            [JsonPropertyName("Realtime Fixed Time")]
-            public ushort RealtimeFixedTime { get; set; }
+            public IPAddress PublicAddress { get; init; }
 
-            public ServerRegion Region { get; set; }
-
-            public async Task Initialize()
+            public static async Task<ConfigurationProperty> Create(Data data)
             {
-                //Resolve Hostname
-                {
-                    if (IPAddress.TryParse(CoordinatorHostname, out var IP) is false)
-                    {
-                        var collection = await Dns.GetHostAddressesAsync(CoordinatorHostname, AddressFamily.InterNetwork);
-                        IP = collection[0];
-                    }
+                IPAddress CoordinatorAddress;
 
-                    CoordinatorAddress = IP;
+                //Resolve Coordinator Hostname
+                {
+                    CoordinatorAddress = await ResolveHostName(data.CoordinatorHostname);
                 }
 
-                if (RealtimeThreadAllowance is 0)
-                    RealtimeThreadAllowance = Environment.ProcessorCount;
+                IPAddress PublicAddress;
+
+                //Resolve Public Address
+                {
+                    if (string.IsNullOrEmpty(data.PublicHostname))
+                        PublicAddress = await FetchPublicAddress();
+                    else
+                        PublicAddress = await ResolveHostName(data.PublicHostname);
+                }
+
+                //Validate Realtime Thread Allowance
+                {
+                    if (data.RealtimeThreadAllowance is 0)
+                        data.RealtimeThreadAllowance = Environment.ProcessorCount;
+                }
+
+                return new ConfigurationProperty()
+                {
+                    CoordinatorAddress = CoordinatorAddress,
+
+                    ID = data.ID,
+                    Region = data.Region,
+
+                    PublicAddress = PublicAddress,
+
+                    RealtimeFixedTime = data.RealtimeFixedTime,
+                    RealtimeThreadAllowance = data.RealtimeThreadAllowance,
+                };
+            }
+
+            static async Task<IPAddress> FetchPublicAddress()
+            {
+                var client = new HttpClient();
+
+                var response = await client.GetStringAsync("https://ipinfo.io/ip");
+
+                var address = IPAddress.Parse(response);
+
+                return address;
+            }
+            static async ValueTask<IPAddress> ResolveHostName(string name)
+            {
+                if (IPAddress.TryParse(name, out var address))
+                    return address;
+
+                var collection = await Dns.GetHostAddressesAsync(name, AddressFamily.InterNetwork);
+                return collection[0];
+            }
+
+            public class Data : ServerConfigurationData
+            {
+                [JsonInclude, JsonPropertyName("Coordinator Hostname")]
+                public string CoordinatorHostname;
+
+                [JsonInclude, JsonPropertyName("Realtime Thread Allowance")]
+                public int RealtimeThreadAllowance;
+
+                [JsonInclude, JsonPropertyName("Realtime Fixed Time")]
+                public ushort RealtimeFixedTime;
+
+                [JsonInclude, JsonPropertyName("Region")]
+                public ServerRegion Region;
+
+                [JsonInclude, JsonPropertyName("ID")]
+                public int ID;
+
+                [JsonInclude, JsonPropertyName("Public Hostname")]
+                public string PublicHostname;
             }
         }
 
@@ -52,7 +111,7 @@ namespace Wsla.Server
                 ThreadDispatcher = new RoomThreadDispatcher(Configuration.RealtimeThreadAllowance, TimeSpan.FromMilliseconds(Configuration.RealtimeFixedTime));
             }
 
-            public static Room CreateRoom(CreateRoomRequest request)
+            public static Room CreateRoom(CreateRoomCommand request)
             {
                 var instance = new Room(request);
 
@@ -79,11 +138,9 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
-            public static IPAddress LocalAddress { get; private set; }
-
             public static async Task Start()
             {
-                Messaging.Server.Dispatcher.Register<CreateRoomRequest>(CreateRoomHandler);
+                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomCommand>(CreateRoomHandler);
 
                 await Register();
             }
@@ -92,26 +149,26 @@ namespace Wsla.Server
             {
                 using (var query = new MessagingQuery())
                 {
-                    var request = new RegisterRelayRequest(Configuration.Region);
+                    var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
+
+                    var request = new RegisterRelayRequest(info);
 
                     var response = await query.Transport<RegisterRelayRequest, RegisterRelayResponse>(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, request);
 
                     if (response.IsError)
                         throw response.Error.ToException();
 
-                    LocalAddress = response.Value.Address;
-
                     NetworkLog.Info($"Registered with Coordinator");
                 }
             }
 
-            static void CreateRoomHandler(MessagingPeer peer, ref CreateRoomRequest message)
+            static async Task CreateRoomHandler(MessagingPeer peer, CreateRoomCommand message)
             {
                 var room = Realtime.CreateRoom(message);
 
-                var response = new CreateRoomResponse(room.Transport.Port);
+                var response = new CreateRoomConfirmation(room.Transport.Port);
 
-                peer.Send(response);
+                await peer.Send(response);
             }
         }
 
@@ -143,8 +200,9 @@ namespace Wsla.Server
         {
             NetworkLog.Info($"Loading Configuration Data");
 
-            Configuration = ServerConfigurationLoader.Load<ConfigurationData>();
-            await Configuration.Initialize();
+            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
+
+            Configuration = await ConfigurationProperty.Create(data);
 
             NetworkLog.Info($"Coordinator Address: {Configuration.CoordinatorAddress}");
             NetworkLog.Info($"Server Region: {Configuration.Region}");

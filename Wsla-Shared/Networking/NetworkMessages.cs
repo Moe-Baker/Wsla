@@ -290,6 +290,41 @@ namespace Wsla
 
     public struct CreateRoomRequest : IAutoNetworkSerialization
     {
+        public CreateRoomCommand Command;
+        public ServerRegion Region;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Command);
+            context.Select(ref Region);
+        }
+
+        public CreateRoomRequest(CreateRoomCommand Command, ServerRegion Region)
+        {
+            this.Command = Command;
+            this.Region = Region;
+        }
+    }
+    public struct CreateRoomResponse : IAutoNetworkSerialization
+    {
+        public IPAddress Address;
+        public ushort Port;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Address);
+            context.Select(ref Port);
+        }
+
+        public CreateRoomResponse(IPAddress Address, ushort Port)
+        {
+            this.Address = Address;
+            this.Port = Port;
+        }
+    }
+
+    public struct CreateRoomCommand : IAutoNetworkSerialization
+    {
         public FixedString40 Name;
         public byte Capacity;
         public FixedString20 Password;
@@ -301,14 +336,14 @@ namespace Wsla
             context.Select(ref Password);
         }
 
-        public CreateRoomRequest(FixedString40 Name, byte Capacity, FixedString20 Password)
+        public CreateRoomCommand(FixedString40 Name, byte Capacity, FixedString20 Password)
         {
             this.Name = Name;
             this.Capacity = Capacity;
             this.Password = Password;
         }
     }
-    public struct CreateRoomResponse : IAutoNetworkSerialization
+    public struct CreateRoomConfirmation : IAutoNetworkSerialization
     {
         public ushort Port;
 
@@ -317,7 +352,7 @@ namespace Wsla
             context.Select(ref Port);
         }
 
-        public CreateRoomResponse(ushort Port)
+        public CreateRoomConfirmation(ushort Port)
         {
             this.Port = Port;
         }
@@ -325,49 +360,39 @@ namespace Wsla
 
     public struct RegisterRelayRequest : IAutoNetworkSerialization
     {
-        public ServerRegion Region;
+        public RelayServerInfo Info;
 
         public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref Region);
+            context.Select(ref Info);
         }
 
-        public RegisterRelayRequest(ServerRegion Region)
+        public RegisterRelayRequest(RelayServerInfo Info)
         {
-            this.Region = Region;
+            this.Info = Info;
         }
     }
     public struct RegisterRelayResponse : IAutoNetworkSerialization
     {
-        public IPAddress Address;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Address);
-        }
-
-        public RegisterRelayResponse(IPAddress Address)
-        {
-            this.Address = Address;
-        }
+        public void Select(ref AutoSerializationContext context) { }
     }
 
-    public struct ListRelaysRequest : IAutoNetworkSerialization
+    public struct ListRegionsRequest : IAutoNetworkSerialization
     {
         public void Select(ref AutoSerializationContext context) { }
     }
-    public struct ListRelaysResponse : IAutoNetworkSerialization
+    public struct ListRegionsResponse : IAutoNetworkSerialization
     {
-        public Dictionary<ServerRegion, IPAddress> Regions;
+        public List<ServerRegion> Regions;
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Regions);
         }
 
-        public ListRelaysResponse(Dictionary<ServerRegion, IPAddress> Regions)
+        public ListRegionsResponse(List<ServerRegion> regions)
         {
-            this.Regions = Regions;
+            this.Regions = regions;
         }
     }
 }

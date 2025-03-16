@@ -1,13 +1,22 @@
-﻿using System.Net;
-
-namespace Wsla.Server
+﻿namespace Wsla.Server
 {
     public class CoordinatorServer
     {
-        public static ConfigurationData Configuration { get; private set; }
-        public class ConfigurationData : ServerConfigurationData
+        public static ConfigurationProperty Configuration { get; private set; }
+        public class ConfigurationProperty : ServerConfigurationData
         {
-            public Task Initialize() => Task.CompletedTask;
+            public static async Task<ConfigurationProperty> Create(Data data)
+            {
+                return new ConfigurationProperty()
+                {
+
+                };
+            }
+
+            public class Data : ServerConfigurationData
+            {
+
+            }
         }
 
         public static class Messaging
@@ -27,42 +36,101 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
-            public static Dictionary<ServerRegion, IPAddress> Regions { get; private set; }
+            public static List<RelayServerInfo> Servers { get; private set; }
+
+            public static bool TryFindServer(ServerRegion region, out RelayServerInfo info)
+            {
+                for (int i = 0; i < Servers.Count; i++)
+                {
+                    info = Servers[i];
+
+                    if (info.Region == region)
+                        return true;
+                }
+
+                info = default;
+                return false;
+            }
 
             public static void Initialize()
             {
-                Regions = new();
+                Servers = new(10);
 
-                Messaging.Server.Dispatcher.Register<RegisterRelayRequest>(RegisterRelayHandler);
-                Messaging.Server.Dispatcher.Register<ListRelaysRequest>(ListRelaysHandler);
+                Messaging.Server.Dispatcher.RegisterAsync<RegisterRelayRequest>(RegisterRelayHandler);
+
+                Messaging.Server.Dispatcher.RegisterAsync<ListRegionsRequest>(ListRegions);
+
+                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomRequest>(CreateRoom);
             }
 
-            static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
+            static async Task RegisterRelayHandler(MessagingPeer peer, RegisterRelayRequest message)
             {
-                var address = (peer.Socket.RemoteEndPoint as IPEndPoint).Address;
+                NetworkLog.Info($"Registering ({message.Info.Region}) Server on Address: {message.Info.Address}");
 
-                NetworkLog.Info($"Registering ({message.Region}) Server on Address: {address}");
-
-                lock (Regions)
+                lock (Servers)
                 {
-                    Regions[message.Region] = address;
+                    Servers.Add(message.Info);
                 }
 
-                var response = new RegisterRelayResponse(address);
-                peer.Send(response);
+                var response = new RegisterRelayResponse();
+                await peer.Send(response);
             }
 
-            static void ListRelaysHandler(MessagingPeer peer, ref ListRelaysRequest message)
+            static async Task ListRegions(MessagingPeer peer, ListRegionsRequest message)
             {
-                Dictionary<ServerRegion, IPAddress> Dictionary;
+                List<ServerRegion> regions;
 
-                lock (Regions)
+                lock (Servers)
                 {
-                    Dictionary = new(Regions);
+                    regions = new(Servers.Count);
+
+                    foreach (var server in Servers)
+                    {
+                        if (regions.Contains(server.Region))
+                            continue;
+
+                        regions.Add(server.Region);
+                    }
                 }
 
-                var response = new ListRelaysResponse(Dictionary);
-                peer.Send(response);
+                var response = new ListRegionsResponse(regions);
+                await peer.Send(response);
+            }
+
+            static async Task CreateRoom(MessagingPeer peer, CreateRoomRequest message)
+            {
+                using (var query = new MessagingQuery())
+                {
+                    RelayServerInfo RelayInfo;
+
+                    //Find Region
+                    if (TryFindServer(message.Region, out RelayInfo) is false)
+                    {
+                        await peer.Send(WslaError.From(WslaErrorCode.NoRegion));
+                        return;
+                    }
+
+                    CreateRoomConfirmation Confirmation;
+
+                    //Forward Request to Relay
+                    {
+                        var response = await query.Transport<CreateRoomCommand, CreateRoomConfirmation>(RelayInfo.Address, Constants.RelayMessagingPort, message.Command);
+
+                        if (response.IsError)
+                        {
+                            await peer.Send(response.Error);
+                            return;
+                        }
+
+                        Confirmation = response.Value;
+                    }
+
+                    //Send Response
+                    {
+                        var response = new CreateRoomResponse(RelayInfo.Address, Confirmation.Port);
+                        await peer.Send(response);
+                    }
+                }
             }
         }
 
@@ -92,8 +160,9 @@ namespace Wsla.Server
         {
             NetworkLog.Info($"Loading Configuration Data");
 
-            Configuration = ServerConfigurationLoader.Load<ConfigurationData>();
-            await Configuration.Initialize();
+            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
+
+            Configuration = await ConfigurationProperty.Create(data);
         }
 
         static void ParseArguments(string[] args) { }

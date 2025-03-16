@@ -14,6 +14,9 @@ class Playground
 
         NetworkLog.UseIgnore();
 
+        var address = await FetchPublicAddress();
+        Console.WriteLine($"Public IP Address: {address}");
+
         Console.WriteLine($"Start In Mode:");
         Console.WriteLine("1. Server");
         Console.WriteLine("2. Client");
@@ -47,11 +50,22 @@ class Playground
             Console.ReadKey();
     }
 
+    static async Task<IPAddress> FetchPublicAddress()
+    {
+        var client = new HttpClient();
+
+        var response = await client.GetStringAsync("https://ipinfo.io/ip");
+
+        var address = IPAddress.Parse(response);
+
+        return address;
+    }
+
     static async Task Server()
     {
         var server = new MessagingServer();
 
-        server.Dispatcher.Register<SamplePayload>(MessageHandler);
+        server.Dispatcher.RegisterSync<SamplePayload>(MessageHandler);
         void MessageHandler(MessagingPeer peer, ref SamplePayload message)
         {
             NetworkLog.Trace($"Message: {message.Text}");

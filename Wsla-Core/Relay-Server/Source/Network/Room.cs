@@ -1020,7 +1020,7 @@ namespace Wsla.Server
             Entities.Dispose();
         }
 
-        public Room(CreateRoomRequest request)
+        public Room(CreateRoomCommand request)
         {
             Name = request.Name;
             Capacity = request.Capacity;

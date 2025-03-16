@@ -8,17 +8,15 @@ namespace Wsla.Unity
     [Serializable]
     public class MatchMakingAPI : NetworkAPI.Property
     {
-        public Dictionary<ServerRegion, IPAddress> Regions { get; private set; }
-
-        public bool TryGet(ServerRegion region, out IPAddress address) => Regions.TryGetValue(region, out address);
+        public List<ServerRegion> Regions { get; private set; }
 
         public async Task<WslaResponse<WslaError>> UpdateRegions()
         {
             using (var query = new MessagingQuery())
             {
-                var request = new ListRelaysRequest();
+                var request = new ListRegionsRequest();
 
-                var response = await query.Transport<ListRelaysRequest, ListRelaysResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, request);
+                var response = await query.Transport<ListRegionsRequest, ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, request);
 
                 if (response.IsError)
                     return response.Error;
@@ -27,26 +25,27 @@ namespace Wsla.Unity
 
                 NetworkLog.Trace($"Region Servers ({Regions.Count})");
 
-                foreach (var (region, address) in Regions)
-                    NetworkLog.Trace($"Region: {region}, Address: {address}");
+                foreach (var region in Regions)
+                    NetworkLog.Trace($"Region: {region}");
 
                 return WslaResponse<WslaError>.Success;
             }
         }
 
-        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomRequest request)
+        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomCommand command)
         {
-            if (TryGet(region, out var address) is false)
-                return WslaError.From(WslaErrorCode.NoRegion);
+            var request = new CreateRoomRequest(command, region);
 
             using (var query = new MessagingQuery())
             {
-                var response = await query.Transport<CreateRoomRequest, CreateRoomResponse>(address, Constants.RelayMessagingPort, request);
+                var response = await query.Transport<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, request);
 
                 if (response.IsError)
                     return response.Error;
 
-                return new RoomConnectionInfo(address, response.Value.Port);
+                var info = response.Value;
+
+                return new RoomConnectionInfo(info.Address, info.Port);
             }
         }
     }
