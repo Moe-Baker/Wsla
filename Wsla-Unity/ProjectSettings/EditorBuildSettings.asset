@@ -11,7 +11,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Systems/Wsla-Sample/Objects/Level/Level.unity
     guid: f0400f4b5f556dd41bf04cc99118c4b7
-  - enabled: 1
+  - enabled: 0
     path: Assets/Systems/Wsla-Sample/Objects/Level/Level 2.unity
     guid: 6e8ce2ecd3a94c24ea7be4548aff2583
   m_configObjects:
