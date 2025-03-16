@@ -64,5 +64,6 @@ namespace Wsla
         NoRegion = 10,
         CapacityFull = 11,
         InvalidPassword = 12,
+        OperationCanceled = 13,
     }
 }

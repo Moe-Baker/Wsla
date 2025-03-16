@@ -84,7 +84,7 @@ namespace Wsla
 
         readonly NetDataWriter SendBuffer;
 
-        public async void Send<[NetworkSerializationMarker] T>(T data)
+        public async Task<WslaResponse<WslaError>> Send<[NetworkSerializationMarker] T>(T data)
         {
             var cancellation = GetCancellationToken();
 
@@ -112,16 +112,21 @@ namespace Wsla
 
                 var memory = SendBuffer.Data.AsMemory(0, SendBuffer.Position);
                 await Socket.SendAsync(memory, SocketFlags.None, cancellation);
+
+                return WslaResponse<WslaError>.Success;
             }
             catch (SocketException ex)
             {
-                NetworkLog.Error($"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}");
+                var text = $"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}";
+
+                NetworkLog.Error(text);
                 await Stop();
-                return;
+
+                return new WslaError(WslaErrorCode.TransportFailure, text);
             }
             catch (OperationCanceledException)
             {
-                return;
+                return WslaError.From(WslaErrorCode.OperationCanceled);
             }
             finally
             {
@@ -382,10 +387,16 @@ namespace Wsla
                     return response.Error;
             }
 
-            //Send, Receive & Disconnect
+            //Send
             {
-                Send(request);
+                var response = await Send(request);
 
+                if (response.IsError)
+                    return response.Error;
+            }
+
+            //Receive & Disconnect
+            {
                 var response = await Receive<TResponse>();
 
                 await Disconnect();
