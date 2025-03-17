@@ -65,5 +65,6 @@ namespace Wsla
         CapacityFull = 11,
         InvalidPassword = 12,
         OperationCanceled = 13,
+        SocketClosed = 14,
     }
 }

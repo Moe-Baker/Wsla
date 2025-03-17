@@ -136,7 +136,7 @@ class Playground
                 }
             }
 
-            await query.Disconnect();
+            query.Disconnect();
         }
     }
 

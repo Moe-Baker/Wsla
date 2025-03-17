@@ -136,30 +136,39 @@ namespace Wsla.Server
             }
         }
 
-        public static class Matchmaking
+        public static class Reporting
         {
-            public static async Task Start()
-            {
-                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomCommand>(CreateRoomHandler);
+            public static MessagingClient Client { get; private set; }
 
-                await Register();
+            public static void Initialize()
+            {
+                Client = new MessagingClient();
             }
 
-            async static Task Register()
+            public static async Task Start()
             {
-                using (var query = new MessagingQuery())
-                {
-                    var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
+                Client = new MessagingClient();
 
-                    var request = new RegisterRelayRequest(info);
+                await Client.Connect(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort);
 
-                    var response = await query.Transport<RegisterRelayRequest, RegisterRelayResponse>(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, request);
+                await Matchmaking.Register();
+            }
+        }
 
-                    if (response.IsError)
-                        throw response.Error.ToException();
+        public static class Matchmaking
+        {
+            public static void Start()
+            {
+                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomCommand>(CreateRoomHandler);
+            }
 
-                    NetworkLog.Info($"Registered with Coordinator");
-                }
+            public static Task<WslaResponse<WslaError>> Register()
+            {
+                var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
+
+                var request = new RegisterRelayRequest(info);
+
+                return Reporting.Client.Send(request);
             }
 
             static async Task CreateRoomHandler(MessagingPeer peer, CreateRoomCommand message)
@@ -174,6 +183,8 @@ namespace Wsla.Server
 
         static async Task Main(string[] args)
         {
+            Console.Title = "Relay Server";
+
             NetworkLog.UseConsole();
 
             await LoadConfig();
@@ -184,14 +195,16 @@ namespace Wsla.Server
             {
                 Messaging.Initialize();
                 Realtime.Initialize();
+                Reporting.Initialize();
             }
 
             //Start
             {
                 Messaging.Start();
-            }
+                Matchmaking.Start();
 
-            await Matchmaking.Start();
+                await Reporting.Start();
+            }
 
             while (true) Console.ReadKey();
         }
