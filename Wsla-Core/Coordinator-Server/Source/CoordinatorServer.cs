@@ -1,6 +1,14 @@
-﻿namespace Wsla.Server
+﻿using GenHTTP.Engine.Internal;
+
+using GenHTTP.Modules.Functional;
+using GenHTTP.Modules.Layouting;
+
+using System.Net;
+using System.Text.Json.Serialization;
+
+namespace Wsla.Server
 {
-    public class CoordinatorServer
+    public static class CoordinatorServer
     {
         public static ConfigurationProperty Configuration { get; private set; }
         public class ConfigurationProperty : ServerConfigurationData
@@ -163,6 +171,8 @@
 
         static async Task Main(string[] args)
         {
+            Call();
+
             Console.Title = "Coordinator Server";
 
             NetworkLog.UseConsole();
@@ -183,6 +193,34 @@
             }
 
             while (true) Console.ReadKey();
+        }
+
+        static async void Call()
+        {
+            var service = Inline.Create()
+                .Get(":id", (int id) =>
+                {
+                    return id;
+                });
+
+            var api = Layout.Create()
+                .Add("mark1", service);
+
+            await Host.Create()
+                .Handler(api)
+                .Bind(IPAddress.Any, 8080)
+                .Development()
+                .Console()
+                .StartAsync();
+        }
+
+        public struct Data
+        {
+            [JsonInclude]
+            public int Number1 { get; init; }
+
+            [JsonInclude]
+            public int Number2 { get; init; }
         }
 
         static async Task LoadConfig()
