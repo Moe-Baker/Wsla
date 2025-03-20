@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.IO;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Wsla
@@ -8,7 +9,7 @@ namespace Wsla
         static JsonSerializerOptions Options = new JsonSerializerOptions(JsonSerializerDefaults.General)
         {
             ReadCommentHandling = JsonCommentHandling.Skip,
-            Converters = { new JsonStringEnumConverter<ServerRegion>() }
+            Converters = { new JsonStringEnumConverter<ServerRegion>(), new IPAddressJsonConverter(), }
         };
 
         public static T Load<T>() where T : ServerConfigurationData => Load<T>("Configuration.json");

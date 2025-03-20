@@ -55,10 +55,10 @@ namespace Wsla
 
         public static implicit operator WslaResponse<TError>(bool value)
         {
-            if (value)
-                return Success;
-            else
-                return FromError(default);
+            if (value is false)
+                throw new InvalidOperationException($"Can Only Implicitly Convert True to Success Response, False not Supported");
+
+            return Success;
         }
         public static implicit operator WslaResponse<TError>(TError error) => FromError(error);
 

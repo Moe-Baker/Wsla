@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading.Tasks;
 
 namespace Wsla.Unity
@@ -12,41 +11,33 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<WslaError>> UpdateRegions()
         {
-            using (var query = new MessagingQuery())
-            {
-                var request = new ListRegionsRequest();
+            var response = await API.Messaging.GET<ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.ListRegions);
 
-                var response = await query.Transport<ListRegionsRequest, ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, request);
+            if (response.IsError)
+                return WslaError.From(response.Error);
 
-                if (response.IsError)
-                    return response.Error;
+            Regions = response.Value.Regions;
 
-                Regions = response.Value.Regions;
+            NetworkLog.Trace($"Region Servers ({Regions.Count})");
 
-                NetworkLog.Trace($"Region Servers ({Regions.Count})");
+            foreach (var region in Regions)
+                NetworkLog.Trace($"Region: {region}");
 
-                foreach (var region in Regions)
-                    NetworkLog.Trace($"Region: {region}");
-
-                return WslaResponse<WslaError>.Success;
-            }
+            return WslaResponse<WslaError>.Success;
         }
 
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomCommand command)
         {
-            var request = new CreateRoomRequest(command, region);
+            var request = new CreateRoomRequest(region, command);
 
-            using (var query = new MessagingQuery())
-            {
-                var response = await query.Transport<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, request);
+            var response = await API.Messaging.POST<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.CreateRoom, request);
 
-                if (response.IsError)
-                    return response.Error;
+            if (response.IsError)
+                return WslaError.From(response.Error);
 
-                var info = response.Value;
+            var info = response.Value;
 
-                return new RoomConnectionInfo(info.Address, info.Port);
-            }
+            return new RoomConnectionInfo(info.Address, info.Port);
         }
     }
 }

@@ -13,5 +13,12 @@ namespace Wsla
         public static TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
         public const byte ChannelCount = 32;
+
+        public static class RestRoutes
+        {
+            public static readonly string RegisterRelay = "register-relay";
+            public static readonly string ListRegions = "list-regions";
+            public static readonly string CreateRoom = "create-room";
+        }
     }
 }

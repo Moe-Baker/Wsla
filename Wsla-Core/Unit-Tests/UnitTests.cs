@@ -2,6 +2,8 @@ using LiteNetLib.Utils;
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Wsla;
 using Wsla.Serialization;
@@ -468,6 +470,39 @@ namespace SerializationTests
         public struct Data
         {
             public int x, y, z, w;
+        }
+    }
+
+    public class JsonIPAddress
+    {
+        [Fact]
+        public void Serialize()
+        {
+            var original = new IPAddress(stackalloc byte[] { 10, 0, 0, 10 });
+            var json = JsonSerializer.Serialize(original, options: CreateOptions());
+            var clone = JsonSerializer.Deserialize<IPAddress>(json, options: CreateOptions());
+
+            Assert.Equal(original, clone);
+        }
+
+        [Fact]
+        public void Warpper()
+        {
+            var original = new Wrapper()
+            {
+                Address = new IPAddress(stackalloc byte[] { 10, 0, 0, 10 })
+            };
+
+            var json = JsonSerializer.Serialize(original, options: SharedAPI.JsonOptions);
+            var clone = JsonSerializer.Deserialize<Wrapper>(json, options: SharedAPI.JsonOptions);
+
+            Assert.Equal(original.Address, clone.Address);
+        }
+
+        public struct Wrapper
+        {
+            [JsonInclude]
+            public IPAddress Address;
         }
     }
 

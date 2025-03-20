@@ -1,6 +1,16 @@
-﻿using System.Net;
+﻿using GenHTTP.Api.Infrastructure;
+using GenHTTP.Engine.Internal;
+using GenHTTP.Modules.Functional;
+using GenHTTP.Modules.Functional.Provider;
+using GenHTTP.Modules.Layouting;
+
+using System;
+using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace Wsla.Server
 {
@@ -103,7 +113,7 @@ namespace Wsla.Server
         {
             public static RoomThreadDispatcher ThreadDispatcher { get; private set; }
 
-            public static void Initialize()
+            public static void Init()
             {
                 NetworkLog.Info($"Realtime Thread Allowance: {Configuration.RealtimeThreadAllowance}");
                 NetworkLog.Info($"Realtime Fixed Time: {Configuration.RealtimeFixedTime}ms");
@@ -123,61 +133,83 @@ namespace Wsla.Server
 
         public static class Messaging
         {
-            public static MessagingServer Server { get; private set; }
-
-            public static void Initialize()
+            public static class Server
             {
-                Server = new MessagingServer();
+                static IServerHost Contract;
+
+                public static void Init()
+                {
+                    var service = Inline.Create()
+                        .Serializers(GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions));
+
+                    Matchmaking.RegisterMessagingRoutes(service);
+
+                    var api = Layout.Create()
+                        .Add(service);
+
+                    Contract = Host.Create()
+                        .Handler(api)
+                        .Bind(IPAddress.Any, Constants.RelayMessagingPort)
+                        .Development()
+                        .Console();
+                }
+                public static async void Start()
+                {
+                    await Contract.StartAsync();
+                }
             }
 
+            public static HttpRequester Client { get; private set; }
+
+            public static void Init()
+            {
+                Server.Init();
+
+                Client = new HttpRequester(SharedAPI.JsonOptions);
+            }
             public static void Start()
             {
-                Server.Start(Constants.RelayMessagingPort);
-            }
-        }
-
-        public static class Reporting
-        {
-            public static MessagingClient Client { get; private set; }
-
-            public static void Initialize()
-            {
-                Client = new MessagingClient();
-            }
-
-            public static async Task Start()
-            {
-                Client = new MessagingClient();
-
-                await Client.Connect(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort);
-
-                await Matchmaking.Register();
+                Server.Start();
             }
         }
 
         public static class Matchmaking
         {
-            public static void Start()
+            public static async Task Start()
             {
-                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomCommand>(CreateRoomHandler);
+                await RegisterWithCoordinator();
             }
 
-            public static Task<WslaResponse<WslaError>> Register()
+            public static void RegisterMessagingRoutes(InlineBuilder builder)
+            {
+                builder.Post(Constants.RestRoutes.CreateRoom, (CreateRoomCommand message) => CreateRoomHandler(message));
+            }
+
+            public static async Task RegisterWithCoordinator()
             {
                 var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
 
                 var request = new RegisterRelayRequest(info);
 
-                return Reporting.Client.Send(request);
+                while (true)
+                {
+                    var response = await Messaging.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RegisterRelay, request);
+
+                    if (response.IsError)
+                    {
+                        NetworkLog.Error($"Failed to Register With Coordinator, Error: {response.Error}");
+                        continue;
+                    }
+
+                    break;
+                }
             }
 
-            static async Task CreateRoomHandler(MessagingPeer peer, CreateRoomCommand message)
+            static CreateRoomConfirmation CreateRoomHandler(CreateRoomCommand message)
             {
                 var room = Realtime.CreateRoom(message);
 
-                var response = new CreateRoomConfirmation(room.Transport.Port);
-
-                await peer.Send(response);
+                return new CreateRoomConfirmation(room.Transport.Port);
             }
         }
 
@@ -193,17 +225,15 @@ namespace Wsla.Server
 
             //Initialize
             {
-                Messaging.Initialize();
-                Realtime.Initialize();
-                Reporting.Initialize();
+                Messaging.Init();
+                Realtime.Init();
             }
 
             //Start
             {
-                Messaging.Start();
-                Matchmaking.Start();
+                await Matchmaking.Start();
 
-                await Reporting.Start();
+                Messaging.Start();
             }
 
             while (true) Console.ReadKey();

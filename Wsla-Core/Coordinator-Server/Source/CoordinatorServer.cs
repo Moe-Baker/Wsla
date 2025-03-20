@@ -1,10 +1,17 @@
-﻿using GenHTTP.Engine.Internal;
+﻿using GenHTTP.Api.Content;
+using GenHTTP.Api.Infrastructure;
+using GenHTTP.Api.Protocol;
+using GenHTTP.Engine.Internal;
 
 using GenHTTP.Modules.Functional;
+using GenHTTP.Modules.Functional.Provider;
 using GenHTTP.Modules.Layouting;
 
+using System;
+using System.Collections.Generic;
 using System.Net;
-using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Wsla.Server
 {
@@ -29,16 +36,43 @@ namespace Wsla.Server
 
         public static class Messaging
         {
-            public static MessagingServer Server { get; private set; }
-
-            public static void Initialize()
+            public static class Server
             {
-                Server = new MessagingServer();
+                static IServerHost Contract;
+
+                public static void Init()
+                {
+                    var service = Inline.Create()
+                        .Serializers(GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions));
+
+                    Matchmaking.RegisterMessagingRoutes(service);
+
+                    var api = Layout.Create()
+                        .Add(service);
+
+                    Contract = Host.Create()
+                        .Handler(api)
+                        .Bind(IPAddress.Any, Constants.CoordinatorMessagingPort)
+                        .Development()
+                        .Console();
+                }
+                public static async void Start()
+                {
+                    await Contract.StartAsync();
+                }
             }
 
+            public static HttpRequester Client { get; private set; }
+
+            public static void Init()
+            {
+                Server.Init();
+
+                Client = new HttpRequester(SharedAPI.JsonOptions);
+            }
             public static void Start()
             {
-                Server.Start(Constants.CoordinatorMessagingPort);
+                Server.Start();
             }
         }
 
@@ -49,13 +83,15 @@ namespace Wsla.Server
             {
                 public RelayServerInfo Info { get; }
 
-                public MessagingPeer MessagingPeer { get; private set; }
-
-                public Entry(RelayServerInfo Info, MessagingPeer MessagingPeer)
+                public Entry(RelayServerInfo Info)
                 {
                     this.Info = Info;
-                    this.MessagingPeer = MessagingPeer;
                 }
+            }
+
+            public static void Init()
+            {
+                Servers = new(10);
             }
 
             public static bool TryFindServer(ServerRegion region, out Entry info)
@@ -72,46 +108,28 @@ namespace Wsla.Server
                 return false;
             }
 
-            public static void Initialize()
+            public static void RegisterMessagingRoutes(InlineBuilder builder)
             {
-                Servers = new(10);
+                builder.Put(Constants.RestRoutes.RegisterRelay, (RegisterRelayRequest x) => RegisterRelayHandler(x));
 
-                Messaging.Server.Dispatcher.RegisterAsync<RegisterRelayRequest>(RegisterRelayHandler);
+                builder.Get(Constants.RestRoutes.ListRegions, () => ListRegions());
 
-                Messaging.Server.Dispatcher.RegisterAsync<ListRegionsRequest>(ListRegions);
-
-                Messaging.Server.Dispatcher.RegisterAsync<CreateRoomRequest>(CreateRoom);
+                builder.Post(Constants.RestRoutes.CreateRoom, (CreateRoomRequest x) => CreateRoom(x));
             }
 
-            static async Task RegisterRelayHandler(MessagingPeer peer, RegisterRelayRequest message)
+            static void RegisterRelayHandler(RegisterRelayRequest message)
             {
                 NetworkLog.Info($"Registering ({message.Info.Region}) Server on Address: {message.Info.Address}");
 
-                var entry = new Entry(message.Info, peer);
+                var entry = new Entry(message.Info);
 
                 lock (Servers)
                 {
                     Servers.Add(entry);
                 }
-
-                peer.OnStop += () => RelayMessagingPeerStopCallback(entry);
-
-                var response = new RegisterRelayResponse();
-                await peer.Send(response);
             }
 
-            static void RelayMessagingPeerStopCallback(Entry entry)
-            {
-                NetworkLog.Info($"Relay {entry} Peer Stopped");
-
-                lock (Servers)
-                {
-                    if (Servers.Remove(entry) is false)
-                        return;
-                }
-            }
-
-            static async Task ListRegions(MessagingPeer peer, ListRegionsRequest message)
+            static List<ServerRegion> ListRegions()
             {
                 List<ServerRegion> regions;
 
@@ -128,51 +146,36 @@ namespace Wsla.Server
                     }
                 }
 
-                var response = new ListRegionsResponse(regions);
-                await peer.Send(response);
+                return regions;
             }
 
-            static async Task CreateRoom(MessagingPeer peer, CreateRoomRequest message)
+            static async Task<CreateRoomResponse> CreateRoom(CreateRoomRequest message)
             {
-                using (var query = new MessagingQuery())
+                Entry Entry;
+
+                //Find Region
+                if (TryFindServer(message.Region, out Entry) is false)
+                    throw new ProviderException(ResponseStatus.BadRequest, $"No Region {message.Region} Found");
+
+                CreateRoomConfirmation Confirmation;
+
+                //Forward Request to Relay
                 {
-                    Entry Entry;
+                    var response = await Messaging.Client.POST<CreateRoomCommand, CreateRoomConfirmation>
+                        (Entry.Info.Address, Constants.RelayMessagingPort, Constants.RestRoutes.CreateRoom, message.Command);
 
-                    //Find Region
-                    if (TryFindServer(message.Region, out Entry) is false)
-                    {
-                        await peer.Send(WslaError.From(WslaErrorCode.NoRegion));
-                        return;
-                    }
+                    if (response.IsError)
+                        throw response.Error.ToProviderException();
 
-                    CreateRoomConfirmation Confirmation;
-
-                    //Forward Request to Relay
-                    {
-                        var response = await query.Transport<CreateRoomCommand, CreateRoomConfirmation>(Entry.Info.Address, Constants.RelayMessagingPort, message.Command);
-
-                        if (response.IsError)
-                        {
-                            await peer.Send(response.Error);
-                            return;
-                        }
-
-                        Confirmation = response.Value;
-                    }
-
-                    //Send Response
-                    {
-                        var response = new CreateRoomResponse(Entry.Info.Address, Confirmation.Port);
-                        await peer.Send(response);
-                    }
+                    Confirmation = response.Value;
                 }
+
+                return new CreateRoomResponse(Entry.Info.Address, Confirmation.Port);
             }
         }
 
         static async Task Main(string[] args)
         {
-            Call();
-
             Console.Title = "Coordinator Server";
 
             NetworkLog.UseConsole();
@@ -183,8 +186,8 @@ namespace Wsla.Server
 
             //Initialize
             {
-                Messaging.Initialize();
-                Matchmaking.Initialize();
+                Messaging.Init();
+                Matchmaking.Init();
             }
 
             //Start
@@ -193,34 +196,6 @@ namespace Wsla.Server
             }
 
             while (true) Console.ReadKey();
-        }
-
-        static async void Call()
-        {
-            var service = Inline.Create()
-                .Get(":id", (int id) =>
-                {
-                    return id;
-                });
-
-            var api = Layout.Create()
-                .Add("mark1", service);
-
-            await Host.Create()
-                .Handler(api)
-                .Bind(IPAddress.Any, 8080)
-                .Development()
-                .Console()
-                .StartAsync();
-        }
-
-        public struct Data
-        {
-            [JsonInclude]
-            public int Number1 { get; init; }
-
-            [JsonInclude]
-            public int Number2 { get; init; }
         }
 
         static async Task LoadConfig()

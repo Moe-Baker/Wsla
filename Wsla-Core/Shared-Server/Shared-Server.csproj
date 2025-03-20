@@ -3,14 +3,16 @@
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<RootNamespace>Wsla</RootNamespace>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>disable</Nullable>
 		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>
 	</PropertyGroup>
 
 	<ItemGroup>
 	  <PackageReference Include="GenHTTP.Core" Version="9.7.0" />
+	  <PackageReference Include="GenHTTP.Modules.Conversion" Version="9.7.0" />
 	  <PackageReference Include="GenHTTP.Modules.Functional" Version="9.7.0" />
+	  <PackageReference Include="GenHTTP.Modules.Protobuf" Version="9.7.0" />
 	</ItemGroup>
 
 	<ItemGroup>

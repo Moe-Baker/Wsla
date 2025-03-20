@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -286,113 +287,5 @@ namespace Wsla
         }
 
         public static NetworkPongMessage From(NetworkPingMessage ping) => new NetworkPongMessage(ping.Time);
-    }
-
-    public struct CreateRoomRequest : IAutoNetworkSerialization
-    {
-        public CreateRoomCommand Command;
-        public ServerRegion Region;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Command);
-            context.Select(ref Region);
-        }
-
-        public CreateRoomRequest(CreateRoomCommand Command, ServerRegion Region)
-        {
-            this.Command = Command;
-            this.Region = Region;
-        }
-    }
-    public struct CreateRoomResponse : IAutoNetworkSerialization
-    {
-        public IPAddress Address;
-        public ushort Port;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Address);
-            context.Select(ref Port);
-        }
-
-        public CreateRoomResponse(IPAddress Address, ushort Port)
-        {
-            this.Address = Address;
-            this.Port = Port;
-        }
-    }
-
-    public struct CreateRoomCommand : IAutoNetworkSerialization
-    {
-        public FixedString40 Name;
-        public byte Capacity;
-        public FixedString20 Password;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Name);
-            context.Select(ref Capacity);
-            context.Select(ref Password);
-        }
-
-        public CreateRoomCommand(FixedString40 Name, byte Capacity, FixedString20 Password)
-        {
-            this.Name = Name;
-            this.Capacity = Capacity;
-            this.Password = Password;
-        }
-    }
-    public struct CreateRoomConfirmation : IAutoNetworkSerialization
-    {
-        public ushort Port;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Port);
-        }
-
-        public CreateRoomConfirmation(ushort Port)
-        {
-            this.Port = Port;
-        }
-    }
-
-    public struct RegisterRelayRequest : IAutoNetworkSerialization
-    {
-        public RelayServerInfo Info;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Info);
-        }
-
-        public RegisterRelayRequest(RelayServerInfo Info)
-        {
-            this.Info = Info;
-        }
-    }
-    public struct RegisterRelayResponse : IAutoNetworkSerialization
-    {
-        public void Select(ref AutoSerializationContext context) { }
-    }
-
-    public struct ListRegionsRequest : IAutoNetworkSerialization
-    {
-        public void Select(ref AutoSerializationContext context) { }
-    }
-    public struct ListRegionsResponse : IAutoNetworkSerialization
-    {
-        public List<ServerRegion> Regions;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Regions);
-        }
-
-        public ListRegionsResponse(List<ServerRegion> regions)
-        {
-            this.Regions = regions;
-        }
     }
 }

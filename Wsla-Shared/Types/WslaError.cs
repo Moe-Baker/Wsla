@@ -48,6 +48,11 @@ namespace Wsla
 
             return From(WslaErrorCode.TransportFailure);
         }
+
+        public static WslaError From(Exception exception) => From(WslaErrorCode.Exception, exception);
+        public static WslaError From(WslaErrorCode code, Exception exception) => new WslaError(code, exception.ToString());
+
+        public static WslaError From(RestResponse response) => new WslaError(WslaErrorCode.HttpRequestFailed, response.ToString());
     }
 
     public enum WslaErrorCode : byte
@@ -66,5 +71,7 @@ namespace Wsla
         InvalidPassword = 12,
         OperationCanceled = 13,
         SocketClosed = 14,
+        HttpRequestFailed = 15,
+        Exception = 16,
     }
 }

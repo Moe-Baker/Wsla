@@ -24,6 +24,9 @@ namespace Wsla.Unity
         public GameVersionProperty GameVersion { get; private set; }
 
         [field: SerializeField]
+        public MessagingAPI Messaging { get; private set; }
+
+        [field: SerializeField]
         public MatchMakingAPI MatchMaking { get; private set; }
 
         [field: Space]
@@ -65,6 +68,7 @@ namespace Wsla.Unity
             GameVersion = GameVersion.Initialize();
             GameID = GameID.Initialize();
 
+            Messaging.Set(this);
             MatchMaking.Set(this);
             NetworkUpdate.Set(this);
             Tick.Set(this);

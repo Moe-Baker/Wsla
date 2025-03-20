@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Net;
-
-using Wsla.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Wsla
 {
@@ -14,10 +13,15 @@ namespace Wsla
         USA = 3,
     }
 
-    public struct RelayServerInfo : IEquatable<RelayServerInfo>, IAutoNetworkSerialization
+    public struct RelayServerInfo : IEquatable<RelayServerInfo>
     {
+        [JsonInclude]
         public ServerRegion Region;
+
+        [JsonInclude]
         public int ID;
+
+        [JsonInclude]
         public IPAddress Address;
 
         public override string ToString() => $"[{Region}-{ID}]";
@@ -32,13 +36,6 @@ namespace Wsla
         public bool Equals(RelayServerInfo other) => (Region == other.Region) && (ID == other.ID);
 
         public override int GetHashCode() => (Region, ID).GetHashCode();
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Region);
-            context.Select(ref ID);
-            context.Select(ref Address);
-        }
 
         public static bool operator ==(RelayServerInfo left, RelayServerInfo right) => left.Equals(right);
         public static bool operator !=(RelayServerInfo left, RelayServerInfo right) => !left.Equals(right);
