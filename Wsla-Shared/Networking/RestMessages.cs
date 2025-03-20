@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Text.Json.Serialization;
 
@@ -54,10 +55,14 @@ namespace Wsla
     public struct CreateRoomConfirmation
     {
         [JsonInclude]
+        public Guid ID;
+
+        [JsonInclude]
         public ushort Port;
 
-        public CreateRoomConfirmation(ushort Port)
+        public CreateRoomConfirmation(Guid ID, ushort Port)
         {
+            this.ID = ID;
             this.Port = Port;
         }
     }

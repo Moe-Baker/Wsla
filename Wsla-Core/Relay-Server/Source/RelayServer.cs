@@ -1,14 +1,13 @@
 ﻿using GenHTTP.Api.Infrastructure;
+using GenHTTP.Api.Protocol;
 using GenHTTP.Engine.Internal;
-using GenHTTP.Modules.Functional;
-using GenHTTP.Modules.Functional.Provider;
 using GenHTTP.Modules.Layouting;
+using GenHTTP.Modules.Webservices;
 
 using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -139,13 +138,10 @@ namespace Wsla.Server
 
                 public static void Init()
                 {
-                    var service = Inline.Create()
-                        .Serializers(GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions));
-
-                    Matchmaking.RegisterMessagingRoutes(service);
+                    var serializers = GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions);
 
                     var api = Layout.Create()
-                        .Add(service);
+                        .AddService<Matchmaking.Endpoints>("/", serializers: serializers);
 
                     Contract = Host.Create()
                         .Handler(api)
@@ -175,14 +171,20 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
+            public class Endpoints
+            {
+                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
+                public CreateRoomConfirmation CreateRoomHandler(CreateRoomCommand message)
+                {
+                    var room = Realtime.CreateRoom(message);
+
+                    return new CreateRoomConfirmation(room.ID, room.Transport.Port);
+                }
+            }
+
             public static async Task Start()
             {
                 await RegisterWithCoordinator();
-            }
-
-            public static void RegisterMessagingRoutes(InlineBuilder builder)
-            {
-                builder.Post(Constants.RestRoutes.CreateRoom, (CreateRoomCommand message) => CreateRoomHandler(message));
             }
 
             public static async Task RegisterWithCoordinator()
@@ -198,18 +200,12 @@ namespace Wsla.Server
                     if (response.IsError)
                     {
                         NetworkLog.Error($"Failed to Register With Coordinator, Error: {response.Error}");
+                        await Task.Delay(TimeSpan.FromSeconds(1));
                         continue;
                     }
 
                     break;
                 }
-            }
-
-            static CreateRoomConfirmation CreateRoomHandler(CreateRoomCommand message)
-            {
-                var room = Realtime.CreateRoom(message);
-
-                return new CreateRoomConfirmation(room.Transport.Port);
             }
         }
 

@@ -1300,16 +1300,4 @@ namespace Wsla.Unity
             reader.Recycle();
         }
     }
-
-    public struct RoomConnectionInfo
-    {
-        public IPAddress Address { get; }
-        public ushort Port { get; }
-
-        public RoomConnectionInfo(IPAddress Address, ushort Port)
-        {
-            this.Address = Address;
-            this.Port = Port;
-        }
-    }
 }

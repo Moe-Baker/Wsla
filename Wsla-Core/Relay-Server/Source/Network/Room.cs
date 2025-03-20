@@ -12,6 +12,8 @@ namespace Wsla.Server
 {
     public class Room : IDisposable
     {
+        public Guid ID { get; }
+
         public FixedString40 Name { get; }
 
         RoomThreadDispatcher.Processor? ThreadProcessor;
@@ -1024,6 +1026,8 @@ namespace Wsla.Server
 
         public Room(CreateRoomCommand request)
         {
+            ID = Guid.NewGuid();
+
             Name = request.Name;
             Capacity = request.Capacity;
             Password = request.Password;

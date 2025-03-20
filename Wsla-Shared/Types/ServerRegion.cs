@@ -47,4 +47,34 @@ namespace Wsla
             this.Address = Address;
         }
     }
+
+    public struct RoomConnectionInfo : IEquatable<RoomConnectionInfo>
+    {
+        [JsonInclude]
+        public IPAddress Address;
+        [JsonInclude]
+        public ushort Port;
+
+        public override string ToString() => $"[{Address}:{Port}]";
+
+        public override bool Equals(object obj)
+        {
+            if (obj is RoomConnectionInfo other)
+                return Equals(other);
+
+            return false;
+        }
+        public bool Equals(RoomConnectionInfo other) => (Port.Equals(other.Port)) && (Address.Equals(other.Address));
+
+        public override int GetHashCode() => HashCode.Combine(Address, Port);
+
+        public static bool operator ==(RoomConnectionInfo left, RoomConnectionInfo right) => left.Equals(right);
+        public static bool operator !=(RoomConnectionInfo left, RoomConnectionInfo right) => !left.Equals(right);
+
+        public RoomConnectionInfo(IPAddress Address, ushort Port)
+        {
+            this.Address = Address;
+            this.Port = Port;
+        }
+    }
 }

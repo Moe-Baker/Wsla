@@ -479,8 +479,8 @@ namespace SerializationTests
         public void Serialize()
         {
             var original = new IPAddress(stackalloc byte[] { 10, 0, 0, 10 });
-            var json = JsonSerializer.Serialize(original, options: CreateOptions());
-            var clone = JsonSerializer.Deserialize<IPAddress>(json, options: CreateOptions());
+            var json = JsonSerializer.Serialize(original, SharedAPI.JsonOptions);
+            var clone = JsonSerializer.Deserialize<IPAddress>(json, options: SharedAPI.JsonOptions);
 
             Assert.Equal(original, clone);
         }

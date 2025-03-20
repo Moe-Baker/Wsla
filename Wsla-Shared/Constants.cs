@@ -16,9 +16,13 @@ namespace Wsla
 
         public static class RestRoutes
         {
-            public static readonly string RegisterRelay = "register-relay";
-            public static readonly string ListRegions = "list-regions";
-            public static readonly string CreateRoom = "create-room";
+            public const string RegisterRelay = "register-relay";
+            public const string ListRegions = "list-regions";
+
+            public const string ListRooms = "list-rooms";
+
+            public const string CreateRoom = "create-room";
+            public const string DeleteRoom = "delete-room";
         }
     }
 }
