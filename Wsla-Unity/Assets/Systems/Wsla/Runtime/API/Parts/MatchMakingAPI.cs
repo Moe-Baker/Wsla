@@ -39,5 +39,17 @@ namespace Wsla.Unity
 
             return new RoomConnectionInfo(info.Address, info.Port);
         }
+
+        public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(ServerRegion region)
+        {
+            var request = new ListRoomsRequest(region);
+
+            var response = await API.Messaging.POST<ListRoomsRequest, List<RoomListEntryInfo>>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.ListRooms, request);
+
+            if (response.IsError)
+                return WslaError.From(response.Error);
+
+            return response.Value;
+        }
     }
 }

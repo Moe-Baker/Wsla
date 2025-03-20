@@ -77,4 +77,21 @@ namespace Wsla
             this.Port = Port;
         }
     }
+
+    public struct RoomListEntryInfo
+    {
+        [JsonInclude]
+        public string Name;
+
+        [JsonInclude]
+        public RoomConnectionInfo ConnectionInfo;
+
+        public override string ToString() => $"[Room: {Name}, Connection: {ConnectionInfo}]";
+
+        public RoomListEntryInfo(string Name, RoomConnectionInfo ConnectionInfo)
+        {
+            this.Name = Name;
+            this.ConnectionInfo = ConnectionInfo;
+        }
+    }
 }

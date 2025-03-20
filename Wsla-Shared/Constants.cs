@@ -22,7 +22,7 @@ namespace Wsla
             public const string ListRooms = "list-rooms";
 
             public const string CreateRoom = "create-room";
-            public const string DeleteRoom = "delete-room";
+            public const string RemoveRoom = "remove-room";
         }
     }
 }

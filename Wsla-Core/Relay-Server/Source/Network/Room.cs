@@ -984,6 +984,8 @@ namespace Wsla.Server
 
             ThreadProcessor.Unregister(this);
 
+            RelayServer.Matchmaking.RemoveRoomFromCoordinator(ID);
+
             Dispose();
         }
 

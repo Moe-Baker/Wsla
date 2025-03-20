@@ -88,4 +88,26 @@ namespace Wsla
             this.Regions = regions;
         }
     }
+
+    public struct RemoveRoomRequest
+    {
+        public IPAddress RelayAddress;
+        public Guid RoomID;
+
+        public RemoveRoomRequest(IPAddress RelayAddress, Guid RoomID)
+        {
+            this.RelayAddress = RelayAddress;
+            this.RoomID = RoomID;
+        }
+    }
+
+    public struct ListRoomsRequest
+    {
+        public ServerRegion Region;
+
+        public ListRoomsRequest(ServerRegion Region)
+        {
+            this.Region = Region;
+        }
+    }
 }

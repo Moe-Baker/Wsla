@@ -207,6 +207,15 @@ namespace Wsla.Server
                     break;
                 }
             }
+
+            public static async void RemoveRoomFromCoordinator(Guid id)
+            {
+                //MOBO: deal with disconnects
+
+                var request = new RemoveRoomRequest(Configuration.PublicAddress, id);
+
+                var response = await Messaging.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RemoveRoom, request);
+            }
         }
 
         static async Task Main(string[] args)
