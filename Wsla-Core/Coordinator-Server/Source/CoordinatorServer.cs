@@ -164,13 +164,13 @@ namespace Wsla.Server
                     }
                 }
 
-                public void ListRooms(IPAddress address, List<RoomListEntryInfo> list)
+                public void ListRooms(List<RoomListEntryInfo> list)
                 {
                     lock (Rooms)
                     {
                         foreach (var (id, room) in Rooms)
                         {
-                            var connection = new RoomConnectionInfo(address, room.Port);
+                            var connection = new RoomConnectionInfo(Address, room.Port);
                             var entry = new RoomListEntryInfo(room.Name.ToString(), connection);
 
                             list.Add(entry);
@@ -260,7 +260,7 @@ namespace Wsla.Server
                             if (server.Region != request.Region)
                                 continue;
 
-                            server.ListRooms(server.Address, list);
+                            server.ListRooms(list);
                         }
                     }
 
