@@ -150,4 +150,76 @@ namespace Wsla
             this.Region = Region;
         }
     }
+
+    public struct UpdateRoomParameters : IAutoNetworkSerialization
+    {
+        public FixedString40? Name;
+
+        public byte? Occupancy;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Name);
+            context.Select(ref Occupancy);
+        }
+
+        public UpdateRoomParameters(FixedString40? Name, byte? Occupancy)
+        {
+            this.Name = Name;
+            this.Occupancy = Occupancy;
+        }
+
+        public static UpdateRoomParameters Merge(UpdateRoomParameters previous, UpdateRoomParameters current)
+        {
+            var name = Merge(previous.Name, current.Name);
+            var occupancy = Merge(previous.Occupancy, current.Occupancy);
+
+            return new UpdateRoomParameters(name, occupancy);
+        }
+
+        static T? Merge<T>(T? previous, T? current)
+            where T : struct
+        {
+            if (current.HasValue)
+                return current;
+
+            if (previous.HasValue)
+                return previous;
+
+            return null;
+        }
+    }
+
+    public struct UpdateRoomsRequest : IAutoNetworkSerialization
+    {
+        public List<UpdateRoomRequest> Requests;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Requests);
+        }
+
+        public UpdateRoomsRequest(List<UpdateRoomRequest> Requests)
+        {
+            this.Requests = Requests;
+        }
+    }
+    public struct UpdateRoomRequest : IAutoNetworkSerialization
+    {
+        public Guid ID;
+
+        public UpdateRoomParameters Parameters;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref ID);
+            context.Select(ref Parameters);
+        }
+
+        public UpdateRoomRequest(Guid ID, UpdateRoomParameters Parameters)
+        {
+            this.ID = ID;
+            this.Parameters = Parameters;
+        }
+    }
 }

@@ -355,6 +355,16 @@ namespace Wsla.Server
 
                     Transport.SendWriter(client, writer);
                 }
+
+                //Submit Matchmaker Change
+                {
+                    var change = new UpdateRoomParameters()
+                    {
+                        Occupancy = Room.Occupancy,
+                    };
+
+                    RelayServer.Matchmaking.RegisterRoomUpdate(Room.ID, change);
+                }
             }
             void DisconnectHandler(NetPeer peer, DisconnectInfo info)
             {
@@ -439,6 +449,16 @@ namespace Wsla.Server
                     }
 
                     client.Dispose();
+
+                    //Submit Matchmaker Change
+                    {
+                        var change = new UpdateRoomParameters()
+                        {
+                            Occupancy = Room.Occupancy,
+                        };
+
+                        RelayServer.Matchmaking.RegisterRoomUpdate(Room.ID, change);
+                    }
                 }
             }
 

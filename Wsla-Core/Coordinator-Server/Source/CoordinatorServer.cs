@@ -48,9 +48,9 @@ namespace Wsla.Server
                     .Development()
                     .Console();
             }
-            public static async void Start()
+            public static void Start()
             {
-                await Contract.StartAsync();
+                Contract.StartAsync().Forget();
             }
         }
 
@@ -84,7 +84,30 @@ namespace Wsla.Server
                 public IPAddress Address => Info.Address;
 
                 Dictionary<Guid, Room> Rooms;
-                record struct Room(ushort Port, string Name);
+                public class Room
+                {
+                    public ushort Port { get; }
+
+                    public FixedString40 Name;
+                    public byte Occupancy;
+
+                    public void UpdateRoom(UpdateRoomParameters parameters)
+                    {
+                        if (parameters.Name.HasValue)
+                            Name = parameters.Name.Value;
+
+                        if (parameters.Occupancy.HasValue)
+                            Occupancy = parameters.Occupancy.Value;
+                    }
+
+                    public Room(ushort Port, FixedString40 Name)
+                    {
+                        this.Port = Port;
+                        this.Name = Name;
+
+                        Occupancy = 0;
+                    }
+                }
 
                 public bool RegisterRoom(Guid id, ushort port, string name)
                 {
@@ -110,6 +133,37 @@ namespace Wsla.Server
                             NetworkLog.Warning($"No Room with ID {id} Registered");
                     }
                 }
+
+                public void UpdateRoom(Guid id, UpdateRoomParameters parameters)
+                {
+                    lock (Rooms)
+                    {
+                        if (Rooms.TryGetValue(id, out var room) is false)
+                        {
+                            NetworkLog.Error($"No Room With ID {id} Found");
+                            return;
+                        }
+
+                        room.UpdateRoom(parameters);
+                    }
+                }
+                public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
+                {
+                    lock (Rooms)
+                    {
+                        foreach (var request in requests)
+                        {
+                            if (Rooms.TryGetValue(request.ID, out var room) is false)
+                            {
+                                NetworkLog.Error($"No Room With ID {request.ID} Found");
+                                continue;
+                            }
+
+                            room.UpdateRoom(request.Parameters);
+                        }
+                    }
+                }
+
                 public void ListRooms(IPAddress address, List<RoomListEntryInfo> list)
                 {
                     lock (Rooms)
@@ -117,7 +171,7 @@ namespace Wsla.Server
                         foreach (var (id, room) in Rooms)
                         {
                             var connection = new RoomConnectionInfo(address, room.Port);
-                            var entry = new RoomListEntryInfo(room.Name, connection);
+                            var entry = new RoomListEntryInfo(room.Name.ToString(), connection);
 
                             list.Add(entry);
                         }
@@ -226,6 +280,7 @@ namespace Wsla.Server
                 server.Dispatcher.RegisterSync<RegisterRelayRequest>(RegisterRelayHandler);
                 server.Dispatcher.RegisterSync<CreateRoomConfirmation>(CreateRoomConfirmationHandler);
                 server.Dispatcher.RegisterSync<RemoveRoomRequest>(RemoveRoomHandler);
+                server.Dispatcher.RegisterSync<UpdateRoomsRequest>(UpdateRoomsHandler);
             }
 
             static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
@@ -296,6 +351,28 @@ namespace Wsla.Server
             static void RemoveRoomHandler(MessagingPeer peer, ref RemoveRoomRequest message)
             {
                 TryRemoveRoom(message.RelayAddress, message.RoomID);
+            }
+
+            static void UpdateRoomsHandler(MessagingPeer peer, ref UpdateRoomsRequest message)
+            {
+                if (TryReadTag(peer, out var server) is false)
+                    return;
+
+                server.UpdateRooms(message.Requests);
+            }
+
+            static bool TryReadTag(MessagingPeer peer, out Server server)
+            {
+                if (peer.Tag is not Server)
+                {
+                    NetworkLog.Warning($"Peer {peer} not Tagged as Relay Server");
+
+                    server = default;
+                    return false;
+                }
+
+                server = peer.Tag as Server;
+                return true;
             }
 
             public static bool TryRemoveRoom(IPAddress relay, Guid id)

@@ -68,8 +68,8 @@ class Playground
         client.Dispatcher.Register<SamplePayload>(MessageHandler);
         void MessageHandler(ref SamplePayload message)
         {
-            Procedure(message);
-            async void Procedure(SamplePayload message)
+            Procedure(message).Forget();
+            async Task Procedure(SamplePayload message)
             {
                 NetworkLog.Trace($"Message: {message.Text}");
 
@@ -97,8 +97,8 @@ class Playground
         client.Dispatcher.Register<SamplePayload>(MessageHandler);
         void MessageHandler(ref SamplePayload message)
         {
-            Procedure(message);
-            async void Procedure(SamplePayload message)
+            Procedure(message).Forget();
+            async Task Procedure(SamplePayload message)
             {
                 NetworkLog.Trace($"Message: {message.Text}");
 

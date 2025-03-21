@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -145,10 +146,61 @@ namespace Wsla.Server
             }
 
             public static void Send<[NetworkSerializationMarker] T>(T message) => Client.SendMessage(message);
+            public static Task SendAsync<[NetworkSerializationMarker] T>(T message) => Client.SendMessageAsync(message);
         }
 
         public static class Matchmaking
         {
+            static ChangesCollector<Guid, UpdateRoomParameters> RoomUpdates;
+            public static void RegisterRoomUpdate(Guid id, UpdateRoomParameters parameters)
+            {
+                lock (RoomUpdates)
+                {
+                    RoomUpdates.Add(id, parameters);
+                }
+            }
+            static async Task UploadRoomUpdates()
+            {
+                var interval = TimeSpan.FromSeconds(5);
+
+                var requests = new List<UpdateRoomRequest>(40);
+
+                while (true)
+                {
+                    await Task.Delay(interval);
+
+                    //Collect Changes
+                    lock (RoomUpdates)
+                    {
+                        if (RoomUpdates.TryRead(out var changes) is false)
+                            continue;
+
+                        requests.Clear();
+
+                        foreach (var (id, parameters) in changes)
+                        {
+                            var request = new UpdateRoomRequest(id, parameters);
+                            requests.Add(request);
+                        }
+
+                        RoomUpdates.Clear();
+                    }
+
+                    //Send Request
+                    {
+                        var request = new UpdateRoomsRequest(requests);
+
+                        await Messaging.SendAsync(request);
+                    }
+                }
+            }
+
+            public static void Init()
+            {
+                RoomUpdates = new ChangesCollector<Guid, UpdateRoomParameters>(UpdateRoomParameters.Merge);
+                UploadRoomUpdates().Forget();
+            }
+
             public static void RegisterMessages(MessagingClient client)
             {
                 client.Dispatcher.Register<CreateRoomCommand>(CreateRoomHandler);
@@ -189,6 +241,7 @@ namespace Wsla.Server
             ParseArguments(args);
 
             Realtime.Init();
+            Matchmaking.Init();
 
             await Messaging.Start();
 

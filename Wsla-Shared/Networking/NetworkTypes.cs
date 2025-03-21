@@ -99,6 +99,9 @@ namespace Wsla
             Add<CreateRoomResponse>(ref counter);
 
             Add<RemoveRoomRequest>(ref counter);
+
+            Add<UpdateRoomRequest>(ref counter);
+            Add<UpdateRoomsRequest>(ref counter);
         }
     }
 

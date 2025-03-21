@@ -36,8 +36,8 @@ namespace Wsla
 
             StopLock = new object();
 
-            Receive(CancellationSource.Token);
-            KeepAlive(CancellationSource.Token);
+            Receive(CancellationSource.Token).Forget();
+            KeepAlive(CancellationSource.Token).Forget();
         }
 
         #region Send
@@ -45,7 +45,7 @@ namespace Wsla
 
         NetDataWriter SendBuffer;
 
-        public async void SendMessage<[NetworkSerializationMarker] T>(T data) => await SendMessageAsync(data);
+        public void SendMessage<[NetworkSerializationMarker] T>(T data) => SendMessageAsync(data).Forget();
         public async Task SendMessageAsync<[NetworkSerializationMarker] T>(T data)
         {
             try
@@ -100,7 +100,7 @@ namespace Wsla
             }
         }
 
-        async void SendKeepAlive()
+        async Task SendKeepAlive()
         {
             try
             {
@@ -137,7 +137,7 @@ namespace Wsla
         #region Receive
         NetDataWriter ReceiveBuffer;
 
-        protected async void Receive(CancellationToken cancellation)
+        protected async Task Receive(CancellationToken cancellation)
         {
             while (cancellation.IsCancellationRequested is false)
             {
@@ -276,7 +276,7 @@ namespace Wsla
 
         static byte[] KeepAlivePayload = new byte[] { 0, 0 };
 
-        async void KeepAlive(CancellationToken cancellation)
+        async Task KeepAlive(CancellationToken cancellation)
         {
             while (cancellation.IsCancellationRequested is false)
             {
@@ -289,7 +289,7 @@ namespace Wsla
                     var duration = LastSendTime.ReadSpan();
 
                     if (duration >= KeepAliveSendInterval)
-                        SendKeepAlive();
+                        SendKeepAlive().Forget();
                 }
 
                 //Check Receive
@@ -310,7 +310,8 @@ namespace Wsla
         #region Stop
         object StopLock;
 
-        protected async void Stop()
+        protected void Stop() => StopAsync().Forget();
+        protected async Task StopAsync()
         {
             lock (StopLock)
             {
@@ -519,10 +520,10 @@ namespace Wsla
 
                 Handlers[id] = Surrogate;
 
-                async void Surrogate(MessagingPeer peer, INetworkStream reader)
+                void Surrogate(MessagingPeer peer, INetworkStream reader)
                 {
                     var data = NetworkSerializer.ReadValue<T>(reader);
-                    await handler(peer, data);
+                    handler(peer, data).Forget();
                 }
             }
 
@@ -545,10 +546,10 @@ namespace Wsla
 
             Socket.Listen(100);
 
-            Poll();
+            Poll().Forget();
         }
 
-        async void Poll()
+        async Task Poll()
         {
             while (true)
             {
