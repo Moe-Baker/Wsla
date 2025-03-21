@@ -33,40 +33,41 @@ namespace Wsla.Server
 
         public static class REST
         {
-            public static class Server
-            {
-                static IServerHost Contract;
-
-                public static void Init()
-                {
-                    var serializers = GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions);
-
-                    var api = Layout.Create()
-                        .AddService<Matchmaking.Endpoints>("/", serializers: serializers);
-
-                    Contract = Host.Create()
-                        .Handler(api)
-                        .Bind(IPAddress.Any, Constants.CoordinatorMessagingPort)
-                        .Development()
-                        .Console();
-                }
-                public static async void Start()
-                {
-                    await Contract.StartAsync();
-                }
-            }
-
-            public static HttpRequester Client { get; private set; }
+            static IServerHost Contract;
 
             public static void Init()
             {
-                Server.Init();
+                var serializers = GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions);
 
-                Client = new HttpRequester(SharedAPI.JsonOptions);
+                var api = Layout.Create()
+                    .AddService<Matchmaking.Endpoints>("/", serializers: serializers);
+
+                Contract = Host.Create()
+                    .Handler(api)
+                    .Bind(IPAddress.Any, Constants.CoordinatorHttpPort)
+                    .Development()
+                    .Console();
             }
+            public static async void Start()
+            {
+                await Contract.StartAsync();
+            }
+        }
+
+        public static class Messaging
+        {
+            public static MessagingServer Server { get; private set; }
+
+            public static void Initialize()
+            {
+                Server = new MessagingServer();
+
+                Matchmaking.RegisterMessages(Server);
+            }
+
             public static void Start()
             {
-                Server.Start();
+                Server.Start(Constants.CoordinatorMessagingPort);
             }
         }
 
@@ -76,6 +77,8 @@ namespace Wsla.Server
             public class Server
             {
                 public RelayServerInfo Info { get; }
+
+                public MessagingPeer MessagingPeer { get; }
 
                 public ServerRegion Region => Info.Region;
                 public IPAddress Address => Info.Address;
@@ -121,29 +124,21 @@ namespace Wsla.Server
                     }
                 }
 
-                public Server(RelayServerInfo Info)
+                public override string ToString() => Info.ToString();
+
+                public Server(RelayServerInfo Info, MessagingPeer MessagingPeer)
                 {
                     this.Info = Info;
+                    this.MessagingPeer = MessagingPeer;
 
                     Rooms = new(10);
                 }
             }
 
+            static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
+
             public class Endpoints
             {
-                [ResourceMethod(RequestMethod.Put, Constants.RestRoutes.RegisterRelay)]
-                public void RegisterRelayHandler(RegisterRelayRequest message)
-                {
-                    NetworkLog.Info($"Registering ({message.Info.Region}) Server on Address: {message.Info.Address}");
-
-                    var entry = new Server(message.Info);
-
-                    lock (Servers)
-                    {
-                        Servers.Add(entry);
-                    }
-                }
-
                 [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
                 public ListRegionsResponse ListRegions()
                 {
@@ -168,34 +163,35 @@ namespace Wsla.Server
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
                 public async Task<CreateRoomResponse> CreateRoom(CreateRoomRequest message)
                 {
-                    Server Entry;
-
                     //Find Region
-                    if (TryFindServer(message.Region, out Entry) is false)
+                    if (TryFindServer(message.Region, out var server) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"No Region {message.Region} Found");
 
-                    CreateRoomConfirmation Confirmation;
+                    var id = Guid.NewGuid();
+
+                    var operation = RoomCreationQueue.Create(id, server.MessagingPeer.DisconnectCancellationToken);
 
                     //Forward Request to Relay
                     {
-                        var response = await REST.Client.POST<CreateRoomCommand, CreateRoomConfirmation>
-                            (Entry.Address, Constants.RelayMessagingPort, Constants.RestRoutes.CreateRoom, message.Command);
-
-                        if (response.IsError)
-                            throw response.Error.ToProviderException();
-
-                        Confirmation = response.Value;
+                        var request = new CreateRoomCommand(id, message.Parameters);
+                        server.MessagingPeer.SendMessage(request);
                     }
 
-                    Entry.RegisterRoom(Confirmation.ID, Confirmation.Port, message.Command.Name);
+                    CreateRoomConfirmation Confirmation;
 
-                    return new CreateRoomResponse(Entry.Address, Confirmation.Port);
-                }
+                    //Wait for Response from Relay
+                    try
+                    {
+                        Confirmation = await operation.Task;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
+                    }
 
-                [ResourceMethod(RequestMethod.Put, Constants.RestRoutes.RemoveRoom)]
-                public void RemoveRoom(RemoveRoomRequest request)
-                {
-                    TryRemoveRoom(request.RelayAddress, request.RoomID);
+                    server.RegisterRoom(id, Confirmation.Port, message.Parameters.Name);
+
+                    return new CreateRoomResponse(server.Address, Confirmation.Port);
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
@@ -221,6 +217,43 @@ namespace Wsla.Server
             public static void Init()
             {
                 Servers = new(10);
+
+                RoomCreationQueue = new();
+            }
+
+            public static void RegisterMessages(MessagingServer server)
+            {
+                server.Dispatcher.RegisterSync<RegisterRelayRequest>(RegisterRelayHandler);
+                server.Dispatcher.RegisterSync<CreateRoomConfirmation>(CreateRoomConfirmationHandler);
+                server.Dispatcher.RegisterSync<RemoveRoomRequest>(RemoveRoomHandler);
+            }
+
+            static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
+            {
+                NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
+
+                var server = new Server(message.Info, peer);
+                peer.Tag = server;
+
+                lock (Servers)
+                {
+                    Servers.Add(server);
+                }
+
+                peer.RegisterStopCallback(() => RelayStoppedCallback(server));
+            }
+            static void RelayStoppedCallback(Server server)
+            {
+                NetworkLog.Info($"Removing {server} Relay Server");
+
+                lock (Servers)
+                {
+                    if (Servers.Remove(server) is false)
+                    {
+                        NetworkLog.Warning($"No Relay Server {server} Found to Remove");
+                        return;
+                    }
+                }
             }
 
             public static bool TryFindServer(ServerRegion region, out Server server)
@@ -256,6 +289,15 @@ namespace Wsla.Server
                 return false;
             }
 
+            static void CreateRoomConfirmationHandler(MessagingPeer peer, ref CreateRoomConfirmation message)
+            {
+                RoomCreationQueue.Fulfill(message.ID, message);
+            }
+            static void RemoveRoomHandler(MessagingPeer peer, ref RemoveRoomRequest message)
+            {
+                TryRemoveRoom(message.RelayAddress, message.RoomID);
+            }
+
             public static bool TryRemoveRoom(IPAddress relay, Guid id)
             {
                 if (TryFindServer(relay, out var server) is false)
@@ -278,12 +320,14 @@ namespace Wsla.Server
 
             //Initialize
             {
+                Messaging.Initialize();
                 REST.Init();
                 Matchmaking.Init();
             }
 
             //Start
             {
+                Messaging.Start();
                 REST.Start();
             }
 

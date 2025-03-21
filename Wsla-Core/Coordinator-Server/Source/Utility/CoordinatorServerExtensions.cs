@@ -3,7 +3,7 @@ using GenHTTP.Api.Protocol;
 
 namespace Wsla.Server
 {
-    public static class SharedServerExtensions
+    public static class CoordinatorServerExtensions
     {
         public static ProviderException ToProviderException(this RestResponse response)
         {

@@ -1026,13 +1026,13 @@ namespace Wsla.Server
             Entities.Dispose();
         }
 
-        public Room(CreateRoomCommand request)
+        public Room(Guid id, CreateRoomParameters parameters)
         {
-            ID = Guid.NewGuid();
+            this.ID = id;
 
-            Name = request.Name;
-            Capacity = request.Capacity;
-            Password = request.Password;
+            Name = parameters.Name;
+            Capacity = parameters.Capacity;
+            Password = parameters.Password;
 
             Visible = false; //Rooms always start invisible, and turn visible optionally
 

@@ -14,6 +14,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="GenHTTP.Core" Version="9.7.0" />
+		<PackageReference Include="GenHTTP.Modules.Webservices" Version="9.7.0" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
 			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
 			<OutputItemType>Analyzer</OutputItemType>

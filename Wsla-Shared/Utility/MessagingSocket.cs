@@ -17,16 +17,14 @@ namespace Wsla
 
         public bool IsConnected { get; protected set; }
 
-        public CancellationTokenSource CancellationSource { get; private set; }
-        public CancellationToken GetCancellationToken() => CancellationSource.Token;
+        CancellationTokenSource CancellationSource;
+        public CancellationToken DisconnectCancellationToken => CancellationSource.Token;
 
         public const int LengthHeaderSize = 2;
 
         protected virtual void Run()
         {
             IsConnected = true;
-
-            CancellationSource = new CancellationTokenSource();
 
             SendLock = new SemaphoreSlim(1);
             SendBuffer = new NetDataWriter(true, 128);
@@ -50,11 +48,9 @@ namespace Wsla
         public async void SendMessage<[NetworkSerializationMarker] T>(T data) => await SendMessageAsync(data);
         public async Task SendMessageAsync<[NetworkSerializationMarker] T>(T data)
         {
-            var cancellation = GetCancellationToken();
-
             try
             {
-                await SendLock.WaitAsync(cancellation);
+                await SendLock.WaitAsync(DisconnectCancellationToken);
 
                 ArraySegment<byte> LengthBuffer;
 
@@ -75,8 +71,8 @@ namespace Wsla
                 }
 
                 var memory = SendBuffer.Data.AsMemory(0, SendBuffer.Position);
-                await Socket.SendAsync(memory, SocketFlags.None, cancellation);
-                if (cancellation.IsCancellationRequested)
+                await Socket.SendAsync(memory, SocketFlags.None, DisconnectCancellationToken);
+                if (DisconnectCancellationToken.IsCancellationRequested)
                     return;
 
                 //Update Keep Alive Send Time
@@ -104,16 +100,14 @@ namespace Wsla
             }
         }
 
-        public async void SendKeepAlive()
+        async void SendKeepAlive()
         {
-            var cancellation = GetCancellationToken();
-
             try
             {
-                await SendLock.WaitAsync(cancellation);
+                await SendLock.WaitAsync(DisconnectCancellationToken);
 
-                await Socket.SendAsync(KeepAlivePayload, SocketFlags.None, cancellation);
-                if (cancellation.IsCancellationRequested)
+                await Socket.SendAsync(KeepAlivePayload, SocketFlags.None, DisconnectCancellationToken);
+                if (DisconnectCancellationToken.IsCancellationRequested)
                     return;
 
                 //Update Keep Alive Send Time
@@ -356,7 +350,18 @@ namespace Wsla
                 Reset();
             }
         }
-        public event Action OnStop;
+        event Action OnStop;
+
+        public void RegisterStopCallback(Action callback)
+        {
+            lock (StopLock)
+            {
+                if (IsConnected)
+                    OnStop += callback;
+                else
+                    callback?.Invoke();
+            }
+        }
 
         protected virtual void Reset()
         {
@@ -369,7 +374,11 @@ namespace Wsla
 
         public override string ToString() => $"[Socket {Socket.RemoteEndPoint} -> {Socket.LocalEndPoint}]";
 
-        protected MessagingConnection(Socket Socket)
+        protected MessagingConnection()
+        {
+            CancellationSource = new CancellationTokenSource();
+        }
+        protected MessagingConnection(Socket Socket) : this()
         {
             this.Socket = Socket;
         }
@@ -450,7 +459,10 @@ namespace Wsla
     {
         public MessagingServer Server { get; }
 
-        public void Start() => Run();
+        public object Tag;
+
+        internal void Start() => Run();
+        public void Disconnect() => Stop();
 
         protected override void DispatchMessage(INetworkStream stream, ushort length) => Server.Dispatcher.Dispatch(this, stream);
 

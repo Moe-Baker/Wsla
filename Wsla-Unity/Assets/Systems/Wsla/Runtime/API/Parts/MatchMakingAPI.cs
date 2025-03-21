@@ -11,7 +11,7 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<WslaError>> UpdateRegions()
         {
-            var response = await API.REST.GET<ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.ListRegions);
+            var response = await API.REST.GET<ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.ListRegions);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -26,11 +26,11 @@ namespace Wsla.Unity
             return WslaResponse<WslaError>.Success;
         }
 
-        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomCommand command)
+        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomParameters parameters)
         {
-            var request = new CreateRoomRequest(region, command);
+            var request = new CreateRoomRequest(region, parameters);
 
-            var response = await API.REST.POST<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.CreateRoom, request);
+            var response = await API.REST.POST<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.CreateRoom, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -44,7 +44,7 @@ namespace Wsla.Unity
         {
             var request = new ListRoomsRequest(region);
 
-            var response = await API.REST.POST<ListRoomsRequest, List<RoomListEntryInfo>>(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort, Constants.RestRoutes.ListRooms, request);
+            var response = await API.REST.POST<ListRoomsRequest, List<RoomListEntryInfo>>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.ListRooms, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);

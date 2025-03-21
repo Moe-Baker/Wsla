@@ -3,19 +3,47 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text.Json.Serialization;
 
+using Wsla.Serialization;
+
 namespace Wsla
 {
+    public struct CreateRoomParameters : IAutoNetworkSerialization
+    {
+        [JsonInclude]
+        public string Name;
+
+        [JsonInclude]
+        public byte Capacity;
+
+        [JsonInclude]
+        public string Password;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Name);
+            context.Select(ref Capacity);
+            context.Select(ref Password);
+        }
+
+        public CreateRoomParameters(string Name, byte Capacity, string Password)
+        {
+            this.Name = Name;
+            this.Capacity = Capacity;
+            this.Password = Password;
+        }
+    }
+
     public struct CreateRoomRequest
     {
         [JsonInclude]
         public ServerRegion Region;
 
         [JsonInclude]
-        public CreateRoomCommand Command;
+        public CreateRoomParameters Parameters;
 
-        public CreateRoomRequest(ServerRegion Region, CreateRoomCommand Command)
+        public CreateRoomRequest(ServerRegion Region, CreateRoomParameters Parameters)
         {
-            this.Command = Command;
+            this.Parameters = Parameters;
             this.Region = Region;
         }
     }
@@ -34,31 +62,33 @@ namespace Wsla
         }
     }
 
-    public struct CreateRoomCommand
+    public struct CreateRoomCommand : IAutoNetworkSerialization
     {
-        [JsonInclude]
-        public string Name;
+        public Guid ID;
+        public CreateRoomParameters Parameters;
 
-        [JsonInclude]
-        public byte Capacity;
-
-        [JsonInclude]
-        public string Password;
-
-        public CreateRoomCommand(string Name, byte Capacity, string Password)
+        public void Select(ref AutoSerializationContext context)
         {
-            this.Name = Name;
-            this.Capacity = Capacity;
-            this.Password = Password;
+            context.Select(ref ID);
+            context.Select(ref Parameters);
+        }
+
+        public CreateRoomCommand(Guid ID, CreateRoomParameters Parameters)
+        {
+            this.ID = ID;
+            this.Parameters = Parameters;
         }
     }
-    public struct CreateRoomConfirmation
+    public struct CreateRoomConfirmation : IAutoNetworkSerialization
     {
-        [JsonInclude]
         public Guid ID;
-
-        [JsonInclude]
         public ushort Port;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref ID);
+            context.Select(ref Port);
+        }
 
         public CreateRoomConfirmation(Guid ID, ushort Port)
         {
@@ -67,10 +97,14 @@ namespace Wsla
         }
     }
 
-    public struct RegisterRelayRequest
+    public struct RegisterRelayRequest : IAutoNetworkSerialization
     {
-        [JsonInclude]
         public RelayServerInfo Info;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Info);
+        }
 
         public RegisterRelayRequest(RelayServerInfo Info)
         {
@@ -89,10 +123,16 @@ namespace Wsla
         }
     }
 
-    public struct RemoveRoomRequest
+    public struct RemoveRoomRequest : IAutoNetworkSerialization
     {
         public IPAddress RelayAddress;
         public Guid RoomID;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref RelayAddress);
+            context.Select(ref RoomID);
+        }
 
         public RemoveRoomRequest(IPAddress RelayAddress, Guid RoomID)
         {

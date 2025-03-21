@@ -34,7 +34,7 @@ public class MainMenu : MonoBehaviour
 
     async UniTask CreateRoom()
     {
-        var request = new CreateRoomCommand("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
+        var request = new CreateRoomParameters("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
         var response = await NetworkAPI.MatchMaking.CreateRoom(ServerRegion.EU, request);
 
         if (response.IsError)
