@@ -12,6 +12,22 @@ namespace Wsla.Server
 {
     public static class RelayServer
     {
+        static async Task Main(string[] args)
+        {
+            Console.Title = "Relay Server";
+
+            NetworkLog.UseConsole();
+
+            await LoadConfig();
+
+            Realtime.Init();
+            Matchmaking.Init();
+
+            await Messaging.Start();
+
+            while (true) Console.ReadKey();
+        }
+
         public static ConfigurationProperty Configuration { get; private set; }
         public class ConfigurationProperty : ServerConfigurationData
         {
@@ -103,6 +119,17 @@ namespace Wsla.Server
                 [JsonInclude, JsonPropertyName("Public Hostname")]
                 public string PublicHostname;
             }
+        }
+        static async Task LoadConfig()
+        {
+            NetworkLog.Info($"Loading Configuration Data");
+
+            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
+
+            Configuration = await ConfigurationProperty.Create(data);
+
+            NetworkLog.Info($"Coordinator Address: {Configuration.CoordinatorAddress}");
+            NetworkLog.Info($"Server Region: {Configuration.Region}");
         }
 
         public static class Realtime
@@ -229,37 +256,5 @@ namespace Wsla.Server
                 Messaging.Send(request);
             }
         }
-
-        static async Task Main(string[] args)
-        {
-            Console.Title = "Relay Server";
-
-            NetworkLog.UseConsole();
-
-            await LoadConfig();
-
-            ParseArguments(args);
-
-            Realtime.Init();
-            Matchmaking.Init();
-
-            await Messaging.Start();
-
-            while (true) Console.ReadKey();
-        }
-
-        static async Task LoadConfig()
-        {
-            NetworkLog.Info($"Loading Configuration Data");
-
-            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
-
-            Configuration = await ConfigurationProperty.Create(data);
-
-            NetworkLog.Info($"Coordinator Address: {Configuration.CoordinatorAddress}");
-            NetworkLog.Info($"Server Region: {Configuration.Region}");
-        }
-
-        static void ParseArguments(string[] args) { }
     }
 }

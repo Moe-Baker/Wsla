@@ -14,6 +14,30 @@ namespace Wsla.Server
 {
     public static class CoordinatorServer
     {
+        static async Task Main(string[] args)
+        {
+            Console.Title = "Coordinator Server";
+
+            NetworkLog.UseConsole();
+
+            await LoadConfig();
+
+            //Initialize
+            {
+                Messaging.Initialize();
+                REST.Init();
+                Matchmaking.Init();
+            }
+
+            //Start
+            {
+                Messaging.Start();
+                REST.Start();
+            }
+
+            while (true) Console.ReadKey();
+        }
+
         public static ConfigurationProperty Configuration { get; private set; }
         public class ConfigurationProperty : ServerConfigurationData
         {
@@ -29,6 +53,14 @@ namespace Wsla.Server
             {
 
             }
+        }
+        static async Task LoadConfig()
+        {
+            NetworkLog.Info($"Loading Configuration Data");
+
+            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
+
+            Configuration = await ConfigurationProperty.Create(data);
         }
 
         public static class REST
@@ -384,42 +416,5 @@ namespace Wsla.Server
                 return true;
             }
         }
-
-        static async Task Main(string[] args)
-        {
-            Console.Title = "Coordinator Server";
-
-            NetworkLog.UseConsole();
-
-            await LoadConfig();
-
-            ParseArguments(args);
-
-            //Initialize
-            {
-                Messaging.Initialize();
-                REST.Init();
-                Matchmaking.Init();
-            }
-
-            //Start
-            {
-                Messaging.Start();
-                REST.Start();
-            }
-
-            while (true) Console.ReadKey();
-        }
-
-        static async Task LoadConfig()
-        {
-            NetworkLog.Info($"Loading Configuration Data");
-
-            var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
-
-            Configuration = await ConfigurationProperty.Create(data);
-        }
-
-        static void ParseArguments(string[] args) { }
     }
 }
