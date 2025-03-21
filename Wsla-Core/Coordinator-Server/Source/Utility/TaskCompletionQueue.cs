@@ -7,7 +7,8 @@ namespace Wsla.Server
 {
     public class TaskCompletionQueue<TKey, TValue>
     {
-        Dictionary<TKey, TaskCompletionSource<TValue>> Dictionary;
+        Dictionary<TKey, Entry> Dictionary;
+        record struct Entry(TaskCompletionSource<TValue> Operation, CancellationTokenRegistration Cancellation);
 
         public TaskCompletionSource<TValue> Create(TKey key, TimeSpan timeout)
         {
@@ -21,10 +22,14 @@ namespace Wsla.Server
             {
                 var operation = new TaskCompletionSource<TValue>();
 
-                if (cancellation.CanBeCanceled)
-                    cancellation.Register(Callback, key);
+                CancellationTokenRegistration registration = default;
 
-                Dictionary.Add(key, operation);
+                if (cancellation.CanBeCanceled)
+                    registration = cancellation.Register(Cancel, key);
+
+                var entry = new Entry(operation, registration);
+
+                Dictionary.Add(key, entry);
 
                 return operation;
             }
@@ -32,13 +37,15 @@ namespace Wsla.Server
 
         public bool Fulfill(TKey key, TValue value)
         {
-            if (TryRemove(key, out var operation) is false)
+            if (TryRemove(key, out var entry) is false)
                 return false;
 
-            return operation.TrySetResult(value);
+            entry.Cancellation.Unregister();
+
+            return entry.Operation.TrySetResult(value);
         }
 
-        void Callback(object state)
+        void Cancel(object state)
         {
             if (state is not TKey key)
                 throw new ArgumentException($"Excepted a ({typeof(TKey)}) Key, Got ({state?.GetType()})");
@@ -47,18 +54,19 @@ namespace Wsla.Server
         }
         public bool Cancel(TKey key)
         {
-            if (TryRemove(key, out var operation) is false)
+            if (TryRemove(key, out var entry) is false)
                 return false;
 
-            operation.TrySetCanceled();
-            return true;
+            entry.Cancellation.Unregister();
+
+            return entry.Operation.TrySetCanceled();
         }
 
-        bool TryRemove(TKey key, out TaskCompletionSource<TValue> operation)
+        bool TryRemove(TKey key, out Entry entry)
         {
             lock (Dictionary)
             {
-                return Dictionary.Remove(key, out operation);
+                return Dictionary.Remove(key, out entry);
             }
         }
 
