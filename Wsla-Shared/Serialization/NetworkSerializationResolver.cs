@@ -64,7 +64,7 @@ namespace Wsla.Serialization
 
         static NetworkSerializationResolver()
         {
-            Register<bool, BlittableNetworkSerializationResolver<bool>>();
+            Register<bool, BoolNetworkSerializationResolver>();
 
             Register<byte, BlittableNetworkSerializationResolver<byte>>();
             Register<sbyte, BlittableNetworkSerializationResolver<sbyte>>();
@@ -83,6 +83,10 @@ namespace Wsla.Serialization
 
             Register<string, StringNetworkSerializationResolver>();
 
+            Register<Guid, BlittableNetworkSerializationResolver<Guid>>();
+            Register<DateTime, DateTimeSerializationResolver>();
+            Register<TimeSpan, TimeSpanSerializationResolver>();
+
             Register<IPAddress, IPAddressNetworkSerializationResolver>();
 
             Registration.LoadAll();
@@ -92,6 +96,54 @@ namespace Wsla.Serialization
     {
         public abstract void Write(in TValue value, INetworkStream stream);
         public abstract void Read(ref TValue value, INetworkStream stream);
+    }
+
+    public class BoolNetworkSerializationResolver : NetworkSerializationResolver<bool>
+    {
+        public override void Write(in bool value, INetworkStream stream)
+        {
+            ref var octet = ref stream.PopByte();
+
+            if (value)
+                octet = 1;
+            else
+                octet = 0;
+        }
+        public override void Read(ref bool value, INetworkStream stream)
+        {
+            var octet = stream.PopByte();
+
+            if (octet is 1)
+                value = true;
+            else
+                value = false;
+        }
+    }
+
+    public class DateTimeSerializationResolver : NetworkSerializationResolver<DateTime>
+    {
+        public override void Write(in DateTime value, INetworkStream stream)
+        {
+            long binary = value.ToBinary();
+            NetworkSerializer.WriteValue(in binary, stream);
+        }
+        public override void Read(ref DateTime value, INetworkStream stream)
+        {
+            var binary = NetworkSerializer.ReadValue<long>(stream);
+            value = DateTime.FromBinary(binary);
+        }
+    }
+    public class TimeSpanSerializationResolver : NetworkSerializationResolver<TimeSpan>
+    {
+        public override void Write(in TimeSpan value, INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(value.Ticks, stream);
+        }
+        public override void Read(ref TimeSpan value, INetworkStream stream)
+        {
+            var ticks = NetworkSerializer.ReadValue<long>(stream);
+            value = new TimeSpan(ticks);
+        }
     }
 
     //Derived Resolvers
