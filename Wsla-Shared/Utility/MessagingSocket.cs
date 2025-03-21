@@ -26,16 +26,25 @@ namespace Wsla
         {
             IsConnected = true;
 
-            Receive();
+            CancellationSource = new CancellationTokenSource();
+
+            SendLock = new SemaphoreSlim(1);
+            SendBuffer = new NetDataWriter(true, 128);
+
+            ReceiveBuffer = new NetDataWriter(true, 128);
+
+            LastSendTime = AtomicTime.Create();
+            LastReceiveTime = AtomicTime.Create();
+
+            Receive(CancellationSource.Token);
+            KeepAlive(CancellationSource.Token);
         }
 
         #region Receive
-        readonly NetDataWriter ReceiveBuffer;
+        NetDataWriter ReceiveBuffer;
 
-        protected async void Receive()
+        protected async void Receive(CancellationToken cancellation)
         {
-            var cancellation = GetCancellationToken();
-
             while (cancellation.IsCancellationRequested is false)
             {
                 try
@@ -54,11 +63,18 @@ namespace Wsla
                         return;
                     }
 
+                    LastReceiveTime.UpdateTime();
+
                     var cursor = ReceiveBuffer.Position + read;
                     ReceiveBuffer.Position = 0;
 
                     while (CheckReceivedMessage(cursor, out ushort length))
+                    {
+                        if (length is 0)
+                            continue; //Keep alive message
+
                         DispatchMessage(ReceiveBuffer, length);
+                    }
 
                     AlignReceiveBuffer(cursor);
                 }
@@ -158,12 +174,12 @@ namespace Wsla
         #endregion
 
         #region Send
-        readonly SemaphoreSlim SendLock;
+        SemaphoreSlim SendLock;
 
-        readonly NetDataWriter SendBuffer;
+        NetDataWriter SendBuffer;
 
-        public async void Send<[NetworkSerializationMarker] T>(T data) => await SendAsync(data);
-        public async Task SendAsync<[NetworkSerializationMarker] T>(T data)
+        public async void SendMessage<[NetworkSerializationMarker] T>(T data) => await SendMessageAsync(data);
+        public async Task SendMessageAsync<[NetworkSerializationMarker] T>(T data)
         {
             var cancellation = GetCancellationToken();
 
@@ -191,6 +207,11 @@ namespace Wsla
 
                 var memory = SendBuffer.Data.AsMemory(0, SendBuffer.Position);
                 await Socket.SendAsync(memory, SocketFlags.None, cancellation);
+                if (cancellation.IsCancellationRequested)
+                    return;
+
+                //Update Keep Alive Send Time
+                LastSendTime.UpdateTime();
 
                 return;
             }
@@ -210,6 +231,41 @@ namespace Wsla
             {
                 SendBuffer.Reset();
 
+                SendLock.Release();
+            }
+        }
+
+        public async void SendKeepAlive()
+        {
+            var cancellation = GetCancellationToken();
+
+            try
+            {
+                await SendLock.WaitAsync(cancellation);
+
+                await Socket.SendAsync(KeepAlivePayload, SocketFlags.None, cancellation);
+                if (cancellation.IsCancellationRequested)
+                    return;
+
+                //Update Keep Alive Send Time
+                LastSendTime.UpdateTime();
+
+                return;
+            }
+            catch (SocketException ex)
+            {
+                var text = $"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}";
+
+                NetworkLog.Error(text);
+                Stop();
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            finally
+            {
                 SendLock.Release();
             }
         }
@@ -264,18 +320,49 @@ namespace Wsla
         }
         #endregion
 
+        #region Keep Alive
+        AtomicTime LastSendTime;
+        AtomicTime LastReceiveTime;
+
+        TimeSpan TimeoutDuration = TimeSpan.FromSeconds(20);
+        TimeSpan KeepAliveSendInterval => TimeoutDuration / 3;
+
+        static byte[] KeepAlivePayload = new byte[] { 0, 0 };
+
+        async void KeepAlive(CancellationToken cancellation)
+        {
+            while (cancellation.IsCancellationRequested is false)
+            {
+                await Task.Delay(KeepAliveSendInterval);
+                if (cancellation.IsCancellationRequested)
+                    return;
+
+                //Check Send
+                {
+                    var duration = LastSendTime.ReadSpan();
+
+                    if (duration >= KeepAliveSendInterval)
+                        SendKeepAlive();
+                }
+
+                //Check Receive
+                {
+                    var duration = LastReceiveTime.ReadSpan();
+
+                    if (duration >= TimeoutDuration)
+                    {
+                        NetworkLog.Error($"Socket {this} Timed-Out after {duration.TotalSeconds}s");
+                        Stop();
+                        return;
+                    }
+                }
+            }
+        }
+        #endregion
+
         public override string ToString() => $"[Socket {Socket.RemoteEndPoint} -> {Socket.LocalEndPoint}]";
 
-        protected MessagingConnection()
-        {
-            CancellationSource = new CancellationTokenSource();
-
-            SendLock = new SemaphoreSlim(1);
-            SendBuffer = new NetDataWriter(true, 128);
-
-            ReceiveBuffer = new NetDataWriter(true, 128);
-        }
-        protected MessagingConnection(Socket Socket) : this()
+        protected MessagingConnection(Socket Socket)
         {
             this.Socket = Socket;
         }

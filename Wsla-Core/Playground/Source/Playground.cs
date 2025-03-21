@@ -53,7 +53,7 @@ class Playground
         {
             NetworkLog.Trace($"Message: {message.Text}");
 
-            peer.Send(message);
+            peer.SendMessage(message);
         }
 
         server.Start(4040);
@@ -79,7 +79,9 @@ class Playground
 
         await client.Connect(ServerAddress, 4040);
 
-        await client.SendAsync(new SamplePayload("Hello World"));
+        return;
+
+        await client.SendMessageAsync(new SamplePayload("Hello World"));
 
         await Task.Delay(TimeSpan.FromSeconds(1));
 
@@ -102,7 +104,7 @@ class Playground
 
                 await Task.Delay(TimeSpan.FromMilliseconds(100));
 
-                client.Send(message);
+                client.SendMessage(message);
             }
         }
 
@@ -111,7 +113,7 @@ class Playground
         var capacity = 5_000;
 
         for (int i = 0; i < capacity; i++)
-            await client.SendAsync(new SamplePayload("Hello World"));
+            await client.SendMessageAsync(new SamplePayload("Hello World"));
 
         NetworkLog.Info($"Flood Ended");
     }
