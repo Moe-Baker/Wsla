@@ -24,9 +24,5 @@
 
 		<PackageReference Include="System.Text.Json" Version="9.0.3" />
 	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Source\Messaging\" />
-	</ItemGroup>
 	
 </Project>

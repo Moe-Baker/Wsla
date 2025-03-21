@@ -107,7 +107,13 @@ namespace Wsla
         {
             if (ReceiveBuffer.Position == 0)
             {
-                //No data read at all, most likely an incomplete message
+                //No data read at all
+                //We should never be able to reach this point because
+                //When the socket reads 0 we terminate connection
+                //And when the message is not yet completely received we re-run the receive loop
+                //But I don't throw an exception, just a warning
+
+                NetworkLog.Warning($"Messaging Receive Buffer Completely not Read");
 
                 ReceiveBuffer.Position = cursor;
                 return;
@@ -274,13 +280,7 @@ namespace Wsla
             this.Socket = Socket;
         }
 
-        protected static Socket CreateSocket()
-        {
-            return new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-            {
-                NoDelay = true,
-            };
-        }
+        protected static Socket CreateSocket() => new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     }
 
     public class MessagingClient : MessagingConnection

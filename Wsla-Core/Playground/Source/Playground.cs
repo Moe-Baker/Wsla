@@ -51,7 +51,7 @@ class Playground
         server.Dispatcher.RegisterSync<SamplePayload>(MessageHandler);
         void MessageHandler(MessagingPeer peer, ref SamplePayload message)
         {
-            //NetworkLog.Trace($"Message: {message.Text}");
+            NetworkLog.Trace($"Message: {message.Text}");
 
             peer.Send(message);
         }
