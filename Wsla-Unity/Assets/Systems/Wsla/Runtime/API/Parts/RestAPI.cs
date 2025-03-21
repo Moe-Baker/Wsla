@@ -11,7 +11,7 @@ using UnityEngine;
 namespace Wsla.Unity
 {
     [Serializable]
-    public class MessagingAPI : NetworkAPI.Property
+    public class RestAPI : NetworkAPI.Property
     {
         readonly UrlStringCache UrlCache;
 
@@ -113,7 +113,7 @@ namespace Wsla.Unity
             return value;
         }
 
-        public MessagingAPI()
+        public RestAPI()
         {
             ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () => new HttpClient());
             UrlCache = new UrlStringCache();

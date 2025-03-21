@@ -130,7 +130,7 @@ namespace Wsla.Server
             }
         }
 
-        public static class Messaging
+        public static class REST
         {
             public static class Server
             {
@@ -195,7 +195,7 @@ namespace Wsla.Server
 
                 while (true)
                 {
-                    var response = await Messaging.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RegisterRelay, request);
+                    var response = await REST.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RegisterRelay, request);
 
                     if (response.IsError)
                     {
@@ -214,7 +214,7 @@ namespace Wsla.Server
 
                 var request = new RemoveRoomRequest(Configuration.PublicAddress, id);
 
-                var response = await Messaging.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RemoveRoom, request);
+                var response = await REST.Client.PUT(Configuration.CoordinatorAddress, Constants.CoordinatorMessagingPort, Constants.RestRoutes.RemoveRoom, request);
             }
         }
 
@@ -230,7 +230,7 @@ namespace Wsla.Server
 
             //Initialize
             {
-                Messaging.Init();
+                REST.Init();
                 Realtime.Init();
             }
 
@@ -238,7 +238,7 @@ namespace Wsla.Server
             {
                 await Matchmaking.Start();
 
-                Messaging.Start();
+                REST.Start();
             }
 
             while (true) Console.ReadKey();

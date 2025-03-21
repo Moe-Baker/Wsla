@@ -31,7 +31,7 @@ namespace Wsla.Server
             }
         }
 
-        public static class Messaging
+        public static class REST
         {
             public static class Server
             {
@@ -178,7 +178,7 @@ namespace Wsla.Server
 
                     //Forward Request to Relay
                     {
-                        var response = await Messaging.Client.POST<CreateRoomCommand, CreateRoomConfirmation>
+                        var response = await REST.Client.POST<CreateRoomCommand, CreateRoomConfirmation>
                             (Entry.Address, Constants.RelayMessagingPort, Constants.RestRoutes.CreateRoom, message.Command);
 
                         if (response.IsError)
@@ -278,13 +278,13 @@ namespace Wsla.Server
 
             //Initialize
             {
-                Messaging.Init();
+                REST.Init();
                 Matchmaking.Init();
             }
 
             //Start
             {
-                Messaging.Start();
+                REST.Start();
             }
 
             while (true) Console.ReadKey();
