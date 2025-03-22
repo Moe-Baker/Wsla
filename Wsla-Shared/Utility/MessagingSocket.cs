@@ -167,7 +167,16 @@ namespace Wsla
                         if (length is 0)
                             continue; //Keep alive message
 
+                        var destination = ReceiveBuffer.Position + length;
+
                         DispatchMessage(ReceiveBuffer, length);
+
+                        if (ReceiveBuffer.Position != destination)
+                        {
+                            NetworkLog.Warning($"Misaligned Read on Messaging Socket, Expected Read: {destination}, Actual Read: {ReceiveBuffer.Position}");
+                            Stop();
+                            return;
+                        }
                     }
 
                     AlignReceiveBuffer(cursor);
@@ -218,12 +227,7 @@ namespace Wsla
             if (ReceiveBuffer.Position == 0)
             {
                 //No data read at all
-                //We should never be able to reach this point because
-                //When the socket reads 0 we terminate connection
-                //And when the message is not yet completely received we re-run the receive loop
-                //But I don't throw an exception, just a warning
-
-                NetworkLog.Warning($"Messaging Receive Buffer Completely not Read");
+                //An incomplete message
 
                 ReceiveBuffer.Position = cursor;
                 return;
