@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -14,19 +15,51 @@ namespace Wsla.Server
     {
         public Guid ID { get; }
 
-        public FixedString40 Name { get; }
-
         RoomThreadDispatcher.Processor? ThreadProcessor;
         internal RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
 
-        public byte Capacity { get; }
-        public byte Occupancy => Clients.Count;
-        public bool IsFull => Occupancy >= Capacity;
+        public PropertiesProperty Properties { get; }
+        public class PropertiesProperty
+        {
+            public FixedString40 Name { get; }
+            public byte Capacity { get; }
 
-        public bool Visible { get; private set; }
+            public FixedString20 Password { get; }
+            public bool Private => Password.Length > 0;
+            public bool CheckPassword(in FixedString20 value)
+            {
+                if (Private is false)
+                    return true;
 
-        public FixedString20 Password { get; private set; }
-        public bool Private => Password.Length > 0;
+                return Password == value;
+            }
+
+            public byte Occupancy => Room.Clients.Count;
+            public bool IsFull => Occupancy >= Capacity;
+
+            public bool Visible { get; private set; }
+            public void SetVisibility(bool value)
+            {
+                Visible = value;
+            }
+
+            public RoomStateInfo ReadState() => new RoomStateInfo(Name, Capacity, Occupancy);
+
+            readonly Room Room;
+            public PropertiesProperty(Room Room, CreateRoomParameters parameters)
+            {
+                this.Room = Room;
+
+                //Assign Fields
+                {
+                    Name = parameters.Name;
+                    Capacity = parameters.Capacity;
+                    Password = parameters.Password;
+
+                    Visible = false; //Rooms always start invisible, and turn visible optionally
+                }
+            }
+        }
 
         public InactivityMonitorProperty InactivityMonitor { get; }
         public class InactivityMonitorProperty
@@ -246,7 +279,7 @@ namespace Wsla.Server
             {
                 NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
 
-                if (Room.IsFull)
+                if (Room.Properties.IsFull)
                 {
                     NetworkLog.Error($"Room {Room} Full, Connection Request Rejected");
                     RejectConnection(request, WslaErrorCode.CapacityFull);
@@ -271,9 +304,9 @@ namespace Wsla.Server
                 NetworkLog.Info($"Connection Request from {data}");
 
                 //Check Password
-                if (Room.Private && Room.Password != data.Password)
+                if (Room.Properties.CheckPassword(in data.Password) is false)
                 {
-                    NetworkLog.Error($"Room {Room} Client Password Mismatch, Expected ({Room.Password}) Got ({data.Password}), Connection Request Rejected");
+                    NetworkLog.Error($"Room {Room} Client Password Mismatch, Expected ({Room.Properties.Password}) Got ({data.Password}), Connection Request Rejected");
                     RejectConnection(request, WslaErrorCode.InvalidPassword);
                     return;
                 }
@@ -360,7 +393,7 @@ namespace Wsla.Server
                 {
                     var change = new UpdateRoomParameters()
                     {
-                        Occupancy = Room.Occupancy,
+                        Occupancy = Room.Properties.Occupancy,
                     };
 
                     RelayServer.Matchmaking.Updates.Add(Room.ID, change);
@@ -454,7 +487,7 @@ namespace Wsla.Server
                     {
                         var change = new UpdateRoomParameters()
                         {
-                            Occupancy = Room.Occupancy,
+                            Occupancy = Room.Properties.Occupancy,
                         };
 
                         RelayServer.Matchmaking.Updates.Add(Room.ID, change);
@@ -1004,7 +1037,7 @@ namespace Wsla.Server
 
             ThreadProcessor.Unregister(this);
 
-            RelayServer.Matchmaking.UnregisterRoom(ID);
+            RelayServer.Matchmaking.UnregisterRoom(this);
 
             Dispose();
         }
@@ -1038,7 +1071,7 @@ namespace Wsla.Server
             RPCs.WriteState(writer);
         }
 
-        public override string ToString() => $"({Name})";
+        public override string ToString() => $"({Properties.Name})";
 
         public void Dispose()
         {
@@ -1050,12 +1083,7 @@ namespace Wsla.Server
         {
             this.ID = id;
 
-            Name = parameters.Name;
-            Capacity = parameters.Capacity;
-            Password = parameters.Password;
-
-            Visible = false; //Rooms always start invisible, and turn visible optionally
-
+            Properties = new PropertiesProperty(this, parameters);
             InactivityMonitor = new InactivityMonitorProperty(this);
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);

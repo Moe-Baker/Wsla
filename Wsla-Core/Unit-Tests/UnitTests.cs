@@ -501,7 +501,6 @@ namespace SerializationTests
 
         public struct Wrapper
         {
-            [JsonInclude]
             public IPAddress Address;
         }
     }

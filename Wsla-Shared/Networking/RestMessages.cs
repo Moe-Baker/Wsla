@@ -7,38 +7,10 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    public struct CreateRoomParameters : IAutoNetworkSerialization
-    {
-        [JsonInclude]
-        public string Name;
-
-        [JsonInclude]
-        public byte Capacity;
-
-        [JsonInclude]
-        public string Password;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Name);
-            context.Select(ref Capacity);
-            context.Select(ref Password);
-        }
-
-        public CreateRoomParameters(string Name, byte Capacity, string Password)
-        {
-            this.Name = Name;
-            this.Capacity = Capacity;
-            this.Password = Password;
-        }
-    }
-
     public struct CreateRoomRequest
     {
-        [JsonInclude]
         public ServerRegion Region;
 
-        [JsonInclude]
         public CreateRoomParameters Parameters;
 
         public CreateRoomRequest(ServerRegion Region, CreateRoomParameters Parameters)
@@ -49,10 +21,8 @@ namespace Wsla
     }
     public struct CreateRoomResponse
     {
-        [JsonInclude]
         public IPAddress Address;
 
-        [JsonInclude]
         public ushort Port;
 
         public CreateRoomResponse(IPAddress Address, ushort Port)
@@ -101,20 +71,23 @@ namespace Wsla
     {
         public RelayServerInfo Info;
 
+        public List<RoomMatchmakerEntryData> Rooms;
+
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Info);
+            context.Select(ref Rooms);
         }
 
-        public RegisterRelayRequest(RelayServerInfo Info)
+        public RegisterRelayRequest(RelayServerInfo Info, List<RoomMatchmakerEntryData> Rooms)
         {
             this.Info = Info;
+            this.Rooms = Rooms;
         }
     }
 
     public struct ListRegionsResponse
     {
-        [JsonInclude]
         public List<ServerRegion> Regions;
 
         public ListRegionsResponse(List<ServerRegion> regions)
@@ -145,45 +118,6 @@ namespace Wsla
         public ListRoomsRequest(ServerRegion Region)
         {
             this.Region = Region;
-        }
-    }
-
-    public struct UpdateRoomParameters : IAutoNetworkSerialization
-    {
-        public FixedString40? Name;
-
-        public byte? Occupancy;
-
-        public void Select(ref AutoSerializationContext context)
-        {
-            context.Select(ref Name);
-            context.Select(ref Occupancy);
-        }
-
-        public UpdateRoomParameters(FixedString40? Name, byte? Occupancy)
-        {
-            this.Name = Name;
-            this.Occupancy = Occupancy;
-        }
-
-        public static UpdateRoomParameters Merge(UpdateRoomParameters previous, UpdateRoomParameters current)
-        {
-            var name = Merge(previous.Name, current.Name);
-            var occupancy = Merge(previous.Occupancy, current.Occupancy);
-
-            return new UpdateRoomParameters(name, occupancy);
-        }
-
-        static T? Merge<T>(T? previous, T? current)
-            where T : struct
-        {
-            if (current.HasValue)
-                return current;
-
-            if (previous.HasValue)
-                return previous;
-
-            return null;
         }
     }
 

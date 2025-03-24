@@ -19,4 +19,8 @@
 		</ProjectReference>
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Source\Networking\" />
+	</ItemGroup>
+
 </Project>

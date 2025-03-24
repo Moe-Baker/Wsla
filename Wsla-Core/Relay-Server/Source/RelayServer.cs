@@ -178,7 +178,7 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
-            static Dictionary<Guid, Room> Rooms;
+            static List<Room> Rooms;
 
             public static class Updates
             {
@@ -269,7 +269,11 @@ namespace Wsla.Server
             public static void RegisterRelay()
             {
                 var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
-                var request = new RegisterRelayRequest(info);
+
+                var rooms = new List<RoomMatchmakerEntryData>();
+                ListRooms(rooms);
+
+                var request = new RegisterRelayRequest(info, rooms);
 
                 Messaging.Send(request);
             }
@@ -278,23 +282,51 @@ namespace Wsla.Server
             {
                 lock (Rooms)
                 {
-                    Rooms.Add(room.ID, room);
+                    Rooms.Add(room);
                 }
             }
-            public static bool UnregisterRoom(Guid id)
+            public static bool UnregisterRoom(Room room)
             {
-                Updates.Remove(id);
-
                 lock (Rooms)
                 {
-                    if (Rooms.Remove(id) is false)
+                    if (Rooms.Remove(room) is false)
                         return false;
                 }
 
-                var request = new RemoveRoomRequest(id);
+                Updates.Remove(room.ID);
+
+                var request = new RemoveRoomRequest(room.ID);
                 Messaging.Send(request);
 
                 return true;
+            }
+
+            public static void ListRooms(List<RoomStateInfo> list)
+            {
+                lock (Rooms)
+                {
+                    list.EnsureCapacity(Rooms.Count);
+
+                    foreach (var room in Rooms)
+                    {
+                        var state = room.Properties.ReadState();
+                        list.Add(state);
+                    }
+                }
+            }
+            public static void ListRooms(List<RoomMatchmakerEntryData> list)
+            {
+                lock (Rooms)
+                {
+                    list.EnsureCapacity(Rooms.Count);
+
+                    foreach (var room in Rooms)
+                    {
+                        var state = room.Properties.ReadState();
+                        var data = new RoomMatchmakerEntryData(room.ID, room.Transport.Port, state);
+                        list.Add(data);
+                    }
+                }
             }
         }
     }

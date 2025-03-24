@@ -134,14 +134,15 @@ namespace Wsla.Server
                             Occupancy = parameters.Occupancy.Value;
                     }
 
-                    public Room(ushort Port, FixedString40 Name, byte Capacity)
+                    public Room(ushort Port, FixedString40 Name, byte Capacity, byte Occupancy)
                     {
                         this.Port = Port;
                         this.Name = Name;
                         this.Capacity = Capacity;
-
-                        Occupancy = 0;
+                        this.Occupancy = Occupancy;
                     }
+                    public Room(ushort Port, FixedString40 Name, byte Capacity) : this(Port, Name, Capacity, Occupancy: 0) { }
+                    public Room(RoomMatchmakerEntryData data) : this(data.Port, data.State.Name, data.State.Capacity, data.State.Occupancy) { }
                 }
 
                 public bool RegisterRoom(Guid id, ushort port, CreateRoomParameters parameters)
@@ -203,6 +204,8 @@ namespace Wsla.Server
                 {
                     lock (Rooms)
                     {
+                        list.EnsureCapacity(Rooms.Count);
+
                         foreach (var (id, room) in Rooms)
                         {
                             var connection = new RoomConnectionInfo(Address, room.Port);
@@ -220,7 +223,25 @@ namespace Wsla.Server
                     this.Info = Info;
                     this.MessagingPeer = MessagingPeer;
 
-                    Rooms = new(10);
+                    Rooms = new();
+                }
+
+                public static Server From(RegisterRelayRequest request, MessagingPeer peer)
+                {
+                    var server = new Server(request.Info, peer);
+
+                    if (request.Rooms is not null)
+                    {
+                        server.Rooms.EnsureCapacity(request.Rooms.Count);
+
+                        foreach (var entry in request.Rooms)
+                        {
+                            var room = new Room(entry);
+                            server.Rooms.Add(entry.ID, room);
+                        }
+                    }
+
+                    return server;
                 }
             }
 
@@ -350,7 +371,7 @@ namespace Wsla.Server
                 {
                     NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
 
-                    var server = new Server(message.Info, peer);
+                    var server = Server.From(message, peer);
                     peer.Tag = server;
 
                     lock (Servers)
