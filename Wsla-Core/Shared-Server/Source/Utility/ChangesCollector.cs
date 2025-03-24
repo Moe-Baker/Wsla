@@ -9,7 +9,7 @@ namespace Wsla
 
         MergeDelegate Merger;
 
-        public void Add(TKey key, TData current)
+        public bool Add(TKey key, TData current)
         {
             ref var value = ref CollectionsMarshal.GetValueRefOrAddDefault(Changes, key, out var exists);
 
@@ -17,8 +17,14 @@ namespace Wsla
                 value = Merger(value, current);
             else
                 value = current;
+
+            return exists;
         }
         public void Clear() => Changes.Clear();
+        public bool Remove(TKey key)
+        {
+            return Changes.Remove(key);
+        }
 
         public bool TryRead(out IReadOnlyDictionary<TKey, TData> collection)
         {

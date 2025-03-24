@@ -72,7 +72,7 @@ namespace Wsla.Server
                 var serializers = GenHTTP.Modules.Conversion.Serialization.Default(SharedAPI.JsonOptions);
 
                 var api = Layout.Create()
-                    .AddService<Matchmaking.Endpoints>("/", serializers: serializers);
+                    .AddService<Matchmaking.HttpEndpoints>("/", serializers: serializers);
 
                 Contract = Host.Create()
                     .Handler(api)
@@ -94,7 +94,7 @@ namespace Wsla.Server
             {
                 Server = new MessagingServer();
 
-                Matchmaking.RegisterMessages(Server);
+                Matchmaking.MessageHandlers.RegisterHandlers(Server);
             }
 
             public static void Start()
@@ -121,6 +121,8 @@ namespace Wsla.Server
                     public ushort Port { get; }
 
                     public FixedString40 Name;
+
+                    public byte Capacity;
                     public byte Occupancy;
 
                     public void UpdateRoom(UpdateRoomParameters parameters)
@@ -132,16 +134,17 @@ namespace Wsla.Server
                             Occupancy = parameters.Occupancy.Value;
                     }
 
-                    public Room(ushort Port, FixedString40 Name)
+                    public Room(ushort Port, FixedString40 Name, byte Capacity)
                     {
                         this.Port = Port;
                         this.Name = Name;
+                        this.Capacity = Capacity;
 
                         Occupancy = 0;
                     }
                 }
 
-                public bool RegisterRoom(Guid id, ushort port, string name)
+                public bool RegisterRoom(Guid id, ushort port, CreateRoomParameters parameters)
                 {
                     lock (Rooms)
                     {
@@ -151,7 +154,7 @@ namespace Wsla.Server
                             return false;
                         }
 
-                        var room = new Room(port, name);
+                        var room = new Room(port, parameters.Name, parameters.Capacity);
                         Rooms.Add(id, room);
 
                         return true;
@@ -187,7 +190,7 @@ namespace Wsla.Server
                         {
                             if (Rooms.TryGetValue(request.ID, out var room) is false)
                             {
-                                NetworkLog.Error($"No Room With ID {request.ID} Found");
+                                NetworkLog.Error($"No Room With ID {request.ID} Found to Update");
                                 continue;
                             }
 
@@ -221,9 +224,42 @@ namespace Wsla.Server
                 }
             }
 
+            public static bool TryFindServer(ServerRegion region, out Server server)
+            {
+                lock (Servers)
+                {
+                    for (int i = 0; i < Servers.Count; i++)
+                    {
+                        server = Servers[i];
+
+                        if (server.Region == region)
+                            return true;
+                    }
+                }
+
+                server = default;
+                return false;
+            }
+            public static bool TryFindServer(IPAddress address, out Server server)
+            {
+                lock (Servers)
+                {
+                    for (int i = 0; i < Servers.Count; i++)
+                    {
+                        server = Servers[i];
+
+                        if (server.Address.Equals(address))
+                            return true;
+                    }
+                }
+
+                server = default;
+                return false;
+            }
+
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
 
-            public class Endpoints
+            public class HttpEndpoints
             {
                 [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
                 public ListRegionsResponse ListRegions()
@@ -275,7 +311,7 @@ namespace Wsla.Server
                         throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
                     }
 
-                    server.RegisterRoom(id, Confirmation.Port, message.Parameters.Name);
+                    server.RegisterRoom(id, Confirmation.Port, message.Parameters);
 
                     return new CreateRoomResponse(server.Address, Confirmation.Port);
                 }
@@ -300,35 +336,60 @@ namespace Wsla.Server
                 }
             }
 
+            public class MessageHandlers
+            {
+                public static void RegisterHandlers(MessagingServer server)
+                {
+                    server.Dispatcher.RegisterSync<RegisterRelayRequest>(MessageHandlers.RegisterRelayHandler);
+                    server.Dispatcher.RegisterSync<CreateRoomConfirmation>(MessageHandlers.CreateRoomConfirmationHandler);
+                    server.Dispatcher.RegisterSync<RemoveRoomRequest>(MessageHandlers.RemoveRoomHandler);
+                    server.Dispatcher.RegisterSync<UpdateRoomsRequest>(MessageHandlers.UpdateRoomsHandler);
+                }
+
+                public static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
+                {
+                    NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
+
+                    var server = new Server(message.Info, peer);
+                    peer.Tag = server;
+
+                    lock (Servers)
+                    {
+                        Servers.Add(server);
+                    }
+
+                    peer.RegisterStopCallback(() => RelayStoppedCallback(server));
+                }
+
+                public static void CreateRoomConfirmationHandler(MessagingPeer peer, ref CreateRoomConfirmation message)
+                {
+                    RoomCreationQueue.Fulfill(message.ID, message);
+                }
+
+                public static void RemoveRoomHandler(MessagingPeer peer, ref RemoveRoomRequest message)
+                {
+                    if (TryReadTag(peer, out var server) is false)
+                        return;
+
+                    server.UnregisterRoom(message.RoomID);
+                }
+
+                public static void UpdateRoomsHandler(MessagingPeer peer, ref UpdateRoomsRequest message)
+                {
+                    if (TryReadTag(peer, out var server) is false)
+                        return;
+
+                    server.UpdateRooms(message.Requests);
+                }
+            }
+
             public static void Init()
             {
                 Servers = new(10);
 
-                RoomCreationQueue = new();
+                RoomCreationQueue = new(100);
             }
 
-            public static void RegisterMessages(MessagingServer server)
-            {
-                server.Dispatcher.RegisterSync<RegisterRelayRequest>(RegisterRelayHandler);
-                server.Dispatcher.RegisterSync<CreateRoomConfirmation>(CreateRoomConfirmationHandler);
-                server.Dispatcher.RegisterSync<RemoveRoomRequest>(RemoveRoomHandler);
-                server.Dispatcher.RegisterSync<UpdateRoomsRequest>(UpdateRoomsHandler);
-            }
-
-            static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
-            {
-                NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
-
-                var server = new Server(message.Info, peer);
-                peer.Tag = server;
-
-                lock (Servers)
-                {
-                    Servers.Add(server);
-                }
-
-                peer.RegisterStopCallback(() => RelayStoppedCallback(server));
-            }
             static void RelayStoppedCallback(Server server)
             {
                 NetworkLog.Info($"Removing {server} Relay Server");
@@ -343,56 +404,6 @@ namespace Wsla.Server
                 }
             }
 
-            public static bool TryFindServer(ServerRegion region, out Server server)
-            {
-                lock (Servers)
-                {
-                    for (int i = 0; i < Servers.Count; i++)
-                    {
-                        server = Servers[i];
-
-                        if (server.Region == region)
-                            return true;
-                    }
-                }
-
-                server = default;
-                return false;
-            }
-            public static bool TryFindServer(IPAddress address, out Server server)
-            {
-                lock (Servers)
-                {
-                    for (int i = 0; i < Servers.Count; i++)
-                    {
-                        server = Servers[i];
-
-                        if (server.Address.Equals(address))
-                            return true;
-                    }
-                }
-
-                server = default;
-                return false;
-            }
-
-            static void CreateRoomConfirmationHandler(MessagingPeer peer, ref CreateRoomConfirmation message)
-            {
-                RoomCreationQueue.Fulfill(message.ID, message);
-            }
-            static void RemoveRoomHandler(MessagingPeer peer, ref RemoveRoomRequest message)
-            {
-                TryRemoveRoom(message.RelayAddress, message.RoomID);
-            }
-
-            static void UpdateRoomsHandler(MessagingPeer peer, ref UpdateRoomsRequest message)
-            {
-                if (TryReadTag(peer, out var server) is false)
-                    return;
-
-                server.UpdateRooms(message.Requests);
-            }
-
             static bool TryReadTag(MessagingPeer peer, out Server server)
             {
                 if (peer.Tag is not Server)
@@ -404,15 +415,6 @@ namespace Wsla.Server
                 }
 
                 server = peer.Tag as Server;
-                return true;
-            }
-
-            public static bool TryRemoveRoom(IPAddress relay, Guid id)
-            {
-                if (TryFindServer(relay, out var server) is false)
-                    return false;
-
-                server.UnregisterRoom(id);
                 return true;
             }
         }

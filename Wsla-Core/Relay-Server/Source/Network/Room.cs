@@ -363,7 +363,7 @@ namespace Wsla.Server
                         Occupancy = Room.Occupancy,
                     };
 
-                    RelayServer.Matchmaking.RegisterRoomUpdate(Room.ID, change);
+                    RelayServer.Matchmaking.Updates.Add(Room.ID, change);
                 }
             }
             void DisconnectHandler(NetPeer peer, DisconnectInfo info)
@@ -457,7 +457,7 @@ namespace Wsla.Server
                             Occupancy = Room.Occupancy,
                         };
 
-                        RelayServer.Matchmaking.RegisterRoomUpdate(Room.ID, change);
+                        RelayServer.Matchmaking.Updates.Add(Room.ID, change);
                     }
                 }
             }
@@ -1004,7 +1004,7 @@ namespace Wsla.Server
 
             ThreadProcessor.Unregister(this);
 
-            RelayServer.Matchmaking.RemoveRoomFromCoordinator(ID);
+            RelayServer.Matchmaking.UnregisterRoom(ID);
 
             Dispose();
         }

@@ -167,9 +167,9 @@ namespace Wsla.Server
                 if (response.IsError)
                     throw response.Error.ToException();
 
-                Matchmaking.RegisterMessages(Client);
+                Matchmaking.MessageHandlers.RegisterHandlers(Client);
 
-                Matchmaking.RegisterWithCoordinator();
+                Matchmaking.RegisterRelay();
             }
 
             public static void Send<[NetworkSerializationMarker] T>(T message) => Client.SendMessage(message);
@@ -178,62 +178,95 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
-            static ChangesCollector<Guid, UpdateRoomParameters> RoomUpdates;
-            public static void RegisterRoomUpdate(Guid id, UpdateRoomParameters parameters)
+            static Dictionary<Guid, Room> Rooms;
+
+            public static class Updates
             {
-                lock (RoomUpdates)
+                static ChangesCollector<Guid, UpdateRoomParameters> Changes;
+
+                public static void Init()
                 {
-                    RoomUpdates.Add(id, parameters);
+                    Changes = new ChangesCollector<Guid, UpdateRoomParameters>(UpdateRoomParameters.Merge);
+                    Poll().Forget();
                 }
-            }
-            static async Task UploadRoomUpdates()
-            {
-                var interval = TimeSpan.FromSeconds(5);
 
-                var requests = new List<UpdateRoomRequest>(40);
-
-                while (true)
+                public static void Add(Guid id, UpdateRoomParameters parameters)
                 {
-                    await Task.Delay(interval);
-
-                    //Collect Changes
-                    lock (RoomUpdates)
+                    lock (Changes)
                     {
-                        if (RoomUpdates.TryRead(out var changes) is false)
-                            continue;
+                        Changes.Add(id, parameters);
+                    }
+                }
+                public static void Remove(Guid id)
+                {
+                    lock (Changes)
+                    {
+                        Changes.Remove(id);
+                    }
+                }
 
-                        requests.Clear();
+                public static async Task Poll()
+                {
+                    var interval = TimeSpan.FromSeconds(5);
 
-                        foreach (var (id, parameters) in changes)
+                    var requests = new List<UpdateRoomRequest>(40);
+
+                    while (true)
+                    {
+                        await Task.Delay(interval);
+
+                        //Collect Changes
+                        lock (Changes)
                         {
-                            var request = new UpdateRoomRequest(id, parameters);
-                            requests.Add(request);
+                            if (Changes.TryRead(out var changes) is false)
+                                continue;
+
+                            requests.Clear();
+
+                            foreach (var (id, parameters) in changes)
+                            {
+                                var request = new UpdateRoomRequest(id, parameters);
+                                requests.Add(request);
+                            }
+
+                            Changes.Clear();
                         }
 
-                        RoomUpdates.Clear();
-                    }
+                        //Send Request
+                        {
+                            var request = new UpdateRoomsRequest(requests);
 
-                    //Send Request
-                    {
-                        var request = new UpdateRoomsRequest(requests);
-
-                        await Messaging.SendAsync(request);
+                            await Messaging.SendAsync(request);
+                        }
                     }
+                }
+            }
+
+            public static class MessageHandlers
+            {
+                public static void RegisterHandlers(MessagingClient client)
+                {
+                    client.Dispatcher.Register<CreateRoomCommand>(MessageHandlers.CreateRoomHandler);
+                }
+
+                public static void CreateRoomHandler(ref CreateRoomCommand message)
+                {
+                    var room = Realtime.CreateRoom(message);
+
+                    RegisterRoom(room);
+
+                    var confirmation = new CreateRoomConfirmation(room.ID, room.Transport.Port);
+                    Messaging.Send(confirmation);
                 }
             }
 
             public static void Init()
             {
-                RoomUpdates = new ChangesCollector<Guid, UpdateRoomParameters>(UpdateRoomParameters.Merge);
-                UploadRoomUpdates().Forget();
+                Rooms = new(100);
+                Updates.Init();
             }
 
-            public static void RegisterMessages(MessagingClient client)
-            {
-                client.Dispatcher.Register<CreateRoomCommand>(CreateRoomHandler);
-            }
-
-            public static void RegisterWithCoordinator()
+            public static void RegisterRelay()
             {
                 var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
                 var request = new RegisterRelayRequest(info);
@@ -241,19 +274,27 @@ namespace Wsla.Server
                 Messaging.Send(request);
             }
 
-            static void CreateRoomHandler(ref CreateRoomCommand message)
+            public static void RegisterRoom(Room room)
             {
-                var room = Realtime.CreateRoom(message);
-
-                var confirmation = new CreateRoomConfirmation(room.ID, room.Transport.Port);
-
-                Messaging.Send(confirmation);
+                lock (Rooms)
+                {
+                    Rooms.Add(room.ID, room);
+                }
             }
-
-            public static void RemoveRoomFromCoordinator(Guid id)
+            public static bool UnregisterRoom(Guid id)
             {
-                var request = new RemoveRoomRequest(Configuration.PublicAddress, id);
+                Updates.Remove(id);
+
+                lock (Rooms)
+                {
+                    if (Rooms.Remove(id) is false)
+                        return false;
+                }
+
+                var request = new RemoveRoomRequest(id);
                 Messaging.Send(request);
+
+                return true;
             }
         }
     }

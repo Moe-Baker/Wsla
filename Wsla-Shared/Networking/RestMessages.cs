@@ -125,18 +125,15 @@ namespace Wsla
 
     public struct RemoveRoomRequest : IAutoNetworkSerialization
     {
-        public IPAddress RelayAddress;
         public Guid RoomID;
 
         public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref RelayAddress);
             context.Select(ref RoomID);
         }
 
-        public RemoveRoomRequest(IPAddress RelayAddress, Guid RoomID)
+        public RemoveRoomRequest(Guid RoomID)
         {
-            this.RelayAddress = RelayAddress;
             this.RoomID = RoomID;
         }
     }

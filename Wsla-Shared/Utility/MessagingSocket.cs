@@ -164,8 +164,7 @@ namespace Wsla
 
                     while (CheckReceivedMessage(cursor, out ushort length))
                     {
-                        if (length is 0)
-                            continue; //Keep alive message
+                        if (length is 0) continue; //Keep alive message
 
                         var destination = ReceiveBuffer.Position + length;
 
@@ -207,9 +206,8 @@ namespace Wsla
 
             //Read Length
             {
-                var buffer = ReceiveBuffer.PopSpan(LengthHeaderSize);
                 available -= LengthHeaderSize;
-
+                var buffer = ReceiveBuffer.PopSpan(LengthHeaderSize);
                 length = BitConverter.ToUInt16(buffer);
             }
 

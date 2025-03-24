@@ -29,7 +29,10 @@ namespace Wsla.Server
 
                 var entry = new Entry(operation, registration);
 
-                Dictionary.Add(key, entry);
+                if (cancellation.IsCancellationRequested)
+                    Cancel(entry);
+                else
+                    Dictionary.Add(key, entry);
 
                 return operation;
             }
@@ -57,6 +60,10 @@ namespace Wsla.Server
             if (TryRemove(key, out var entry) is false)
                 return false;
 
+            return Cancel(entry);
+        }
+        bool Cancel(Entry entry)
+        {
             entry.Cancellation.Unregister();
 
             return entry.Operation.TrySetCanceled();
@@ -70,9 +77,9 @@ namespace Wsla.Server
             }
         }
 
-        public TaskCompletionQueue()
+        public TaskCompletionQueue(int capacity)
         {
-            Dictionary = new();
+            Dictionary = new(capacity);
         }
     }
 }
