@@ -1009,11 +1009,11 @@ namespace Wsla.Server
             }
 
             readonly Room Room;
-            public SceneProperty(Room Room)
+            public SceneProperty(Room Room, CreateRoomParameters parameters)
             {
                 this.Room = Room;
 
-                ID = new NetworkSceneID(1);
+                ID = parameters.Scene;
 
                 Transport.Dispatcher.Register<ChangeSceneRequest>(ChangeRequestHandler);
                 Transport.Dispatcher.Register<SpawnSceneRequest>(SpawnRequestHandler);
@@ -1088,7 +1088,7 @@ namespace Wsla.Server
             Transport = new TransportProperty(this);
             Clients = new ClientsProperty(this);
             Entities = new EntitiesProperty(this);
-            Scene = new SceneProperty(this);
+            Scene = new SceneProperty(this, parameters);
             RPCs = new RpcProperty(this);
             Variables = new VariablesProperty(this);
         }

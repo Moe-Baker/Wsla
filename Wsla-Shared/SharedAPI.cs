@@ -11,6 +11,7 @@ namespace Wsla
             JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
                 IncludeFields = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
             };
             JsonOptions.Converters.Add(new IPAddressJsonConverter());
         }

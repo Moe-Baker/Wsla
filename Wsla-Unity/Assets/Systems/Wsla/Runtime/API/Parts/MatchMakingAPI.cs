@@ -11,12 +11,12 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<WslaError>> UpdateRegions()
         {
-            var response = await API.REST.GET<ListRegionsResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.ListRegions);
+            var response = await API.REST.GET<List<ServerRegion>>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.ListRegions);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
 
-            Regions = response.Value.Regions;
+            Regions = response.Value;
 
             NetworkLog.Trace($"Region Servers ({Regions.Count})");
 
@@ -26,11 +26,14 @@ namespace Wsla.Unity
             return WslaResponse<WslaError>.Success;
         }
 
-        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion region, CreateRoomParameters parameters)
+        public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion? region, CreateRoomParameters parameters)
         {
             var request = new CreateRoomRequest(region, parameters);
-
-            var response = await API.REST.POST<CreateRoomRequest, CreateRoomResponse>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.CreateRoom, request);
+            return CreateRoom(request);
+        }
+        public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(CreateRoomRequest request)
+        {
+            var response = await API.REST.POST<CreateRoomRequest, RoomConnectionInfo>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.CreateRoom, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -38,6 +41,21 @@ namespace Wsla.Unity
             var info = response.Value;
 
             return new RoomConnectionInfo(info.Address, info.Port);
+        }
+
+        public Task<WslaResponse<RoomConnectionInfo?, WslaError>> FindRoom(ServerRegion? region, CreateRoomParameters? create = default)
+        {
+            var request = new FindRoomRequest(region, create);
+            return FindRoom(request);
+        }
+        public async Task<WslaResponse<RoomConnectionInfo?, WslaError>> FindRoom(FindRoomRequest request)
+        {
+            var response = await API.REST.POST<FindRoomRequest, RoomConnectionInfo?>(API.CoordinatorAddress.IP, Constants.CoordinatorHttpPort, Constants.RestRoutes.FindRoom, request);
+
+            if (response.IsError)
+                return WslaError.From(response.Error);
+
+            return response.Value;
         }
 
         public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(ServerRegion region)

@@ -29,12 +29,14 @@ public class MainMenu : MonoBehaviour
         }
 
         CreateMatchButton.onClick.AddListener(() => CreateRoom().Forget());
-        JoinMatchButton.onClick.AddListener(() => JoinRoom().Forget());
+        JoinMatchButton.onClick.AddListener(() => FindRoom().Forget());
     }
+
+    CreateRoomParameters GetCreateRoomParameters() => new CreateRoomParameters("SAMPLE-ROOM-NAME", 10, NetworkSceneID.From(1), "HELLO-WORLD");
 
     async UniTask CreateRoom()
     {
-        var request = new CreateRoomParameters("SAMPLE-ROOM-NAME", 10, "HELLO-WORLD");
+        var request = GetCreateRoomParameters();
         var response = await NetworkAPI.MatchMaking.CreateRoom(ServerRegion.EU, request);
 
         if (response.IsError)
@@ -46,9 +48,9 @@ public class MainMenu : MonoBehaviour
         await JoinRoom(response.Value);
     }
 
-    async UniTask JoinRoom()
+    async UniTask FindRoom()
     {
-        var response = await NetworkAPI.MatchMaking.ListRooms(ServerRegion.EU);
+        var response = await NetworkAPI.MatchMaking.FindRoom(ServerRegion.EU, GetCreateRoomParameters());
 
         if (response.IsError)
         {
@@ -56,15 +58,15 @@ public class MainMenu : MonoBehaviour
             return;
         }
 
-        var list = response.Value;
+        var info = response.Value;
 
-        if (list.Count is 0)
+        if (info.HasValue is false)
         {
             NetworkLog.Error($"Zero Rooms Found");
             return;
         }
 
-        await JoinRoom(list[0].ConnectionInfo);
+        await JoinRoom(info.Value);
     }
 
     public async UniTask JoinRoom(RoomConnectionInfo info)

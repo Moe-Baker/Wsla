@@ -1,28 +1,35 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Toolbox;
 
 using UnityEngine;
 
+using Wsla;
+
 public class Sandbox : MonoBehaviour
 {
     public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
     {
-        var data = new Data()
+        //1
         {
-            Number1 = 42,
-            Number2 = 35
-        };
+            var data = new NetworkSceneID(14);
+
+            var json = JsonSerializer.Serialize(data, options: SharedAPI.JsonOptions);
+
+            Debug.Log(json);
+
+            var data2 = JsonSerializer.Deserialize<NetworkSceneID>(json);
+
+            Debug.Log(data2);
+        }
 
         return ButtonFieldOperation.None;
     });
 
     public struct Data
     {
-        [JsonInclude]
         public int Number1 { get; set; }
-
-        [JsonInclude]
         public int Number2 { get; set; }
     }
 }

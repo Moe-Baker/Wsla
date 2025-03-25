@@ -1,12 +1,9 @@
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 using System.Net.Http.Json;
-using System.Diagnostics;
-using UnityEngine;
 
 namespace Wsla.Unity
 {
@@ -26,6 +23,9 @@ namespace Wsla.Unity
 
             if (response.IsSuccessStatusCode is false)
                 return RestResponse.From(response);
+
+            if (response.StatusCode is HttpStatusCode.NoContent)
+                return WslaResponse<T, RestResponse>.FromResult(default);
 
             T value;
 
@@ -63,6 +63,9 @@ namespace Wsla.Unity
             if (response.IsSuccessStatusCode is false)
                 return RestResponse.From(response);
 
+            if (response.StatusCode is HttpStatusCode.NoContent)
+                return WslaResponse<TResponse, RestResponse>.FromResult(default);
+
             TResponse value;
 
             try
@@ -98,6 +101,9 @@ namespace Wsla.Unity
 
             if (response.IsSuccessStatusCode is false)
                 return RestResponse.From(response);
+
+            if (response.StatusCode is HttpStatusCode.NoContent)
+                return WslaResponse<TResponse, RestResponse>.FromResult(default);
 
             TResponse value;
 

@@ -6,7 +6,7 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    public partial struct WslaError : IAutoNetworkSerialization
+    public struct WslaError : IAutoNetworkSerialization
     {
         public WslaErrorCode Code;
         public string Description;

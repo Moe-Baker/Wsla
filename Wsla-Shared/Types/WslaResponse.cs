@@ -99,11 +99,13 @@ namespace Wsla
             this.Value = value;
             this.Error = error;
         }
+        public WslaResponse(TValue value) : this(WslaResponseResponseType.Error, value, default) { }
+        public WslaResponse(TError error) : this(WslaResponseResponseType.Error, default, error) { }
 
         public static implicit operator WslaResponse<TValue, TError>(TValue value) => FromResult(value);
         public static implicit operator WslaResponse<TValue, TError>(TError error) => FromError(error);
 
-        public static WslaResponse<TValue, TError> FromResult(TValue error) => new(WslaResponseResponseType.Success, error, default);
+        public static WslaResponse<TValue, TError> FromResult(TValue value) => new(WslaResponseResponseType.Success, value, default);
         public static WslaResponse<TValue, TError> FromError(TError error) => new(WslaResponseResponseType.Error, default, error);
     }
 

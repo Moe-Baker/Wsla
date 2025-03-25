@@ -117,35 +117,6 @@ namespace Wsla.Server
                 public IPAddress Address => Info.Address;
 
                 Dictionary<Guid, Room> Rooms;
-                public class Room
-                {
-                    public ushort Port { get; }
-
-                    public FixedString40 Name;
-
-                    public byte Capacity;
-
-                    public byte Occupancy;
-
-                    public void UpdateRoom(UpdateRoomParameters parameters)
-                    {
-                        if (parameters.Name.HasValue)
-                            Name = parameters.Name.Value;
-
-                        if (parameters.Occupancy.HasValue)
-                            Occupancy = parameters.Occupancy.Value;
-                    }
-
-                    public Room(ushort Port, FixedString40 Name, byte Capacity, byte Occupancy)
-                    {
-                        this.Port = Port;
-                        this.Name = Name;
-                        this.Capacity = Capacity;
-                        this.Occupancy = Occupancy;
-                    }
-                    public Room(ushort Port, FixedString40 Name, byte Capacity) : this(Port, Name, Capacity, Occupancy: 0) { }
-                    public Room(RoomMatchmakerEntryData data) : this(data.Port, data.State.Name, data.State.Capacity, data.State.Occupancy) { }
-                }
 
                 public int Occupancy;
                 void ModifyOccupancy(int modifier)
@@ -166,7 +137,7 @@ namespace Wsla.Server
                             return false;
                         }
 
-                        var room = new Room(port, parameters.Name, parameters.Capacity);
+                        var room = new Room(this, port, parameters.Name, parameters.Capacity);
 
                         Rooms.Add(id, room);
 
@@ -239,11 +210,34 @@ namespace Wsla.Server
                         foreach (var (id, room) in Rooms)
                         {
                             var connection = new RoomConnectionInfo(Address, room.Port);
-                            var entry = new RoomListEntryInfo(room.Name.ToString(), connection);
+
+                            var name = room.Name.ToString();
+                            var capacity = room.Capacity;
+                            var occupancy = room.Occupancy;
+
+                            var entry = new RoomListEntryInfo(name, capacity, occupancy, connection);
 
                             list.Add(entry);
                         }
                     }
+                }
+
+                public bool TryFindFreeRoom(out Room target)
+                {
+                    lock (Rooms)
+                    {
+                        foreach (var (id, room) in Rooms)
+                        {
+                            if (room.IsFull)
+                                continue;
+
+                            target = room;
+                            return true;
+                        }
+                    }
+
+                    target = default;
+                    return false;
                 }
 
                 public void Dispose()
@@ -261,7 +255,7 @@ namespace Wsla.Server
                     Rooms = new();
                 }
 
-                public static Server From(RegisterRelayRequest request, MessagingPeer peer)
+                public static Server Create(RegisterRelayRequest request, MessagingPeer peer)
                 {
                     var server = new Server(request.Info, peer);
 
@@ -271,7 +265,7 @@ namespace Wsla.Server
 
                         foreach (var entry in request.Rooms)
                         {
-                            var room = new Room(entry);
+                            var room = Room.Create(server, entry);
                             server.Rooms.Add(entry.ID, room);
 
                             server.Occupancy += room.Occupancy;
@@ -279,6 +273,45 @@ namespace Wsla.Server
                     }
 
                     return server;
+                }
+            }
+            public class Room
+            {
+                public Server Server { get; }
+
+                public ushort Port { get; }
+
+                public FixedString40 Name;
+
+                public byte Capacity;
+
+                public byte Occupancy;
+                public bool IsFull => Occupancy >= Capacity;
+
+                public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
+
+                public void UpdateRoom(UpdateRoomParameters parameters)
+                {
+                    if (parameters.Name.HasValue)
+                        Name = parameters.Name.Value;
+
+                    if (parameters.Occupancy.HasValue)
+                        Occupancy = parameters.Occupancy.Value;
+                }
+
+                public Room(Server Server, ushort Port, FixedString40 Name, byte Capacity, byte Occupancy)
+                {
+                    this.Server = Server;
+                    this.Port = Port;
+                    this.Name = Name;
+                    this.Capacity = Capacity;
+                    this.Occupancy = Occupancy;
+                }
+                public Room(Server Server, ushort Port, FixedString40 Name, byte Capacity) : this(Server, Port, Name, Capacity, Occupancy: 0) { }
+
+                public static Room Create(Server server, RoomMatchmakerEntryData data)
+                {
+                    return new Room(server, data.Port, data.State.Name, data.State.Capacity, data.State.Occupancy);
                 }
             }
 
@@ -289,23 +322,7 @@ namespace Wsla.Server
                 NetworkLog.Trace($"Matchmaking Occupancy Changed to {value}");
             }
 
-            public static bool TryFindServer(ServerRegion region, out Server server)
-            {
-                lock (Servers)
-                {
-                    for (int i = 0; i < Servers.Count; i++)
-                    {
-                        server = Servers[i];
-
-                        if (server.Region == region)
-                            return true;
-                    }
-                }
-
-                server = default;
-                return false;
-            }
-            public static bool TryFindFreeServer(ServerRegion region, out Server server)
+            public static bool TryFindFreeServer(ServerRegion? region, out Server server)
             {
                 lock (Servers)
                 {
@@ -315,7 +332,7 @@ namespace Wsla.Server
                     {
                         server = Servers[i];
 
-                        if (server.Region != region)
+                        if (region.HasValue && region.Value != server.Region)
                             continue;
 
                         if (server.Occupancy < marker.Occupancy)
@@ -327,12 +344,32 @@ namespace Wsla.Server
                 }
             }
 
+            public static bool TryFindFreeRoom(ServerRegion? region, out Room room)
+            {
+                lock (Servers)
+                {
+                    for (int i = 0; i < Servers.Count; i++)
+                    {
+                        var server = Servers[i];
+
+                        if (region.HasValue && region.Value != server.Region)
+                            continue;
+
+                        if (server.TryFindFreeRoom(out room))
+                            return true;
+                    }
+                }
+
+                room = default;
+                return false;
+            }
+
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
 
             public class HttpEndpoints
             {
                 [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
-                public ListRegionsResponse ListRegions()
+                public List<ServerRegion> ListRegions()
                 {
                     List<ServerRegion> list;
 
@@ -349,11 +386,11 @@ namespace Wsla.Server
                         }
                     }
 
-                    return new ListRegionsResponse(list);
+                    return list;
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
-                public async Task<CreateRoomResponse> CreateRoom(CreateRoomRequest message)
+                public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
                     //Find Region
                     if (TryFindFreeServer(message.Region, out var server) is false)
@@ -383,7 +420,7 @@ namespace Wsla.Server
 
                     server.RegisterRoom(id, Confirmation.Port, message.Parameters);
 
-                    return new CreateRoomResponse(server.Address, Confirmation.Port);
+                    return new RoomConnectionInfo(server.Address, Confirmation.Port);
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
@@ -404,6 +441,26 @@ namespace Wsla.Server
 
                     return list;
                 }
+
+                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.FindRoom)]
+                public async Task<RoomConnectionInfo?> FindRoom(FindRoomRequest request)
+                {
+                    //Try Find Existing Room
+                    {
+                        if (TryFindFreeRoom(request.Region, out var room))
+                            return room.GetConnectionInfo();
+                    }
+
+                    //Try Create Room
+                    if (request.CreateRoom.HasValue)
+                    {
+                        var create = new CreateRoomRequest(request.Region, request.CreateRoom.Value);
+
+                        return await CreateRoom(create);
+                    }
+
+                    return null;
+                }
             }
 
             public class MessageHandlers
@@ -420,7 +477,7 @@ namespace Wsla.Server
                 {
                     NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
 
-                    var server = Server.From(message, peer);
+                    var server = Server.Create(message, peer);
                     peer.Tag = server;
 
                     lock (Servers)

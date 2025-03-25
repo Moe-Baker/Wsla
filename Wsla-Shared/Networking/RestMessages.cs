@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
-using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -9,26 +7,14 @@ namespace Wsla
 {
     public struct CreateRoomRequest
     {
-        public ServerRegion Region;
+        public ServerRegion? Region;
 
         public CreateRoomParameters Parameters;
 
-        public CreateRoomRequest(ServerRegion Region, CreateRoomParameters Parameters)
+        public CreateRoomRequest(ServerRegion? Region, CreateRoomParameters Parameters)
         {
             this.Parameters = Parameters;
             this.Region = Region;
-        }
-    }
-    public struct CreateRoomResponse
-    {
-        public IPAddress Address;
-
-        public ushort Port;
-
-        public CreateRoomResponse(IPAddress Address, ushort Port)
-        {
-            this.Address = Address;
-            this.Port = Port;
         }
     }
 
@@ -83,16 +69,6 @@ namespace Wsla
         {
             this.Info = Info;
             this.Rooms = Rooms;
-        }
-    }
-
-    public struct ListRegionsResponse
-    {
-        public List<ServerRegion> Regions;
-
-        public ListRegionsResponse(List<ServerRegion> regions)
-        {
-            this.Regions = regions;
         }
     }
 
@@ -151,6 +127,19 @@ namespace Wsla
         {
             this.ID = ID;
             this.Parameters = Parameters;
+        }
+    }
+
+    public struct FindRoomRequest
+    {
+        public ServerRegion? Region;
+
+        public CreateRoomParameters? CreateRoom;
+
+        public FindRoomRequest(ServerRegion? Region, CreateRoomParameters? CreateRoom)
+        {
+            this.Region = Region;
+            this.CreateRoom = CreateRoom;
         }
     }
 }
