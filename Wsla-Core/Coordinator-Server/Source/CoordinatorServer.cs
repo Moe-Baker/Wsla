@@ -8,6 +8,7 @@ using GenHTTP.Modules.Webservices;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Wsla.Server
@@ -106,7 +107,7 @@ namespace Wsla.Server
         public static class Matchmaking
         {
             public static List<Server> Servers { get; private set; }
-            public class Server
+            public class Server : IDisposable
             {
                 public RelayServerInfo Info { get; }
 
@@ -123,6 +124,7 @@ namespace Wsla.Server
                     public FixedString40 Name;
 
                     public byte Capacity;
+
                     public byte Occupancy;
 
                     public void UpdateRoom(UpdateRoomParameters parameters)
@@ -145,6 +147,15 @@ namespace Wsla.Server
                     public Room(RoomMatchmakerEntryData data) : this(data.Port, data.State.Name, data.State.Capacity, data.State.Occupancy) { }
                 }
 
+                public int Occupancy;
+                void ModifyOccupancy(int modifier)
+                {
+                    var value = Interlocked.Add(ref Occupancy, modifier);
+                    NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
+
+                    Matchmaking.ModifyOccupancy(modifier);
+                }
+
                 public bool RegisterRoom(Guid id, ushort port, CreateRoomParameters parameters)
                 {
                     lock (Rooms)
@@ -156,17 +167,24 @@ namespace Wsla.Server
                         }
 
                         var room = new Room(port, parameters.Name, parameters.Capacity);
+
                         Rooms.Add(id, room);
 
                         return true;
                     }
                 }
-                public void UnregisterRoom(Guid id)
+                public bool UnregisterRoom(Guid id)
                 {
                     lock (Rooms)
                     {
-                        if (Rooms.Remove(id) is false)
+                        if (Rooms.Remove(id, out var room) is false)
+                        {
                             NetworkLog.Warning($"No Room with ID {id} Registered");
+                            return false;
+                        }
+
+                        ModifyOccupancy(-room.Occupancy);
+                        return true;
                     }
                 }
 
@@ -180,7 +198,7 @@ namespace Wsla.Server
                             return;
                         }
 
-                        room.UpdateRoom(parameters);
+                        UpdateRoom(room, parameters);
                     }
                 }
                 public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
@@ -195,9 +213,21 @@ namespace Wsla.Server
                                 continue;
                             }
 
-                            room.UpdateRoom(request.Parameters);
+                            UpdateRoom(room, request.Parameters);
                         }
                     }
+                }
+                void UpdateRoom(Room room, UpdateRoomParameters parameters)
+                {
+                    //Update Occupancy
+                    if (parameters.Occupancy.HasValue)
+                    {
+                        var delta = (parameters.Occupancy.Value - room.Occupancy);
+
+                        ModifyOccupancy(delta);
+                    }
+
+                    room.UpdateRoom(parameters);
                 }
 
                 public void ListRooms(List<RoomListEntryInfo> list)
@@ -214,6 +244,11 @@ namespace Wsla.Server
                             list.Add(entry);
                         }
                     }
+                }
+
+                public void Dispose()
+                {
+                    Matchmaking.ModifyOccupancy(-Occupancy);
                 }
 
                 public override string ToString() => Info.ToString();
@@ -238,11 +273,20 @@ namespace Wsla.Server
                         {
                             var room = new Room(entry);
                             server.Rooms.Add(entry.ID, room);
+
+                            server.Occupancy += room.Occupancy;
                         }
                     }
 
                     return server;
                 }
+            }
+
+            public static int Occupancy;
+            static void ModifyOccupancy(int modifier)
+            {
+                var value = Interlocked.Add(ref Occupancy, modifier);
+                NetworkLog.Trace($"Matchmaking Occupancy Changed to {value}");
             }
 
             public static bool TryFindServer(ServerRegion region, out Server server)
@@ -261,21 +305,26 @@ namespace Wsla.Server
                 server = default;
                 return false;
             }
-            public static bool TryFindServer(IPAddress address, out Server server)
+            public static bool TryFindFreeServer(ServerRegion region, out Server server)
             {
                 lock (Servers)
                 {
+                    var marker = (Found: false, Server: default(Server), Occupancy: int.MaxValue);
+
                     for (int i = 0; i < Servers.Count; i++)
                     {
                         server = Servers[i];
 
-                        if (server.Address.Equals(address))
-                            return true;
-                    }
-                }
+                        if (server.Region != region)
+                            continue;
 
-                server = default;
-                return false;
+                        if (server.Occupancy < marker.Occupancy)
+                            marker = (true, server, server.Occupancy);
+                    }
+
+                    server = marker.Server;
+                    return marker.Found;
+                }
             }
 
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
@@ -307,7 +356,7 @@ namespace Wsla.Server
                 public async Task<CreateRoomResponse> CreateRoom(CreateRoomRequest message)
                 {
                     //Find Region
-                    if (TryFindServer(message.Region, out var server) is false)
+                    if (TryFindFreeServer(message.Region, out var server) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"No Region {message.Region} Found");
 
                     var id = Guid.NewGuid();
@@ -422,6 +471,8 @@ namespace Wsla.Server
                         NetworkLog.Warning($"No Relay Server {server} Found to Remove");
                         return;
                     }
+
+                    server.Dispose();
                 }
             }
 

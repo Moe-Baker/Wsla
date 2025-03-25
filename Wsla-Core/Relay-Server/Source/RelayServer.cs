@@ -184,6 +184,8 @@ namespace Wsla.Server
             {
                 static ChangesCollector<Guid, UpdateRoomParameters> Changes;
 
+                static readonly TimeSpan SendInterval = TimeSpan.FromSeconds(2);
+
                 public static void Init()
                 {
                     Changes = new ChangesCollector<Guid, UpdateRoomParameters>(UpdateRoomParameters.Merge);
@@ -207,13 +209,11 @@ namespace Wsla.Server
 
                 public static async Task Poll()
                 {
-                    var interval = TimeSpan.FromSeconds(5);
-
                     var requests = new List<UpdateRoomRequest>(40);
 
                     while (true)
                     {
-                        await Task.Delay(interval);
+                        await Task.Delay(SendInterval);
 
                         //Collect Changes
                         lock (Changes)
