@@ -20,6 +20,8 @@ namespace Wsla
         public IPAddress Address;
         public ushort Port;
 
+        public string GetCode() => IPEndpointTextEncoder.Encode(Address, Port);
+
         public override string ToString() => $"[{Address}:{Port}]";
 
         public override bool Equals(object obj)
@@ -40,6 +42,18 @@ namespace Wsla
         {
             this.Address = Address;
             this.Port = Port;
+        }
+
+        public static bool TryParseCode(ReadOnlySpan<char> characters, out RoomConnectionInfo info)
+        {
+            if (IPEndpointTextEncoder.TryDecode(characters, out var address, out var port) is false)
+            {
+                info = default;
+                return false;
+            }
+
+            info = new RoomConnectionInfo(address, port);
+            return true;
         }
     }
 
