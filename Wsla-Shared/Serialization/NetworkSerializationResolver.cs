@@ -89,6 +89,16 @@ namespace Wsla.Serialization
 
             Register<IPAddress, IPAddressNetworkSerializationResolver>();
 
+            Register<Type, NetworkTypeSerializationResolver>();
+
+            Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
+            Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
+
+            Register(new FixedStringNetworkSerializationResolver<FixedString20>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString40>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString60>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString80>());
+
             Registration.LoadAll();
         }
     }

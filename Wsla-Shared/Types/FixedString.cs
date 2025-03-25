@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Buffers;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -9,6 +12,9 @@ namespace Wsla
 {
     public static class FixedString
     {
+        public const int Min = FixedString20.Capacity;
+        public const int Max = FixedString80.Capacity;
+
         internal unsafe static int Populate<TString>(ref TString instance, ReadOnlySpan<char> characters, int capacity)
             where TString : IFixedString
         {
@@ -120,8 +126,11 @@ namespace Wsla
     public interface IFixedString
     {
         int Length { get; }
+        void SetLength(int value);
 
-        public char this[int index] { get; }
+        int Max { get; }
+
+        char this[int index] { get; }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         ref char GetPinnableReference();
@@ -131,11 +140,13 @@ namespace Wsla
     {
         fixed char Characters[Capacity];
 
-        public int Length { get; }
+        public int Length { get; private set; }
+        void IFixedString.SetLength(int value) => Length = value;
 
         public char this[int index] => FixedString.Index(ref this, index, Length);
 
         public const int Capacity = 20;
+        public int Max => Capacity;
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         public ref char GetPinnableReference() => ref Characters[0];
@@ -172,11 +183,13 @@ namespace Wsla
     {
         fixed char Characters[Capacity];
 
-        public int Length { get; }
+        public int Length { get; private set; }
+        void IFixedString.SetLength(int value) => Length = value;
 
         public char this[int index] => FixedString.Index(ref this, index, Length);
 
-        public const int Capacity = 40;
+        public const int Capacity = 20;
+        public int Max => Capacity;
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         public ref char GetPinnableReference() => ref Characters[0];
@@ -213,11 +226,13 @@ namespace Wsla
     {
         fixed char Characters[Capacity];
 
-        public int Length { get; }
+        public int Length { get; private set; }
+        void IFixedString.SetLength(int value) => Length = value;
 
         public char this[int index] => FixedString.Index(ref this, index, Length);
 
-        public const int Capacity = 60;
+        public const int Capacity = 20;
+        public int Max => Capacity;
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         public ref char GetPinnableReference() => ref Characters[0];
@@ -254,11 +269,13 @@ namespace Wsla
     {
         fixed char Characters[Capacity];
 
-        public int Length { get; }
+        public int Length { get; private set; }
+        void IFixedString.SetLength(int value) => Length = value;
 
         public char this[int index] => FixedString.Index(ref this, index, Length);
 
-        public const int Capacity = 80;
+        public const int Capacity = 20;
+        public int Max => Capacity;
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         public ref char GetPinnableReference() => ref Characters[0];
@@ -293,11 +310,8 @@ namespace Wsla
     }
 
     public unsafe class FixedStringNetworkSerializationResolver<TString> : NetworkSerializationResolver<TString>
-        where TString : IFixedString
+        where TString : IFixedString, new()
     {
-        CreatorDelegate Creator;
-        public delegate TString CreatorDelegate(ReadOnlySpan<char> characters);
-
         Encoding Encoder => Encoding.UTF8;
 
         public override void Write(in TString value, INetworkStream stream)
@@ -335,17 +349,82 @@ namespace Wsla
 
             var binary = stream.PopSpan(length);
 
-            Span<char> characters = stackalloc char[Encoder.GetMaxCharCount(length)];
+            fixed (char* ptr = value)
+            {
+                var characters = new Span<char>(ptr, value.Max);
 
-            var count = Encoder.GetChars(binary, characters);
-            characters = characters.Slice(0, count);
+                var count = Encoder.GetChars(binary, characters);
+                characters = characters.Slice(0, count);
 
-            value = Creator(characters);
+                value.SetLength(count);
+            }
+        }
+    }
+
+    public unsafe class FixedStringJsonConverter<TString> : JsonConverter<TString>
+        where TString : IFixedString, new()
+    {
+        public override TString Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType is JsonTokenType.Null)
+                return default;
+
+            if (reader.TokenType is not JsonTokenType.String)
+                throw new JsonException($"Cannot Convert {reader.TokenType} to Fixed String");
+
+            if (reader.ValueIsEscaped)
+                throw new JsonException($"Cannot Convert Escaped String to Fixed String");
+
+            if (reader.HasValueSequence)
+            {
+                CheckBinarySize((int)reader.ValueSequence.Length);
+
+                Span<byte> binary = stackalloc byte[(int)reader.ValueSequence.Length];
+                reader.ValueSequence.CopyTo(binary);
+
+                return ReadBinary(binary);
+            }
+            else
+            {
+                CheckBinarySize(reader.ValueSpan.Length);
+
+                var binary = reader.ValueSpan;
+
+                return ReadBinary(binary);
+            }
+
+            static void CheckBinarySize(int binary)
+            {
+                var max = Encoding.UTF8.GetMaxByteCount(FixedString.Max);
+
+                if (binary > max)
+                    throw new JsonException($"Json Fixed String Bytes Longer than Possible Max of {max}");
+            }
+            static TString ReadBinary(ReadOnlySpan<byte> binary)
+            {
+                var value = new TString();
+
+                fixed (char* ptr = value)
+                {
+                    var characters = new Span<char>(ptr, value.Max);
+
+                    var length = Encoding.UTF8.GetChars(binary, characters);
+                    characters = characters.Slice(0, length);
+
+                    value.SetLength(length);
+                }
+
+                return value;
+            }
         }
 
-        public FixedStringNetworkSerializationResolver(CreatorDelegate Creator)
+        public override void Write(Utf8JsonWriter writer, TString value, JsonSerializerOptions options)
         {
-            this.Creator = Creator;
+            fixed (char* ptr = value)
+            {
+                var source = new Span<char>(ptr, value.Length);
+                writer.WriteStringValue(source);
+            }
         }
     }
 }

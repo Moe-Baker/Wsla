@@ -9,8 +9,8 @@ namespace Wsla
 {
     public class IPAddressJsonConverter : JsonConverter<IPAddress>
     {
-        public const int MaxCharactersLength = 50;
-        public const int MaxBinaryLength = MaxCharactersLength * 4;
+        public static readonly int MaxCharactersLength = 50; //An educated guess
+        public static readonly int MaxBinaryLength = Encoding.UTF8.GetMaxByteCount(MaxCharactersLength);
 
         public override IPAddress Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
@@ -25,33 +25,30 @@ namespace Wsla
 
             if (reader.HasValueSequence)
             {
-                var length = (int)reader.ValueSequence.Length;
+                CheckBinarySize((int)reader.ValueSequence.Length);
 
-                if (length > MaxBinaryLength)
-                    throw new JsonException($"Binary Length of {length} Is Bigger than Max Binary Length of {MaxBinaryLength}");
-
-                Span<byte> binary = stackalloc byte[length];
+                Span<byte> binary = stackalloc byte[(int)reader.ValueSequence.Length];
                 reader.ValueSequence.CopyTo(binary);
 
                 return ReadBinary(binary);
             }
             else
             {
-                var length = reader.ValueSpan.Length;
-
-                if (length > MaxBinaryLength)
-                    throw new JsonException($"Binary Length of {length} Is Bigger than Max Binary Length of {MaxBinaryLength}");
+                CheckBinarySize(reader.ValueSpan.Length);
 
                 var binary = reader.ValueSpan;
 
                 return ReadBinary(binary);
             }
 
+            static void CheckBinarySize(int length)
+            {
+                if (length > MaxBinaryLength)
+                    throw new JsonException($"Binary Length of {length} Is Bigger than Max Binary Length of {MaxBinaryLength}");
+            }
             static IPAddress ReadBinary(ReadOnlySpan<byte> binary)
             {
-                var length = Encoding.UTF8.GetMaxCharCount(binary.Length);
-
-                Span<char> characters = stackalloc char[length];
+                Span<char> characters = stackalloc char[Encoding.UTF8.GetMaxCharCount(binary.Length)];
 
                 var written = Encoding.UTF8.GetChars(binary, characters);
 

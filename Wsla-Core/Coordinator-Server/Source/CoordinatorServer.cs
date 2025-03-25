@@ -211,7 +211,7 @@ namespace Wsla.Server
                         {
                             var connection = new RoomConnectionInfo(Address, room.Port);
 
-                            var name = room.Name.ToString();
+                            var name = room.Name;
                             var capacity = room.Capacity;
                             var occupancy = room.Occupancy;
 

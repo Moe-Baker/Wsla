@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,25 +12,31 @@ public class Sandbox : MonoBehaviour
 {
     public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
     {
-        //1
-        {
-            var data = new NetworkSceneID(14);
+        var data = new FixedString20("Hello World");
 
-            var json = JsonSerializer.Serialize(data, options: SharedAPI.JsonOptions);
-
-            Debug.Log(json);
-
-            var data2 = JsonSerializer.Deserialize<NetworkSceneID>(json);
-
-            Debug.Log(data2);
-        }
+        JsonClone(data);
 
         return ButtonFieldOperation.None;
     });
 
     public struct Data
     {
-        public int Number1 { get; set; }
-        public int Number2 { get; set; }
+        public FixedString20 Text;
+    }
+
+    public static T JsonClone<T>(T original) => JsonClone(original, x => x.ToString());
+    public static T JsonClone<T>(T original, Func<T, string> reader)
+    {
+        Debug.Log($"Original: [{reader(original)}]");
+
+        var json = JsonSerializer.Serialize(original, options: SharedAPI.JsonOptions);
+
+        Debug.Log($"Json: [{json}]");
+
+        var clone = JsonSerializer.Deserialize<T>(json, options: SharedAPI.JsonOptions);
+
+        Debug.Log($"Clone: [{reader(clone)}]");
+
+        return clone;
     }
 }

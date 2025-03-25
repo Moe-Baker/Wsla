@@ -59,7 +59,7 @@ namespace Wsla
 
     public struct RoomListEntryInfo
     {
-        public string Name;
+        public FixedString40 Name;
 
         public byte Capacity;
         public byte Occupancy;
@@ -68,7 +68,7 @@ namespace Wsla
 
         public override string ToString() => $"[Room: {Name} ({Occupancy}/{Capacity}) | Connection: {ConnectionInfo}]";
 
-        public RoomListEntryInfo(string Name, byte Capacity, byte Occupancy, RoomConnectionInfo ConnectionInfo)
+        public RoomListEntryInfo(FixedString40 Name, byte Capacity, byte Occupancy, RoomConnectionInfo ConnectionInfo)
         {
             this.Name = Name;
             this.Capacity = Capacity;
@@ -127,10 +127,10 @@ namespace Wsla
 
     public struct CreateRoomParameters : IAutoNetworkSerialization
     {
-        public string Name;
+        public FixedString40 Name;
         public byte Capacity;
         public NetworkSceneID Scene;
-        public string Password;
+        public FixedString20 Password;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -140,7 +140,7 @@ namespace Wsla
             context.Select(ref Password);
         }
 
-        public CreateRoomParameters(string Name, byte Capacity, NetworkSceneID Scene, string Password)
+        public CreateRoomParameters(FixedString40 Name, byte Capacity, NetworkSceneID Scene, FixedString20 Password)
         {
             this.Name = Name;
             this.Capacity = Capacity;

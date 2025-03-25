@@ -3,8 +3,6 @@ using System.Collections.Generic;
 
 using Wsla.Serialization;
 
-[assembly: NetworkSerializationResolverRegistration(typeof(Wsla.WslaSerializationResolvers), 0, "Register")]
-
 namespace Wsla
 {
     public static class NetworkTypes
@@ -126,21 +124,5 @@ namespace Wsla
 
         public static byte ReadValue(INetworkStream stream)
             => NetworkSerializer.ReadValue<byte>(stream);
-    }
-
-    public static class WslaSerializationResolvers
-    {
-        static void Register()
-        {
-            NetworkSerializationResolver.Register<Type, NetworkTypeSerializationResolver>();
-
-            NetworkSerializationResolver.Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
-            NetworkSerializationResolver.Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
-
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString20>(span => new FixedString20(span)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString40>(span => new FixedString40(span)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString60>(span => new FixedString60(span)));
-            NetworkSerializationResolver.Register(new FixedStringNetworkSerializationResolver<FixedString80>(span => new FixedString80(span)));
-        }
     }
 }
