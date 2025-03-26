@@ -15,10 +15,10 @@ namespace Wsla
             };
 
             JsonOptions.Converters.Add(new IPAddressJsonConverter());
-            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString20>());
-            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString40>());
-            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString60>());
-            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString80>());
+            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString<FS20>>());
+            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString<FS40>>());
+            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString<FS60>>());
+            JsonOptions.Converters.Add(new FixedStringJsonConverter<FixedString<FS80>>());
         }
     }
 }

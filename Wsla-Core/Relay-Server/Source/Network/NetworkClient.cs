@@ -12,7 +12,7 @@ namespace Wsla.Server
     {
         public NetworkClientID ID { get; }
 
-        public FixedString20 Username { get; private set; }
+        public FixedString<FS20> Username { get; private set; }
 
         public NetPeer? Peer { get; private set; }
         internal void AssignPeer(NetPeer value)
@@ -89,7 +89,7 @@ namespace Wsla.Server
         }
 
         readonly Room Room;
-        public NetworkClient(Room Room, NetworkClientID ID, FixedString20 Username, int SpawnTokenCapacity, NetworkClientVersion Version)
+        public NetworkClient(Room Room, NetworkClientID ID, FixedString<FS20> Username, int SpawnTokenCapacity, NetworkClientVersion Version)
         {
             this.Room = Room;
 

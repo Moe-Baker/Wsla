@@ -59,7 +59,7 @@ namespace Wsla
 
     public struct RoomListEntryInfo
     {
-        public FixedString40 Name;
+        public FixedString<FS20> Name;
 
         public byte Capacity;
         public byte Occupancy;
@@ -68,7 +68,7 @@ namespace Wsla
 
         public override string ToString() => $"[Room: {Name} ({Occupancy}/{Capacity}) | Connection: {ConnectionInfo}]";
 
-        public RoomListEntryInfo(FixedString40 Name, byte Capacity, byte Occupancy, RoomConnectionInfo ConnectionInfo)
+        public RoomListEntryInfo(FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomConnectionInfo ConnectionInfo)
         {
             this.Name = Name;
             this.Capacity = Capacity;
@@ -79,7 +79,7 @@ namespace Wsla
 
     public struct RoomStateInfo : IAutoNetworkSerialization
     {
-        public FixedString40 Name;
+        public FixedString<FS20> Name;
 
         public byte Capacity;
         public byte Occupancy;
@@ -92,7 +92,7 @@ namespace Wsla
             context.Select(ref Occupancy);
         }
 
-        public RoomStateInfo(FixedString40 Name, byte Capacity, byte Occupancy)
+        public RoomStateInfo(FixedString<FS20> Name, byte Capacity, byte Occupancy)
         {
             this.Name = Name;
 
@@ -127,10 +127,10 @@ namespace Wsla
 
     public struct CreateRoomParameters : IAutoNetworkSerialization
     {
-        public FixedString40 Name;
+        public FixedString<FS20> Name;
         public byte Capacity;
         public NetworkSceneID Scene;
-        public FixedString20 Password;
+        public FixedString<FS20> Password;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -140,7 +140,7 @@ namespace Wsla
             context.Select(ref Password);
         }
 
-        public CreateRoomParameters(FixedString40 Name, byte Capacity, NetworkSceneID Scene, FixedString20 Password)
+        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password)
         {
             this.Name = Name;
             this.Capacity = Capacity;
@@ -151,28 +151,23 @@ namespace Wsla
 
     public struct UpdateRoomParameters : IAutoNetworkSerialization
     {
-        public FixedString40? Name;
-
         public byte? Occupancy;
 
         public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref Name);
             context.Select(ref Occupancy);
         }
 
-        public UpdateRoomParameters(FixedString40? Name, byte? Occupancy)
+        public UpdateRoomParameters(byte? Occupancy)
         {
-            this.Name = Name;
             this.Occupancy = Occupancy;
         }
 
         public static UpdateRoomParameters Merge(UpdateRoomParameters previous, UpdateRoomParameters current)
         {
-            var name = Merge(previous.Name, current.Name);
             var occupancy = Merge(previous.Occupancy, current.Occupancy);
 
-            return new UpdateRoomParameters(name, occupancy);
+            return new UpdateRoomParameters(occupancy);
         }
 
         static T? Merge<T>(T? previous, T? current)

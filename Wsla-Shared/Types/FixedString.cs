@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -10,89 +10,39 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    public static class FixedString
+    public static unsafe class FixedString
     {
-        public const int Min = FixedString20.Capacity;
-        public const int Max = FixedString80.Capacity;
+        public const int MinCharacters = FS20.Capacity;
+        public const int MaxCharacters = FS80.Capacity;
 
-        internal unsafe static int Populate<TString>(ref TString instance, ReadOnlySpan<char> characters, int capacity)
-            where TString : IFixedString
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Equals<TLeft, TRight>(in TLeft left, in TRight right)
+            where TLeft : IFixedString
+            where TRight : IFixedString
         {
-            if (characters.Length > capacity)
-                throw new ArgumentOutOfRangeException($"{typeof(TString)} Can Only Accept {capacity} Characters");
-
-            fixed (char* source = characters)
-            fixed (char* destination = instance)
-            {
-                Buffer.MemoryCopy(source, destination, capacity * sizeof(char), characters.Length * sizeof(char));
-            }
-
-            return characters.Length;
+            return Equals(in left, in right, StringComparison.Ordinal);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Equals<TLeft, TRight>(in TLeft left, in TRight right, StringComparison comparison)
+            where TLeft : IFixedString
+            where TRight : IFixedString
+        {
+            return MemoryExtensions.Equals(left.AsSpan(), right.AsSpan(), comparison);
         }
 
-        public unsafe static char Index<TString>(ref TString instance, int index, int length)
-            where TString : IFixedString
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Compare<TLeft, TRight>(in TLeft left, in TRight right)
+            where TLeft : IFixedString
+            where TRight : IFixedString
         {
-            if (index > length)
-                throw new IndexOutOfRangeException($"Can't Access Character {index} on {typeof(TString)} as it Only has {length} Elements");
-
-            fixed (char* destination = instance)
-                return *(destination + index);
+            return Compare(in left, in right);
         }
-
-        public unsafe static Span<char> CopyTo<TString>(this TString instance, Span<char> buffer)
-            where TString : IFixedString
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Compare<TLeft, TRight>(in TLeft left, in TRight right, StringComparison comparison)
+            where TLeft : IFixedString
+            where TRight : IFixedString
         {
-            fixed (char* source = instance)
-            fixed (char* destination = buffer)
-            {
-                Buffer.MemoryCopy(source, destination, buffer.Length * sizeof(char), instance.Length * sizeof(char));
-
-                return buffer.Slice(0, instance.Length);
-            }
-        }
-
-        public unsafe static string ToString<TString>(ref TString instance)
-            where TString : IFixedString
-        {
-            fixed (char* destination = instance)
-                return new string(destination, 0, instance.Length);
-        }
-
-        public unsafe static bool Equals<TString>(ref TString left, ref TString right, StringComparison comparison)
-            where TString : IFixedString
-        {
-            fixed (void* leftPtr = left)
-            fixed (void* rightPtr = right)
-            {
-                var leftSpan = new ReadOnlySpan<char>(leftPtr, left.Length);
-                var rightSpan = new ReadOnlySpan<char>(rightPtr, right.Length);
-
-                return MemoryExtensions.Equals(leftSpan, rightSpan, comparison);
-            }
-        }
-
-        public unsafe static int Compare<TString>(ref TString left, ref TString right, StringComparison comparison)
-            where TString : IFixedString
-        {
-            fixed (void* leftPtr = left)
-            fixed (void* rightPtr = right)
-            {
-                var leftSpan = new ReadOnlySpan<char>(leftPtr, left.Length);
-                var rightSpan = new ReadOnlySpan<char>(rightPtr, right.Length);
-
-                return MemoryExtensions.CompareTo(leftSpan, rightSpan, comparison);
-            }
-        }
-
-        public unsafe static int GetHashcode<TString>(ref TString instance)
-            where TString : IFixedString
-        {
-            fixed (char* ptr = instance)
-            {
-                var span = new ReadOnlySpan<char>(ptr, instance.Length);
-                return FNVHash.Compute(span);
-            }
+            return MemoryExtensions.CompareTo(left.AsSpan(), right.AsSpan(), comparison);
         }
 
         public static class FNVHash
@@ -128,185 +78,175 @@ namespace Wsla
         int Length { get; }
         void SetLength(int value);
 
+        char this[int index] { get; }
         int Max { get; }
 
-        char this[int index] { get; }
+        Span<char> GetTotalSpan();
 
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        ref char GetPinnableReference();
+        ReadOnlySpan<char> AsSpan();
     }
-
-    public unsafe struct FixedString20 : IFixedString, IComparable<FixedString20>, IEquatable<FixedString20>
+    public unsafe struct FixedString<TStorage> : IFixedString,
+        IEquatable<FixedString<FS20>>, IEquatable<FixedString<FS40>>, IEquatable<FixedString<FS60>>, IEquatable<FixedString<FS80>>, IEquatable<string>,
+        IComparable<FixedString<FS20>>, IComparable<FixedString<FS40>>, IComparable<FixedString<FS60>>, IComparable<FixedString<FS80>>, IComparable<string>
+        where TStorage : IFixedStringStorage, new()
     {
-        fixed char Characters[Capacity];
+        TStorage Storage;
 
         public int Length { get; private set; }
-        void IFixedString.SetLength(int value) => Length = value;
+        void IFixedString.SetLength(int value)
+        {
+            if (value < 0 || value > Storage.Max)
+                throw new ArgumentOutOfRangeException($"Fixed String {typeof(TStorage).Name} Only  Supports Length of [{0}-{Storage.Max}]");
 
-        public char this[int index] => FixedString.Index(ref this, index, Length);
+            Length = value;
+        }
 
-        public const int Capacity = 20;
-        public int Max => Capacity;
+        public int Max => Storage.Max;
 
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public ref char GetPinnableReference() => ref Characters[0];
+        public char this[int index] => GetTotalSpan()[index];
 
-        public override string ToString() => FixedString.ToString(ref this);
+        public override int GetHashCode() => FixedString.FNVHash.Compute(GetTotalSpan());
 
+        public override string ToString() => AsSpan().ToString();
+
+        #region Equality
         public override bool Equals(object obj)
         {
-            if (obj is FixedString20 other)
-                return Equals(other);
+            if (obj is IFixedString other)
+                return FixedString.Equals(in this, in other);
 
             return false;
         }
-        public bool Equals(FixedString20 other) => FixedString.Equals(ref this, ref other, StringComparison.Ordinal);
 
-        public override int GetHashCode() => FixedString.GetHashcode(ref this);
+        //Fixed String 20
+        public bool Equals(FixedString<FS20> other) => FixedString.Equals(in this, in other);
+        public bool Equals(FixedString<FS20> other, StringComparison comparison) => FixedString.Equals(in this, in other, comparison);
+        public static bool operator ==(FixedString<TStorage> left, FixedString<FS20> right) => FixedString.Equals(in left, in right);
+        public static bool operator !=(FixedString<TStorage> left, FixedString<FS20> right) => !FixedString.Equals(in left, in right);
 
-        public int CompareTo(FixedString20 other) => FixedString.GetHashcode(ref this);
+        //Fixed String 40
+        public bool Equals(FixedString<FS40> other) => FixedString.Equals(in this, in other);
+        public bool Equals(FixedString<FS40> other, StringComparison comparison) => FixedString.Equals(in this, in other, comparison);
+        public static bool operator ==(FixedString<TStorage> left, FixedString<FS40> right) => FixedString.Equals(in left, in right);
+        public static bool operator !=(FixedString<TStorage> left, FixedString<FS40> right) => !FixedString.Equals(in left, in right);
 
-        public FixedString20(ReadOnlySpan<char> characters)
+        //Fixed String 60
+        public bool Equals(FixedString<FS60> other) => FixedString.Equals(in this, in other);
+        public bool Equals(FixedString<FS60> other, StringComparison comparison) => FixedString.Equals(in this, in other, comparison);
+        public static bool operator ==(FixedString<TStorage> left, FixedString<FS60> right) => FixedString.Equals(in left, in right);
+        public static bool operator !=(FixedString<TStorage> left, FixedString<FS60> right) => !FixedString.Equals(in left, in right);
+
+        //Fixed String 80
+        public bool Equals(FixedString<FS80> other) => FixedString.Equals(in this, in other);
+        public bool Equals(FixedString<FS80> other, StringComparison comparison) => FixedString.Equals(in this, in other, comparison);
+        public static bool operator ==(FixedString<TStorage> left, FixedString<FS80> right) => FixedString.Equals(in left, in right);
+        public static bool operator !=(FixedString<TStorage> left, FixedString<FS80> right) => !FixedString.Equals(in left, in right);
+
+        //System.String
+        public bool Equals(string other) => Equals(other, StringComparison.Ordinal);
+        public bool Equals(string other, StringComparison comparison)
+        {
+            return MemoryExtensions.Equals(AsSpan(), other.AsSpan(), comparison);
+        }
+        public static bool operator ==(FixedString<TStorage> left, string right) => left.Equals(right);
+        public static bool operator !=(FixedString<TStorage> left, string right) => !left.Equals(right);
+        public static bool operator ==(string left, FixedString<TStorage> right) => right.Equals(left);
+        public static bool operator !=(string left, FixedString<TStorage> right) => !right.Equals(left);
+        #endregion
+
+        #region Comparison
+        public int CompareTo(FixedString<FS20> other) => FixedString.Compare(in this, in other);
+        public int CompareTo(FixedString<FS20> other, StringComparison comparison) => FixedString.Compare(in this, in other, comparison);
+
+        public int CompareTo(FixedString<FS40> other) => FixedString.Compare(in this, in other);
+        public int CompareTo(FixedString<FS40> other, StringComparison comparison) => FixedString.Compare(in this, in other, comparison);
+
+        public int CompareTo(FixedString<FS60> other) => FixedString.Compare(in this, in other);
+        public int CompareTo(FixedString<FS60> other, StringComparison comparison) => FixedString.Compare(in this, in other, comparison);
+
+        public int CompareTo(FixedString<FS80> other) => FixedString.Compare(in this, in other);
+        public int CompareTo(FixedString<FS80> other, StringComparison comparison) => FixedString.Compare(in this, in other, comparison);
+
+        public int CompareTo(string other) => CompareTo(other, StringComparison.Ordinal);
+        public int CompareTo(string other, StringComparison comparison)
+        {
+            return MemoryExtensions.CompareTo(AsSpan(), other.AsSpan(), comparison);
+        }
+        #endregion
+
+        #region Span
+        Span<char> IFixedString.GetTotalSpan() => GetTotalSpan();
+        Span<char> GetTotalSpan() => Storage.GetSpan();
+
+        public ReadOnlySpan<char> AsSpan() => GetTotalSpan().Slice(0, Length);
+        #endregion
+
+        #region Implicit Converters
+        public static implicit operator FixedString<TStorage>(string input) => new FixedString<TStorage>(input);
+        public static implicit operator FixedString<TStorage>(ReadOnlySpan<char> input) => new FixedString<TStorage>(input);
+
+        public static implicit operator FixedString<TStorage>(FixedString<FS20> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS40> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS60> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS80> other) => new FixedString<TStorage>(other.AsSpan());
+        #endregion
+
+        public FixedString(ReadOnlySpan<char> input)
         {
             Unsafe.SkipInit(out this);
 
-            Length = FixedString.Populate(ref this, characters, Capacity);
+            if (input.Length > Storage.Max)
+                throw new ArgumentOutOfRangeException($"Fixed String {typeof(TStorage).Name} Only  Supports Length of [{0}-{Storage.Max}]");
+
+            Length = input.Length;
+            Storage = new TStorage();
+
+            var characters = GetTotalSpan();
+            input.CopyTo(characters);
         }
-
-        public static implicit operator FixedString20(string text) => new(text);
-        public static implicit operator FixedString20(ReadOnlySpan<char> characters) => new(characters);
-
-        public static bool operator ==(FixedString20 left, FixedString20 right) => left.Equals(right);
-        public static bool operator !=(FixedString20 left, FixedString20 right) => !left.Equals(right);
     }
-    public unsafe struct FixedString40 : IFixedString, IComparable<FixedString40>, IEquatable<FixedString40>
+
+    public interface IFixedStringStorage
     {
-        fixed char Characters[Capacity];
+        int Max { get; }
 
-        public int Length { get; private set; }
-        void IFixedString.SetLength(int value) => Length = value;
-
-        public char this[int index] => FixedString.Index(ref this, index, Length);
-
+        Span<char> GetSpan();
+    }
+    public unsafe struct FS20 : IFixedStringStorage
+    {
         public const int Capacity = 20;
+
+        fixed char Characters[Capacity];
         public int Max => Capacity;
 
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public ref char GetPinnableReference() => ref Characters[0];
-
-        public override string ToString() => FixedString.ToString(ref this);
-
-        public override bool Equals(object obj)
-        {
-            if (obj is FixedString40 other)
-                return Equals(other);
-
-            return false;
-        }
-        public bool Equals(FixedString40 other) => FixedString.Equals(ref this, ref other, StringComparison.Ordinal);
-
-        public override int GetHashCode() => FixedString.GetHashcode(ref this);
-
-        public int CompareTo(FixedString40 other) => FixedString.GetHashcode(ref this);
-
-        public FixedString40(ReadOnlySpan<char> characters)
-        {
-            Unsafe.SkipInit(out this);
-
-            Length = FixedString.Populate(ref this, characters, Capacity);
-        }
-
-        public static implicit operator FixedString40(string text) => new(text);
-        public static implicit operator FixedString40(ReadOnlySpan<char> characters) => new(characters);
-
-        public static bool operator ==(FixedString40 left, FixedString40 right) => left.Equals(right);
-        public static bool operator !=(FixedString40 left, FixedString40 right) => !left.Equals(right);
+        Span<char> IFixedStringStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Characters[0], Capacity);
     }
-    public unsafe struct FixedString60 : IFixedString, IComparable<FixedString60>, IEquatable<FixedString60>
+    public unsafe struct FS40 : IFixedStringStorage
     {
+        public const int Capacity = 40;
+
         fixed char Characters[Capacity];
-
-        public int Length { get; private set; }
-        void IFixedString.SetLength(int value) => Length = value;
-
-        public char this[int index] => FixedString.Index(ref this, index, Length);
-
-        public const int Capacity = 20;
         public int Max => Capacity;
 
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public ref char GetPinnableReference() => ref Characters[0];
-
-        public override string ToString() => FixedString.ToString(ref this);
-
-        public override bool Equals(object obj)
-        {
-            if (obj is FixedString60 other)
-                return Equals(other);
-
-            return false;
-        }
-        public bool Equals(FixedString60 other) => FixedString.Equals(ref this, ref other, StringComparison.Ordinal);
-
-        public override int GetHashCode() => FixedString.GetHashcode(ref this);
-
-        public int CompareTo(FixedString60 other) => FixedString.GetHashcode(ref this);
-
-        public FixedString60(ReadOnlySpan<char> characters)
-        {
-            Unsafe.SkipInit(out this);
-
-            Length = FixedString.Populate(ref this, characters, Capacity);
-        }
-
-        public static implicit operator FixedString60(string text) => new(text);
-        public static implicit operator FixedString60(ReadOnlySpan<char> characters) => new(characters);
-
-        public static bool operator ==(FixedString60 left, FixedString60 right) => left.Equals(right);
-        public static bool operator !=(FixedString60 left, FixedString60 right) => !left.Equals(right);
+        Span<char> IFixedStringStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Characters[0], Capacity);
     }
-    public unsafe struct FixedString80 : IFixedString, IComparable<FixedString80>, IEquatable<FixedString80>
+    public unsafe struct FS60 : IFixedStringStorage
     {
+        public const int Capacity = 60;
+
         fixed char Characters[Capacity];
-
-        public int Length { get; private set; }
-        void IFixedString.SetLength(int value) => Length = value;
-
-        public char this[int index] => FixedString.Index(ref this, index, Length);
-
-        public const int Capacity = 20;
         public int Max => Capacity;
 
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public ref char GetPinnableReference() => ref Characters[0];
+        Span<char> IFixedStringStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Characters[0], Capacity);
+    }
+    public unsafe struct FS80 : IFixedStringStorage
+    {
+        public const int Capacity = 80;
 
-        public override string ToString() => FixedString.ToString(ref this);
+        fixed char Characters[Capacity];
+        public int Max => Capacity;
 
-        public override bool Equals(object obj)
-        {
-            if (obj is FixedString80 other)
-                return Equals(other);
-
-            return false;
-        }
-        public bool Equals(FixedString80 other) => FixedString.Equals(ref this, ref other, StringComparison.Ordinal);
-
-        public override int GetHashCode() => FixedString.GetHashcode(ref this);
-
-        public int CompareTo(FixedString80 other) => FixedString.GetHashcode(ref this);
-
-        public FixedString80(ReadOnlySpan<char> characters)
-        {
-            Unsafe.SkipInit(out this);
-
-            Length = FixedString.Populate(ref this, characters, Capacity);
-        }
-
-        public static implicit operator FixedString80(string text) => new(text);
-        public static implicit operator FixedString80(ReadOnlySpan<char> characters) => new(characters);
-
-        public static bool operator ==(FixedString80 left, FixedString80 right) => left.Equals(right);
-        public static bool operator !=(FixedString80 left, FixedString80 right) => !left.Equals(right);
+        Span<char> IFixedStringStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Characters[0], Capacity);
     }
 
     public unsafe class FixedStringNetworkSerializationResolver<TString> : NetworkSerializationResolver<TString>
@@ -316,26 +256,23 @@ namespace Wsla
 
         public override void Write(in TString value, INetworkStream stream)
         {
-            fixed (char* ptr = value)
-            {
-                var source = new Span<char>(ptr, value.Length);
+            var source = value.AsSpan();
 
-                Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
+            Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
 
-                //Max capacity of 80 specifically chosen to ensure the max byte count is under byte.MaxValue
-                var length = (byte)Encoder.GetBytes(source, buffer);
-                buffer = buffer.Slice(0, length);
+            //Max capacity of 80 specifically chosen to ensure the max byte count is under byte.MaxValue
+            var length = (byte)Encoder.GetBytes(source, buffer);
+            buffer = buffer.Slice(0, length);
 
-                //Pop (length header + characters buffer) size span
-                var destination = stream.PopSpan(1 + length);
+            //Pop (length header + characters buffer) size span
+            var destination = stream.PopSpan(1 + length);
 
-                //Write Length
-                destination[0] = length;
+            //Write Length
+            destination[0] = length;
 
-                //Write characters
-                destination = destination.Slice(1, length);
-                buffer.CopyTo(destination);
-            }
+            //Write characters
+            destination = destination.Slice(1, length);
+            buffer.CopyTo(destination);
         }
         public override void Read(ref TString value, INetworkStream stream)
         {
@@ -349,15 +286,9 @@ namespace Wsla
 
             var binary = stream.PopSpan(length);
 
-            fixed (char* ptr = value)
-            {
-                var characters = new Span<char>(ptr, value.Max);
-
-                var count = Encoder.GetChars(binary, characters);
-                characters = characters.Slice(0, count);
-
-                value.SetLength(count);
-            }
+            var characters = value.GetTotalSpan();
+            var count = Encoder.GetChars(binary, characters);
+            value.SetLength(count);
         }
     }
 
@@ -395,7 +326,7 @@ namespace Wsla
 
             static void CheckBinarySize(int binary)
             {
-                var max = Encoding.UTF8.GetMaxByteCount(FixedString.Max);
+                var max = Encoding.UTF8.GetMaxByteCount(FixedString.MaxCharacters);
 
                 if (binary > max)
                     throw new JsonException($"Json Fixed String Bytes Longer than Possible Max of {max}");
@@ -404,15 +335,9 @@ namespace Wsla
             {
                 var value = new TString();
 
-                fixed (char* ptr = value)
-                {
-                    var characters = new Span<char>(ptr, value.Max);
-
-                    var length = Encoding.UTF8.GetChars(binary, characters);
-                    characters = characters.Slice(0, length);
-
-                    value.SetLength(length);
-                }
+                var characters = value.GetTotalSpan();
+                var length = Encoding.UTF8.GetChars(binary, characters);
+                value.SetLength(length);
 
                 return value;
             }
@@ -420,11 +345,8 @@ namespace Wsla
 
         public override void Write(Utf8JsonWriter writer, TString value, JsonSerializerOptions options)
         {
-            fixed (char* ptr = value)
-            {
-                var source = new Span<char>(ptr, value.Length);
-                writer.WriteStringValue(source);
-            }
+            var characters = value.AsSpan();
+            writer.WriteStringValue(characters);
         }
     }
 }

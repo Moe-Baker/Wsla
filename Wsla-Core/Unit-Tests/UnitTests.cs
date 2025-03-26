@@ -1,16 +1,13 @@
-using LiteNetLib.Utils;
+﻿using LiteNetLib.Utils;
 
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Wsla;
 using Wsla.Serialization;
 
-using static SerializationTests.Utility;
-
-namespace SerializationTests
+namespace NetworkSerializationTests
 {
     public class StringTests
     {
@@ -18,7 +15,7 @@ namespace SerializationTests
         public void NullStringTest()
         {
             string? source = null;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -27,7 +24,7 @@ namespace SerializationTests
         public void ShortStringTest()
         {
             var source = "Hello World";
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -43,7 +40,7 @@ namespace SerializationTests
                 builder.Append((char)i);
 
             var source = builder.ToString();
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -54,32 +51,32 @@ namespace SerializationTests
         [Fact]
         void Fixed20Test()
         {
-            var source = new FixedString20("Hello World");
-            var clone = Duplicate(source);
+            var source = new FixedString<FS20>("Hello World");
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
         void Fixed40Test()
         {
-            var source = new FixedString40("Hello World");
-            var clone = Duplicate(source);
+            var source = new FixedString<FS40>("Hello World");
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
         void Fixed60Test()
         {
-            var source = new FixedString60("Hello World");
-            var clone = Duplicate(source);
+            var source = new FixedString<FS60>("Hello World");
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
         void Fixed80Test()
         {
-            var source = new FixedString80("Hello World");
-            var clone = Duplicate(source);
+            var source = new FixedString<FS80>("Hello World");
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
@@ -87,8 +84,8 @@ namespace SerializationTests
         [Fact]
         void MinTestTest()
         {
-            var source = new FixedString20("");
-            var clone = Duplicate(source);
+            var source = new FixedString<FS20>("");
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
@@ -96,16 +93,31 @@ namespace SerializationTests
         [Fact]
         void MaxTest()
         {
-            var source = new FixedString80(new string(char.MaxValue, 80));
-            var clone = Duplicate(source);
+            var source = new FixedString<FS80>(new string(char.MaxValue, 80));
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source.ToString(), clone.ToString());
         }
 
         [Fact]
+        void ImplicitConversion()
+        {
+            FixedString<FS20> f20 = new FixedString<FS20>("Hello World");
+
+            FixedString<FS40> f40 = f20;
+            Assert.True(f20 == f40);
+
+            FixedString<FS60> f60 = f20;
+            Assert.True(f20 == f60);
+
+            FixedString<FS80> f80 = f20;
+            Assert.True(f20 == f80);
+        }
+
+        [Fact]
         void BinaryLengthTest()
         {
-            var instance = new FixedString20("Hello World");
+            var instance = new FixedString<FS20>("Hello World");
 
             var writer = new NetDataWriter();
 
@@ -121,7 +133,7 @@ namespace SerializationTests
         public void EmptyTest()
         {
             var original = new ValueTuple();
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original, clone);
         }
@@ -130,7 +142,7 @@ namespace SerializationTests
         public void Item2Test()
         {
             var original = ValueTuple.Create(1, "Hello World");
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original.Item1, clone.Item1);
             Assert.Equal(original.Item2, clone.Item2);
@@ -140,7 +152,7 @@ namespace SerializationTests
         public void Item4Test()
         {
             var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue);
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original.Item1, clone.Item1);
             Assert.Equal(original.Item2, clone.Item2);
@@ -152,7 +164,7 @@ namespace SerializationTests
         public void Item6Test()
         {
             var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue, ushort.MinValue, new int[] { 1, 2, 3 });
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original.Item1, clone.Item1);
             Assert.Equal(original.Item2, clone.Item2);
@@ -166,7 +178,7 @@ namespace SerializationTests
         public void Item8Test()
         {
             var original = ValueTuple.Create(1, "Hello World", 2.5f, long.MaxValue, ushort.MinValue, new int[] { 1, 2, 3 }, "Bye World", 12);
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original.Item1, clone.Item1);
             Assert.Equal(original.Item2, clone.Item2);
@@ -185,7 +197,7 @@ namespace SerializationTests
         public void V4Test()
         {
             var source = IPAddress.Loopback;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.True(source.Equals(clone));
         }
@@ -194,7 +206,7 @@ namespace SerializationTests
         public void V6Test()
         {
             var source = IPAddress.IPv6Loopback;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.True(source.Equals(clone));
         }
@@ -206,7 +218,7 @@ namespace SerializationTests
         void ValueTest()
         {
             var original = new Nullable<int>(42);
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original, clone);
         }
@@ -215,7 +227,7 @@ namespace SerializationTests
         void NullTest()
         {
             var original = new Nullable<int>();
-            var clone = Duplicate(original);
+            var clone = Utility.Duplicate(original);
 
             Assert.Equal(original, clone);
         }
@@ -282,7 +294,7 @@ namespace SerializationTests
             };
 
             var source = array;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -293,7 +305,7 @@ namespace SerializationTests
             var array = new string[] { };
 
             var source = array;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -310,7 +322,7 @@ namespace SerializationTests
             var destination = new string[source.Length];
             var marker = destination;
 
-            WriteInto(ref source, ref destination);
+            Utility.WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
             Assert.Same(destination, marker);
@@ -331,7 +343,7 @@ namespace SerializationTests
             };
 
             var source = new ArraySegment<string>(array, 1, 2);
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -342,7 +354,7 @@ namespace SerializationTests
             var array = new string[] { };
 
             var source = new ArraySegment<string>(array);
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -354,7 +366,7 @@ namespace SerializationTests
             var destination = new ArraySegment<string>(new string[42]);
             var marker = destination;
 
-            WriteInto(ref source, ref destination);
+            Utility.WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
             Assert.Same(destination.Array, marker.Array);
@@ -375,7 +387,7 @@ namespace SerializationTests
             };
 
             var source = list;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -392,7 +404,7 @@ namespace SerializationTests
             var destination = new List<string>() { "1", "2", "3", "4", "5" };
             var marker = destination;
 
-            WriteInto(ref source, ref destination);
+            Utility.WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
             Assert.Same(destination, marker);
@@ -413,7 +425,7 @@ namespace SerializationTests
             };
 
             var source = dictionary;
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -441,7 +453,7 @@ namespace SerializationTests
 
             var marker = destination;
 
-            WriteInto(ref source, ref destination);
+            Utility.WriteInto(ref source, ref destination);
 
             Assert.Equal(source, destination);
             Assert.Same(destination, marker);
@@ -461,7 +473,7 @@ namespace SerializationTests
                 w = 4,
             };
 
-            var clone = Duplicate(source);
+            var clone = Utility.Duplicate(source);
 
             Assert.Equal(source, clone);
         }
@@ -533,6 +545,103 @@ namespace SerializationTests
             NetworkSerializer.ReadValue<T>(ref destination, reader);
 
             Assert.Equal(reader.Position, writer.Length);
+        }
+    }
+}
+
+namespace JsonSerializationTests
+{
+    public class FixedStringTests
+    {
+        [Fact]
+        void Fixed20Test()
+        {
+            var source = new FixedString<FS20>("Hello World");
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed40Test()
+        {
+            var source = new FixedString<FS40>("Hello World");
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed60Test()
+        {
+            var source = new FixedString<FS60>("Hello World");
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+        [Fact]
+        void Fixed80Test()
+        {
+            var source = new FixedString<FS80>("Hello World");
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+
+        [Fact]
+        void MinTestTest()
+        {
+            var source = new FixedString<FS20>("");
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+
+        [Fact]
+        void MaxTest()
+        {
+            var source = new FixedString<FS80>(new string('A', 80));
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToString(), clone.ToString());
+        }
+    }
+
+    public class IPAddressTests
+    {
+        [Fact]
+        void MinTest()
+        {
+            var source = new IPAddress([0, 0, 0, 0]);
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source, clone);
+        }
+
+        [Fact]
+        void MaxTest()
+        {
+            var source = new IPAddress([255, 255, 255, 255]);
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source, clone);
+        }
+
+        [Fact]
+        void OverflowTest()
+        {
+            var json = '"' + new string('0', 100) + '"';
+            var clone = JsonSerializer.Deserialize<IPAddress>(json, options: SharedAPI.JsonOptions);
+        }
+    }
+
+    public static class Utility
+    {
+        public static T Duplicate<[NetworkSerializationMarker] T>(T original)
+        {
+            var json = JsonSerializer.Serialize(original, options: SharedAPI.JsonOptions);
+
+            var clone = JsonSerializer.Deserialize<T>(json, options: SharedAPI.JsonOptions);
+
+            return clone;
         }
     }
 }

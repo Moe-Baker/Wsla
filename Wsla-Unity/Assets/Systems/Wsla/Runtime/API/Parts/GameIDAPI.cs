@@ -22,7 +22,7 @@ namespace Wsla.Unity
 
             public const int MaxLength = 20;
 
-            public FixedString20 Value { get; private set; }
+            public FixedString<FS20> Value { get; private set; }
 
             internal GameIDProperty Initialize()
             {

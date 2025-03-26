@@ -12,7 +12,7 @@ public class Sandbox : MonoBehaviour
 {
     public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
     {
-        var data = new FixedString20("Hello World");
+        var data = new FixedString<FS20>("Hello World");
 
         JsonClone(data);
 
@@ -21,7 +21,7 @@ public class Sandbox : MonoBehaviour
 
     public struct Data
     {
-        public FixedString20 Text;
+        public FixedString<FS20> Text;
     }
 
     public static T JsonClone<T>(T original) => JsonClone(original, x => x.ToString());

@@ -281,7 +281,7 @@ namespace Wsla.Server
 
                 public ushort Port { get; }
 
-                public FixedString40 Name;
+                public FixedString<FS20> Name { get; }
 
                 public byte Capacity;
 
@@ -292,14 +292,11 @@ namespace Wsla.Server
 
                 public void UpdateRoom(UpdateRoomParameters parameters)
                 {
-                    if (parameters.Name.HasValue)
-                        Name = parameters.Name.Value;
-
                     if (parameters.Occupancy.HasValue)
                         Occupancy = parameters.Occupancy.Value;
                 }
 
-                public Room(Server Server, ushort Port, FixedString40 Name, byte Capacity, byte Occupancy)
+                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy)
                 {
                     this.Server = Server;
                     this.Port = Port;
@@ -307,7 +304,7 @@ namespace Wsla.Server
                     this.Capacity = Capacity;
                     this.Occupancy = Occupancy;
                 }
-                public Room(Server Server, ushort Port, FixedString40 Name, byte Capacity) : this(Server, Port, Name, Capacity, Occupancy: 0) { }
+                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity) : this(Server, Port, Name, Capacity, Occupancy: 0) { }
 
                 public static Room Create(Server server, RoomMatchmakerEntryData data)
                 {

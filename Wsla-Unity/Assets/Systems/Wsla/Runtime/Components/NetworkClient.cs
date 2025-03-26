@@ -10,7 +10,7 @@ namespace Wsla.Unity
     public abstract class NetworkClient
     {
         public NetworkClientID ID { get; }
-        public FixedString20 Username { get; private set; }
+        public FixedString<FS20> Username { get; private set; }
 
         /// <summary>
         /// Is this your local client? opposite of <see cref="IsRemote"/>
@@ -45,7 +45,7 @@ namespace Wsla.Unity
         }
         public virtual void ReadState(NetPacketReader reader)
         {
-            Username = NetworkSerializer.ReadValue<FixedString20>(reader);
+            Username = NetworkSerializer.ReadValue<FixedString<FS20>>(reader);
         }
 
         public override string ToString()

@@ -9,8 +9,8 @@ namespace Wsla
 {
     public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
-        public FixedString20 Username;
-        public FixedString20 Password;
+        public FixedString<FS20> Username;
+        public FixedString<FS20> Password;
 
         public override string ToString() => $"(Username: {Username})";
 
@@ -20,7 +20,7 @@ namespace Wsla
             context.Select(ref Password);
         }
 
-        public ClientConnectionRequest(FixedString20 Username, FixedString20 Password)
+        public ClientConnectionRequest(FixedString<FS20> Username, FixedString<FS20> Password)
         {
             this.Username = Username;
             this.Password = Password;

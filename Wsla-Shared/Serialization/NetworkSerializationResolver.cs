@@ -94,10 +94,10 @@ namespace Wsla.Serialization
             Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
             Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
 
-            Register(new FixedStringNetworkSerializationResolver<FixedString20>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString40>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString60>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString80>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString<FS20>>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString<FS40>>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString<FS60>>());
+            Register(new FixedStringNetworkSerializationResolver<FixedString<FS80>>());
 
             Registration.LoadAll();
         }

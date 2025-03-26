@@ -21,12 +21,12 @@ namespace Wsla.Server
         public PropertiesProperty Properties { get; }
         public class PropertiesProperty
         {
-            public FixedString40 Name { get; }
+            public FixedString<FS20> Name { get; }
             public byte Capacity { get; }
 
-            public FixedString20 Password { get; }
+            public FixedString<FS20> Password { get; }
             public bool Private => Password.Length > 0;
-            public bool CheckPassword(in FixedString20 value)
+            public bool CheckPassword(in FixedString<FS20> value)
             {
                 if (Private is false)
                     return true;
