@@ -96,7 +96,7 @@ namespace Wsla.Generator
         bool CheckIfUnityProject(ParseOptions options, CancellationToken cancellation)
         {
             foreach (var symbol in options.PreprocessorSymbolNames)
-                if (symbol == Constants.UNITY_EDITOR)
+                if (symbol.StartsWith(Constants.UnityConditionalDirectivePrefix))
                     return true;
 
             return false;
@@ -474,7 +474,7 @@ namespace Wsla.Generator
 
         public class Constants : GlobalNetworkGenerator.Constants
         {
-            public const string UNITY_EDITOR = nameof(UNITY_EDITOR);
+            public const string UnityConditionalDirectivePrefix = "UNITY_";
 
             public static readonly string Namespace = $"{Name}.Unity";
 
