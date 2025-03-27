@@ -10,9 +10,27 @@ namespace Wsla.Unity
     [Serializable]
     public class RestAPI : NetworkAPI.Property
     {
-        readonly UrlStringCache UrlCache;
+        UrlStringCache UrlCache;
 
-        readonly AutoCyclingValue<HttpClient> ClientCycle;
+        AutoCyclingValue<HttpClient> ClientCycle;
+
+        public override void Set(NetworkAPI value)
+        {
+            base.Set(value);
+
+            var qa = 5;
+
+            ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () => new HttpClient());
+            UrlCache = new UrlStringCache();
+
+            API.OnDispose += DisposeCallback;
+        }
+
+        void DisposeCallback()
+        {
+            ClientCycle.Dispose();
+            ClientCycle = default;
+        }
 
         public async Task<WslaResponse<T, RestResponse>> GET<T>(IPAddress address, ushort port, string path)
         {
@@ -117,12 +135,6 @@ namespace Wsla.Unity
             }
 
             return value;
-        }
-
-        public RestAPI()
-        {
-            ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () => new HttpClient());
-            UrlCache = new UrlStringCache();
         }
     }
 }

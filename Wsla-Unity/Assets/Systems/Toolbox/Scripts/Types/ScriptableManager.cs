@@ -37,29 +37,32 @@ namespace Toolbox
 
             public static ScriptableManager[] Instances { get; private set; }
 
+            static StateMode State = StateMode.None;
+            public enum StateMode
+            {
+                None, Init, Dispose
+            }
+            static bool SetState(StateMode value)
+            {
+                if (State == value)
+                    return false;
+
+                State = value;
+                return true;
+            }
+
 #if UNITY_EDITOR
             [InitializeOnLoadMethod]
             static void OnEditorLoad()
             {
-                //This case will be handled by OnRuntimeLoad
-                if (EditorApplication.isPlayingOrWillChangePlaymode)
-                    return;
+                AssemblyReloadEvents.beforeAssemblyReload += Dispose;
 
-                AssemblyReloadEvents.beforeAssemblyReload += () =>
-                {
-                    Dispose();
-                };
-
-                EditorApplication.playModeStateChanged += state =>
+                EditorApplication.playModeStateChanged += (state) =>
                 {
                     switch (state)
                     {
                         case PlayModeStateChange.EnteredEditMode:
                             Init(ExecutionModeSelection.Editor);
-                            break;
-
-                        case PlayModeStateChange.EnteredPlayMode:
-                            //Handled by OnRuntimeLoad
                             break;
 
                         case PlayModeStateChange.ExitingPlayMode:
@@ -69,19 +72,29 @@ namespace Toolbox
                         case PlayModeStateChange.ExitingEditMode:
                             Dispose();
                             break;
-
                     }
                 };
 
-                Init(ExecutionModeSelection.Editor);
+                if (EditorApplication.isPlayingOrWillChangePlaymode is false)
+                    Init(ExecutionModeSelection.Editor);
             }
 #endif
 
             [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-            static void OnRuntimeLoad() => Init(ExecutionModeSelection.Runtime);
+            static void OnRuntimeLoad()
+            {
+                Init(ExecutionModeSelection.Runtime);
+
+#if !UNITY_EDITOR
+                Application.quitting += Dispose;
+#endif
+            }
 
             static void Init(ExecutionModeSelection mode)
             {
+                if (SetState(StateMode.Init) is false)
+                    return;
+
                 ExecutionContext = mode;
 
                 Instances = Resources.LoadAll<ScriptableManager>("");
@@ -106,6 +119,9 @@ namespace Toolbox
 
             static void Dispose()
             {
+                if (SetState(StateMode.Dispose) is false)
+                    return;
+
                 for (int i = 0; i < Instances.Length; i++)
                     Instances[i].Dispose();
 

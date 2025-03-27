@@ -2,7 +2,7 @@
 
 namespace Wsla.Unity
 {
-    public class AutoCyclingValue<T>
+    public class AutoCyclingValue<T> : IDisposable
     {
         TimeSpan Lifetime;
         Func<T> Creator;
@@ -33,6 +33,14 @@ namespace Wsla.Unity
             Instance = Creator();
 
             return Instance;
+        }
+
+        public void Dispose()
+        {
+            if (Instance is IDisposable disposable)
+                disposable.Dispose();
+
+            Instance = default;
         }
 
         public AutoCyclingValue(TimeSpan Lifetime, Func<T> Creator)
