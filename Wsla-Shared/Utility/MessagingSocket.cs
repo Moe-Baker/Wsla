@@ -15,16 +15,21 @@ namespace Wsla
     {
         public Socket Socket { get; private set; }
 
-        public bool IsConnected { get; protected set; }
+        volatile bool Connected;
+        public bool IsConnected => Connected;
+
+        MessagingSocketDisconnectReason DisconnectReason;
 
         CancellationTokenSource CancellationSource;
         public CancellationToken DisconnectCancellationToken => CancellationSource.Token;
 
         public const int LengthHeaderSize = 2;
 
+        public object Tag;
+
         protected virtual void Run()
         {
-            IsConnected = true;
+            Connected = true;
 
             SendLock = new SemaphoreSlim(1);
             SendBuffer = new NetDataWriter(true, 128);
@@ -33,8 +38,6 @@ namespace Wsla
 
             LastSendTime = AtomicTime.Create();
             LastReceiveTime = AtomicTime.Create();
-
-            StopLock = new object();
 
             Receive(CancellationSource.Token).Forget();
             KeepAlive(CancellationSource.Token).Forget();
@@ -85,7 +88,7 @@ namespace Wsla
                 var text = $"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}";
 
                 NetworkLog.Error(text);
-                Stop();
+                Stop(MessagingSocketDisconnectReason.SendError);
                 return;
             }
             catch (OperationCanceledException)
@@ -120,7 +123,7 @@ namespace Wsla
                 var text = $"Socket Send Exception: {ex.ErrorCode} | {ex.SocketErrorCode} | {ex.NativeErrorCode}";
 
                 NetworkLog.Error(text);
-                Stop();
+                Stop(MessagingSocketDisconnectReason.SendError);
                 return;
             }
             catch (OperationCanceledException)
@@ -153,7 +156,7 @@ namespace Wsla
 
                     if (read is 0)
                     {
-                        Stop();
+                        Stop(MessagingSocketDisconnectReason.RemoteClose);
                         return;
                     }
 
@@ -173,7 +176,7 @@ namespace Wsla
                         if (ReceiveBuffer.Position != destination)
                         {
                             NetworkLog.Warning($"Misaligned Read on Messaging Socket, Expected Read: {destination}, Actual Read: {ReceiveBuffer.Position}");
-                            Stop();
+                            Stop(MessagingSocketDisconnectReason.ReceiveError);
                             return;
                         }
                     }
@@ -186,8 +189,8 @@ namespace Wsla
                 }
                 catch (Exception ex)
                 {
-                    NetworkLog.Error($"Exception on Socket Receive: {ex}");
-                    Stop();
+                    NetworkLog.Error($"Exception on Socket Receive: {ex.Message}");
+                    Stop(MessagingSocketDisconnectReason.ReceiveError);
 
                     return;
                 }
@@ -301,7 +304,7 @@ namespace Wsla
                     if (duration >= TimeoutDuration)
                     {
                         NetworkLog.Error($"Socket {this} Timed-Out after {duration.TotalSeconds}s");
-                        Stop();
+                        Stop(MessagingSocketDisconnectReason.Timeout);
                         return;
                     }
                 }
@@ -312,22 +315,20 @@ namespace Wsla
         #region Stop
         object StopLock;
 
-        protected void Stop() => StopAsync().Forget();
-        protected async Task StopAsync()
+        protected void Stop(MessagingSocketDisconnectReason reason) => StopAsync(reason).Forget();
+        protected async ValueTask StopAsync(MessagingSocketDisconnectReason reason)
         {
-            lock (StopLock)
-            {
-                if (IsConnected is false)
-                    return;
-
-                IsConnected = false;
-            }
-
             CancellationSource.Cancel();
 
-            NetworkLog.Trace($"Stopping {this}");
+            lock (StopLock)
+            {
+                if (Connected is false)
+                    return;
 
-            OnStop?.Invoke();
+                StopAction(reason);
+            }
+
+            NetworkLog.Trace($"Stopping Messaging Socket {this}");
 
             try
             {
@@ -350,28 +351,29 @@ namespace Wsla
             }
             finally
             {
-                Reset();
+                Socket.Close();
             }
         }
-        event Action OnStop;
+        protected virtual void StopAction(MessagingSocketDisconnectReason reason)
+        {
+            Connected = false;
+            DisconnectReason = reason;
 
-        public void RegisterStopCallback(Action callback)
+            OnStop?.Invoke(this, reason);
+        }
+
+        public event StopDelegate OnStop;
+        public delegate void StopDelegate(MessagingConnection connection, MessagingSocketDisconnectReason reason);
+
+        public void RegisterStopCallback(StopDelegate callback)
         {
             lock (StopLock)
             {
-                if (IsConnected)
+                if (Connected)
                     OnStop += callback;
                 else
-                    callback?.Invoke();
+                    callback?.Invoke(this, DisconnectReason);
             }
-        }
-
-        protected virtual void Reset()
-        {
-            Socket.Close();
-
-            ReceiveBuffer.Reset();
-            SendBuffer.Reset();
         }
         #endregion
 
@@ -380,6 +382,8 @@ namespace Wsla
         protected MessagingConnection()
         {
             CancellationSource = new CancellationTokenSource();
+
+            StopLock = new object();
         }
         protected MessagingConnection(Socket Socket) : this()
         {
@@ -387,6 +391,39 @@ namespace Wsla
         }
 
         protected static Socket CreateSocket() => new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    }
+
+    public enum MessagingSocketDisconnectReason
+    {
+        /// <summary>
+        /// ¯\_(ツ)_/¯
+        /// </summary>
+        Unknown = 0,
+
+        /// <summary>
+        /// Connection timed-out
+        /// </summary>
+        Timeout = 1,
+
+        /// <summary>
+        /// Remote end (not you) closed the connection
+        /// </summary>
+        RemoteClose = 2,
+
+        /// <summary>
+        /// Local end (you) closed the connection
+        /// </summary>
+        LocalClose = 3,
+
+        /// <summary>
+        /// Error when sending a message
+        /// </summary>
+        SendError = 4,
+
+        /// <summary>
+        /// Error when receiving a message
+        /// </summary>
+        ReceiveError = 4,
     }
 
     public class MessagingClient : MessagingConnection
@@ -439,7 +476,7 @@ namespace Wsla
             }
             catch (Exception ex)
             {
-                NetworkLog.Error($"Exception: {ex}");
+                NetworkLog.Error($"Exception: {ex.Message}");
 
                 return WslaError.From(WslaErrorCode.TransportFailure);
             }
@@ -448,7 +485,7 @@ namespace Wsla
 
             return true;
         }
-        public void Disconnect() => Stop();
+        public void Disconnect() => Stop(MessagingSocketDisconnectReason.LocalClose);
 
         protected override void DispatchMessage(INetworkStream stream, ushort length) => Dispatcher.Dispatch(stream);
 
@@ -462,10 +499,15 @@ namespace Wsla
     {
         public MessagingServer Server { get; }
 
-        public object Tag;
-
         internal void Start() => Run();
-        public void Disconnect() => Stop();
+
+        public void Disconnect() => Stop(MessagingSocketDisconnectReason.LocalClose);
+        protected override void StopAction(MessagingSocketDisconnectReason reason)
+        {
+            base.StopAction(reason);
+
+            Server.RemovePeer(this);
+        }
 
         protected override void DispatchMessage(INetworkStream stream, ushort length) => Server.Dispatcher.Dispatch(this, stream);
 
@@ -558,12 +600,24 @@ namespace Wsla
                 var socket = await Socket.AcceptAsync();
                 var peer = new MessagingPeer(this, socket);
 
-                lock (Peers)
-                {
-                    Peers.Add(peer);
-                }
+                AddPeer(peer);
 
                 peer.Start();
+            }
+        }
+
+        void AddPeer(MessagingPeer peer)
+        {
+            lock (Peers)
+            {
+                Peers.Add(peer);
+            }
+        }
+        internal void RemovePeer(MessagingPeer peer)
+        {
+            lock (Peers)
+            {
+                Peers.Remove(peer);
             }
         }
 

@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Wsla.Serialization;
@@ -156,9 +157,78 @@ namespace Wsla.Server
 
         public static class Messaging
         {
-            static MessagingClient Client;
+            static volatile MessagingClient Client;
+            public static bool IsConnected
+            {
+                get
+                {
+                    if (Client == null)
+                        return false;
+
+                    return Client.IsConnected;
+                }
+            }
+
+            static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(1f);
 
             public static async Task Start()
+            {
+                await Wireup();
+            }
+
+            static async Task Wireup()
+            {
+                while (true)
+                {
+                    var response = await Connect().ToResponse();
+
+                    switch (response.Type)
+                    {
+                        case WslaResponseResponseType.Success:
+                        {
+                            var client = response.Value;
+
+                            NetworkLog.Info($"Messaging Client Connected");
+
+                            client.RegisterStopCallback(ClientDisconnectCallback);
+
+                            return;
+                        }
+
+                        case WslaResponseResponseType.Error:
+                        {
+                            var exception = response.Error;
+
+                            NetworkLog.Error($"Messaging Client Connect Exception: {exception.Message}");
+
+                            await Task.Delay(ReconnectDelay);
+
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            static void ClientDisconnectCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
+            {
+                if (reason is MessagingSocketDisconnectReason.LocalClose)
+                {
+                    NetworkLog.Info($"Messaging Socket Closed");
+                    return;
+                }
+
+                NetworkLog.Error($"Messaging Socket Disconnected, Reconnecting");
+                Reconnect().Forget();
+            }
+
+            static async Task Reconnect()
+            {
+                await Task.Delay(ReconnectDelay);
+
+                await Wireup();
+            }
+
+            static async Task<MessagingClient> Connect()
             {
                 Client = new MessagingClient();
 
@@ -170,6 +240,8 @@ namespace Wsla.Server
                 Matchmaking.MessageHandlers.RegisterHandlers(Client);
 
                 Matchmaking.RegisterRelay();
+
+                return Client;
             }
 
             public static void Send<[NetworkSerializationMarker] T>(T message) => Client.SendMessage(message);

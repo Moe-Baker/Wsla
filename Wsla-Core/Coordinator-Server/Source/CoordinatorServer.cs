@@ -268,7 +268,7 @@ namespace Wsla.Server
                             var room = Room.Create(server, entry);
                             server.Rooms.Add(entry.ID, room);
 
-                            server.Occupancy += room.Occupancy;
+                            server.ModifyOccupancy(room.Occupancy);
                         }
                     }
 
@@ -482,7 +482,7 @@ namespace Wsla.Server
                         Servers.Add(server);
                     }
 
-                    peer.RegisterStopCallback(() => RelayStoppedCallback(server));
+                    peer.RegisterStopCallback(RelayStoppedCallback);
                 }
 
                 public static void CreateRoomConfirmationHandler(MessagingPeer peer, ref CreateRoomConfirmation message)
@@ -514,8 +514,11 @@ namespace Wsla.Server
                 RoomCreationQueue = new(100);
             }
 
-            static void RelayStoppedCallback(Server server)
+            static void RelayStoppedCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
             {
+                if (TryReadTag(connection, out var server) is false)
+                    return;
+
                 NetworkLog.Info($"Removing {server} Relay Server");
 
                 lock (Servers)
@@ -530,17 +533,17 @@ namespace Wsla.Server
                 }
             }
 
-            static bool TryReadTag(MessagingPeer peer, out Server server)
+            static bool TryReadTag(MessagingConnection connection, out Server server)
             {
-                if (peer.Tag is not Server)
+                if (connection.Tag is not Server)
                 {
-                    NetworkLog.Warning($"Peer {peer} not Tagged as Relay Server");
+                    NetworkLog.Warning($"Peer {connection} not Tagged as Relay Server");
 
                     server = default;
                     return false;
                 }
 
-                server = peer.Tag as Server;
+                server = connection.Tag as Server;
                 return true;
             }
         }

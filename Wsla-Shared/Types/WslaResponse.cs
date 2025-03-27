@@ -120,8 +120,7 @@ namespace Wsla
         {
             try
             {
-                var value = await task;
-                return value;
+                return await task;
             }
             catch (Exception ex)
             {
@@ -133,8 +132,7 @@ namespace Wsla
         {
             try
             {
-                var value = await task;
-                return value;
+                return await task;
             }
             catch (Exception ex)
             {

@@ -80,6 +80,6 @@ public class MainMenu : MonoBehaviour
             return;
         }
 
-        NetworkLog.Trace($"Connected to Room {NetworkAPI.Room}");
+        NetworkLog.Trace($"Connected to Room {NetworkAPI.Room.ConnectionInfo}");
     }
 }

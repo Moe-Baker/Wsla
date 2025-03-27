@@ -3,7 +3,6 @@
     "rootNamespace": "Wsla.Unity",
     "references": [
         "GUID:cd2e83a21afe2724fb99b59626766161",
-        "GUID:883642feda06fb3478d41d10475fa7ff",
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
         "GUID:87b90f7aed791d74685864306e391a32"
     ],

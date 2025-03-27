@@ -20,6 +20,8 @@ namespace Wsla.Unity
     {
         public bool IsConnected { get; private set; }
 
+        public RoomConnectionInfo ConnectionInfo { get; private set; }
+
         public override void Set(NetworkAPI value)
         {
             base.Set(value);
@@ -46,6 +48,8 @@ namespace Wsla.Unity
         {
             if (IsConnected is true)
                 throw new InvalidOperationException($"Client Already Connected to A Room");
+
+            ConnectionInfo = new RoomConnectionInfo(address, port);
 
             Application.runInBackground = true;
 
@@ -95,6 +99,8 @@ namespace Wsla.Unity
                 NetworkLog.Error("Client not Connected to a Room");
                 return;
             }
+
+            ConnectionInfo = default;
 
             //Stop
             {
