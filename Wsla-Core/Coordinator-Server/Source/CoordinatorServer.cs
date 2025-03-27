@@ -519,7 +519,7 @@ namespace Wsla.Server
                 if (TryReadTag(connection, out var server) is false)
                     return;
 
-                NetworkLog.Info($"Removing {server} Relay Server");
+                NetworkLog.Info($"Removing {server} Relay Server, Disconnect: {reason}");
 
                 lock (Servers)
                 {
