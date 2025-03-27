@@ -1,5 +1,7 @@
 using Cysharp.Threading.Tasks;
 
+using System;
+
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -32,7 +34,7 @@ public class MainMenu : MonoBehaviour
         JoinMatchButton.onClick.AddListener(() => FindRoom().Forget());
     }
 
-    CreateRoomParameters GetCreateRoomParameters() => new CreateRoomParameters("SAMPLE-ROOM-NAME", 10, NetworkSceneID.From(1), "HELLO-WORLD");
+    CreateRoomParameters GetCreateRoomParameters() => new CreateRoomParameters("SAMPLE-ROOM-NAME", 2, NetworkSceneID.From(1), "HELLO-WORLD");
 
     async UniTask CreateRoom()
     {
@@ -65,6 +67,8 @@ public class MainMenu : MonoBehaviour
             NetworkLog.Error($"Zero Rooms Found");
             return;
         }
+
+        await UniTask.Delay(TimeSpan.FromSeconds(3));
 
         await JoinRoom(info.Value);
     }

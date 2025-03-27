@@ -394,6 +394,7 @@ namespace Wsla.Server
                     var change = new UpdateRoomParameters()
                     {
                         Occupancy = Room.Properties.Occupancy,
+                        Joins = 1,
                     };
 
                     RelayServer.Matchmaking.Updates.Add(Room.ID, change);

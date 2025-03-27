@@ -119,7 +119,7 @@ namespace Wsla.Server
                 Dictionary<Guid, Room> Rooms;
 
                 public int Occupancy;
-                void ModifyOccupancy(int modifier)
+                public void ModifyOccupancy(int modifier)
                 {
                     var value = Interlocked.Add(ref Occupancy, modifier);
                     NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
@@ -127,7 +127,7 @@ namespace Wsla.Server
                     Matchmaking.ModifyOccupancy(modifier);
                 }
 
-                public bool RegisterRoom(Guid id, ushort port, CreateRoomParameters parameters)
+                public bool CreateRoom(Guid id, ushort port, CreateRoomParameters parameters, int reservations)
                 {
                     lock (Rooms)
                     {
@@ -138,13 +138,15 @@ namespace Wsla.Server
                         }
 
                         var room = new Room(this, port, parameters.Name, parameters.Capacity);
-
                         Rooms.Add(id, room);
+
+                        room.MakeJoinReservation(reservations);
 
                         return true;
                     }
                 }
-                public bool UnregisterRoom(Guid id)
+
+                public bool RemoveRoom(Guid id)
                 {
                     lock (Rooms)
                     {
@@ -159,19 +161,6 @@ namespace Wsla.Server
                     }
                 }
 
-                public void UpdateRoom(Guid id, UpdateRoomParameters parameters)
-                {
-                    lock (Rooms)
-                    {
-                        if (Rooms.TryGetValue(id, out var room) is false)
-                        {
-                            NetworkLog.Error($"No Room With ID {id} Found");
-                            return;
-                        }
-
-                        UpdateRoom(room, parameters);
-                    }
-                }
                 public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
                 {
                     lock (Rooms)
@@ -184,21 +173,9 @@ namespace Wsla.Server
                                 continue;
                             }
 
-                            UpdateRoom(room, request.Parameters);
+                            room.UpdateRoom(request.Parameters);
                         }
                     }
-                }
-                void UpdateRoom(Room room, UpdateRoomParameters parameters)
-                {
-                    //Update Occupancy
-                    if (parameters.Occupancy.HasValue)
-                    {
-                        var delta = (parameters.Occupancy.Value - room.Occupancy);
-
-                        ModifyOccupancy(delta);
-                    }
-
-                    room.UpdateRoom(parameters);
                 }
 
                 public void ListRooms(List<RoomListEntryInfo> list)
@@ -222,17 +199,21 @@ namespace Wsla.Server
                     }
                 }
 
-                public bool TryFindFreeRoom(out Room target)
+                public bool TryReserveJoin(int capacity, out Room target)
                 {
                     lock (Rooms)
                     {
                         foreach (var (id, room) in Rooms)
                         {
-                            if (room.IsFull)
-                                continue;
+                            var vacancy = room.CheckVacancy();
 
-                            target = room;
-                            return true;
+                            if (vacancy >= capacity)
+                            {
+                                room.MakeJoinReservation(capacity);
+
+                                target = room;
+                                return true;
+                            }
                         }
                     }
 
@@ -259,17 +240,21 @@ namespace Wsla.Server
                 {
                     var server = new Server(request.Info, peer);
 
-                    if (request.Rooms is not null)
+                    if (request.Rooms?.Count > 0)
                     {
                         server.Rooms.EnsureCapacity(request.Rooms.Count);
+
+                        var occupancy = 0;
 
                         foreach (var entry in request.Rooms)
                         {
                             var room = Room.Create(server, entry);
                             server.Rooms.Add(entry.ID, room);
 
-                            server.ModifyOccupancy(room.Occupancy);
+                            occupancy += room.Occupancy;
                         }
+
+                        server.ModifyOccupancy(occupancy);
                     }
 
                     return server;
@@ -288,12 +273,37 @@ namespace Wsla.Server
                 public byte Occupancy;
                 public bool IsFull => Occupancy >= Capacity;
 
+                TimedReservationCollection JoinReservations;
+                public void MakeJoinReservation(int capacity) => JoinReservations.ReserveCapacity(capacity);
+
+                public int CheckVacancy()
+                {
+                    var total = Occupancy + JoinReservations.CalculateCapacity();
+
+                    var vacancy = Capacity - total;
+                    if (vacancy < 0) vacancy = 0;
+
+                    return vacancy;
+                }
+
                 public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
 
                 public void UpdateRoom(UpdateRoomParameters parameters)
                 {
+                    //Free Reservations
+                    if (parameters.Joins > 0)
+                    {
+                        JoinReservations.FreeCapacity(parameters.Joins);
+                    }
+
+                    //Update Occupancy
                     if (parameters.Occupancy.HasValue)
+                    {
+                        var delta = (parameters.Occupancy.Value - Occupancy);
+                        Server.ModifyOccupancy(delta);
+
                         Occupancy = parameters.Occupancy.Value;
+                    }
                 }
 
                 public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy)
@@ -303,17 +313,21 @@ namespace Wsla.Server
                     this.Name = Name;
                     this.Capacity = Capacity;
                     this.Occupancy = Occupancy;
+
+                    JoinReservations = new TimedReservationCollection(TimeSpan.FromSeconds(10));
                 }
                 public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity) : this(Server, Port, Name, Capacity, Occupancy: 0) { }
 
                 public static Room Create(Server server, RoomMatchmakerEntryData data)
                 {
-                    return new Room(server, data.Port, data.State.Name, data.State.Capacity, data.State.Occupancy);
+                    var state = data.State;
+
+                    return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy);
                 }
             }
 
             public static int Occupancy;
-            static void ModifyOccupancy(int modifier)
+            public static void ModifyOccupancy(int modifier)
             {
                 var value = Interlocked.Add(ref Occupancy, modifier);
                 NetworkLog.Trace($"Matchmaking Occupancy Changed to {value}");
@@ -341,7 +355,7 @@ namespace Wsla.Server
                 }
             }
 
-            public static bool TryFindFreeRoom(ServerRegion? region, out Room room)
+            public static bool TryFindFreeRoom(ServerRegion? region, int capacity, out Room room)
             {
                 lock (Servers)
                 {
@@ -352,7 +366,7 @@ namespace Wsla.Server
                         if (region.HasValue && region.Value != server.Region)
                             continue;
 
-                        if (server.TryFindFreeRoom(out room))
+                        if (server.TryReserveJoin(capacity, out room))
                             return true;
                     }
                 }
@@ -415,7 +429,7 @@ namespace Wsla.Server
                         throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
                     }
 
-                    server.RegisterRoom(id, Confirmation.Port, message.Parameters);
+                    server.CreateRoom(id, Confirmation.Port, message.Parameters, 1);
 
                     return new RoomConnectionInfo(server.Address, Confirmation.Port);
                 }
@@ -444,7 +458,7 @@ namespace Wsla.Server
                 {
                     //Try Find Existing Room
                     {
-                        if (TryFindFreeRoom(request.Region, out var room))
+                        if (TryFindFreeRoom(request.Region, 1, out var room))
                             return room.GetConnectionInfo();
                     }
 
@@ -495,7 +509,7 @@ namespace Wsla.Server
                     if (TryReadTag(peer, out var server) is false)
                         return;
 
-                    server.UnregisterRoom(message.RoomID);
+                    server.RemoveRoom(message.RoomID);
                 }
 
                 public static void UpdateRoomsHandler(MessagingPeer peer, ref UpdateRoomsRequest message)

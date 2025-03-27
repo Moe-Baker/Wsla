@@ -151,22 +151,26 @@ namespace Wsla
     public struct UpdateRoomParameters : IAutoNetworkSerialization
     {
         public byte? Occupancy;
+        public byte Joins;
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Occupancy);
+            context.Select(ref Joins);
         }
 
-        public UpdateRoomParameters(byte? Occupancy)
+        public UpdateRoomParameters(byte? Occupancy, byte Joins)
         {
             this.Occupancy = Occupancy;
+            this.Joins = Joins;
         }
 
         public static UpdateRoomParameters Merge(UpdateRoomParameters previous, UpdateRoomParameters current)
         {
             var occupancy = Merge(previous.Occupancy, current.Occupancy);
+            var joins = (byte)(previous.Joins + current.Joins);
 
-            return new UpdateRoomParameters(occupancy);
+            return new UpdateRoomParameters(occupancy, joins);
         }
 
         static T? Merge<T>(T? previous, T? current)
