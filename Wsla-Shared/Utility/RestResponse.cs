@@ -9,6 +9,8 @@ namespace Wsla
         public HttpStatusCode Code { get; }
         public string Message { get; }
 
+        public HttpRequestException ToException() => new HttpRequestException(ToString());
+
         public override string ToString()
         {
             if (string.IsNullOrEmpty(Message))
@@ -17,6 +19,7 @@ namespace Wsla
                 return $"{Code} | {Message}";
         }
 
+        public RestResponse(HttpStatusCode Code) : this(Code, null) { }
         public RestResponse(HttpStatusCode Code, string Message)
         {
             this.Code = Code;

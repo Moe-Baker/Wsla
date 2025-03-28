@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 
 using System.Net.Http.Json;
+using System.Threading;
 
 namespace Wsla.Unity
 {
@@ -13,6 +14,9 @@ namespace Wsla.Unity
         UrlStringCache UrlCache;
 
         AutoCyclingValue<HttpClient> ClientCycle;
+
+        IPAddress Address => API.CoordinatorAddress.IP;
+        ushort Port => Constants.CoordinatorHttpPort;
 
         public override void Set(NetworkAPI value)
         {
@@ -32,109 +36,111 @@ namespace Wsla.Unity
             ClientCycle = default;
         }
 
-        public async Task<WslaResponse<T, RestResponse>> GET<T>(IPAddress address, ushort port, string path)
+        public async Task<WslaResponse<T, RestResponse>> GET<T>(string path, CancellationToken cancellation = default)
         {
-            var url = UrlCache.Get(address, port, path);
+            var url = UrlCache.Get(Address, Port, path);
             var client = ClientCycle.Fetch();
-
-            var response = await client.GetAsync(url);
-
-            if (response.IsSuccessStatusCode is false)
-                return RestResponse.From(response);
-
-            if (response.StatusCode is HttpStatusCode.NoContent)
-                return WslaResponse<T, RestResponse>.FromResult(default);
-
-            T value;
 
             try
             {
-                value = await response.Content.ReadFromJsonAsync<T>(options: SharedAPI.JsonOptions);
+                var response = await client.GetAsync(url, cancellationToken: cancellation);
+
+                if (response.IsSuccessStatusCode is false)
+                    return RestResponse.From(response);
+
+                if (response.StatusCode is HttpStatusCode.NoContent)
+                    return WslaResponse<T, RestResponse>.FromResult(default);
+
+                return await response.Content.ReadFromJsonAsync<T>(options: SharedAPI.JsonOptions, cancellationToken: cancellation);
             }
             catch (Exception ex)
             {
                 return RestResponse.From(ex);
             }
-
-            return value;
         }
 
-        public async Task<WslaResponse<RestResponse>> PUT<TRequest>(IPAddress address, ushort port, string path, TRequest request)
+        public async Task<WslaResponse<RestResponse>> PUT<TRequest>(string path, TRequest request, CancellationToken cancellation = default)
         {
-            var url = UrlCache.Get(address, port, path);
+            var url = UrlCache.Get(Address, Port, path);
             var client = ClientCycle.Fetch();
-
-            var response = await client.PutAsJsonAsync(url, request, options: SharedAPI.JsonOptions);
-
-            if (response.IsSuccessStatusCode is false)
-                return RestResponse.From(response);
-
-            return true;
-        }
-        public async Task<WslaResponse<TResponse, RestResponse>> PUT<TRequest, TResponse>(IPAddress address, ushort port, string path, TRequest request)
-        {
-            var url = UrlCache.Get(address, port, path);
-            var client = ClientCycle.Fetch();
-
-            var response = await client.PutAsJsonAsync(url, request, options: SharedAPI.JsonOptions);
-
-            if (response.IsSuccessStatusCode is false)
-                return RestResponse.From(response);
-
-            if (response.StatusCode is HttpStatusCode.NoContent)
-                return WslaResponse<TResponse, RestResponse>.FromResult(default);
-
-            TResponse value;
 
             try
             {
-                value = await response.Content.ReadFromJsonAsync<TResponse>();
+                var response = await client.PutAsJsonAsync(url, request, options: SharedAPI.JsonOptions, cancellationToken: cancellation);
+
+                if (response.IsSuccessStatusCode is false)
+                    return RestResponse.From(response);
+
+                return true;
             }
             catch (Exception ex)
             {
                 return RestResponse.From(ex);
             }
-
-            return value;
         }
-
-        public async Task<WslaResponse<RestResponse>> POST<TRequest>(IPAddress address, ushort port, string path, TRequest request)
+        public async Task<WslaResponse<TResponse, RestResponse>> PUT<TRequest, TResponse>(string path, TRequest request, CancellationToken cancellation = default)
         {
-            var url = UrlCache.Get(address, port, path);
+            var url = UrlCache.Get(Address, Port, path);
             var client = ClientCycle.Fetch();
-
-            var response = await client.PostAsJsonAsync(url, request, options: SharedAPI.JsonOptions);
-
-            if (response.IsSuccessStatusCode is false)
-                return RestResponse.From(response);
-
-            return true;
-        }
-        public async Task<WslaResponse<TResponse, RestResponse>> POST<TRequest, TResponse>(IPAddress address, ushort port, string path, TRequest request)
-        {
-            var url = UrlCache.Get(address, port, path);
-            var client = ClientCycle.Fetch();
-
-            var response = await client.PostAsJsonAsync(url, request, options: SharedAPI.JsonOptions);
-
-            if (response.IsSuccessStatusCode is false)
-                return RestResponse.From(response);
-
-            if (response.StatusCode is HttpStatusCode.NoContent)
-                return WslaResponse<TResponse, RestResponse>.FromResult(default);
-
-            TResponse value;
 
             try
             {
-                value = await response.Content.ReadFromJsonAsync<TResponse>(options: SharedAPI.JsonOptions);
+                var response = await client.PutAsJsonAsync(url, request, options: SharedAPI.JsonOptions, cancellationToken: cancellation);
+
+                if (response.IsSuccessStatusCode is false)
+                    return RestResponse.From(response);
+
+                if (response.StatusCode is HttpStatusCode.NoContent)
+                    return WslaResponse<TResponse, RestResponse>.FromResult(default);
+
+                return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: cancellation);
             }
             catch (Exception ex)
             {
                 return RestResponse.From(ex);
             }
+        }
 
-            return value;
+        public async Task<WslaResponse<RestResponse>> POST<TRequest>(string path, TRequest request, CancellationToken cancellation = default)
+        {
+            var url = UrlCache.Get(Address, Port, path);
+            var client = ClientCycle.Fetch();
+
+            try
+            {
+                var response = await client.PostAsJsonAsync(url, request, options: SharedAPI.JsonOptions, cancellationToken: cancellation);
+
+                if (response.IsSuccessStatusCode is false)
+                    return RestResponse.From(response);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return RestResponse.From(ex);
+            }
+        }
+        public async Task<WslaResponse<TResponse, RestResponse>> POST<TRequest, TResponse>(string path, TRequest request, CancellationToken cancellation = default)
+        {
+            var url = UrlCache.Get(Address, Port, path);
+            var client = ClientCycle.Fetch();
+
+            try
+            {
+                var response = await client.PostAsJsonAsync(url, request, options: SharedAPI.JsonOptions, cancellationToken: cancellation);
+
+                if (response.IsSuccessStatusCode is false)
+                    return RestResponse.From(response);
+
+                if (response.StatusCode is HttpStatusCode.NoContent)
+                    return WslaResponse<TResponse, RestResponse>.FromResult(default);
+
+                return await response.Content.ReadFromJsonAsync<TResponse>(options: SharedAPI.JsonOptions, cancellationToken: cancellation);
+            }
+            catch (Exception ex)
+            {
+                return RestResponse.From(ex);
+            }
         }
     }
 }

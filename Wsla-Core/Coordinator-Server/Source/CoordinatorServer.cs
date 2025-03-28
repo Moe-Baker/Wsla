@@ -344,6 +344,11 @@ namespace Wsla.Server
                 }
             }
 
+            public static class Queue
+            {
+
+            }
+
             public static bool TryFindFreeServer(ServerRegion? region, out Server server)
             {
                 lock (Servers)
@@ -482,6 +487,25 @@ namespace Wsla.Server
                     }
 
                     return null;
+                }
+
+                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.RequestMatch)]
+                public void RequestMatch(MatchMakingRequest request)
+                {
+                    NetworkLog.Info("Match Making Request Received");
+                }
+
+                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.UpdateMatch)]
+                public MatchMakingUpdate UpdateMatch(Guid ID)
+                {
+                    NetworkLog.Info("Match Making Update Requested");
+                    return MatchMakingUpdate.Searching;
+                }
+
+                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CancelMatch)]
+                public void CancelMatch(Guid ID)
+                {
+                    NetworkLog.Info("Match Making Request Canceled");
                 }
             }
 

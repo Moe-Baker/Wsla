@@ -74,5 +74,6 @@ namespace Wsla
         HttpRequestFailed = 15,
         Exception = 16,
         RoomLocked = 17,
+        NoRoomFound = 18,
     }
 }

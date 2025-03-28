@@ -26,6 +26,10 @@ namespace Wsla
 
             public const string CreateRoom = "create-room";
             public const string RemoveRoom = "remove-room";
+
+            public const string RequestMatch = "request-match";
+            public const string UpdateMatch = "update-match";
+            public const string CancelMatch = "cancel-match";
         }
     }
 }

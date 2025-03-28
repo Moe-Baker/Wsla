@@ -132,8 +132,13 @@ namespace Wsla.Unity
                     break;
 
                 case NetworkLogType.Error:
-                    Debug.LogError(item);
-                    break;
+                {
+                    if (item is Exception ex)
+                        Debug.LogException(ex);
+                    else
+                        Debug.LogError(item);
+                }
+                break;
 
                 default: throw new NotImplementedException();
             }

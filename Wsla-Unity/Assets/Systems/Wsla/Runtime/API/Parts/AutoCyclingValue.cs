@@ -10,6 +10,8 @@ namespace Wsla.Unity
         DateTime Timestamp;
         T Instance;
 
+        public bool DisposeInstanceOnRefresh = false;
+
         public T Fetch()
         {
             //Check Expiration
@@ -25,7 +27,7 @@ namespace Wsla.Unity
 
         T Refresh()
         {
-            if (Instance is IDisposable disposable)
+            if (DisposeInstanceOnRefresh && Instance is IDisposable disposable)
                 disposable.Dispose();
 
             Timestamp = DateTime.UtcNow;

@@ -41,6 +41,8 @@ public class MainMenu : MonoBehaviour
         CreateRoomButton.onClick.AddListener(() => PerformOperation(CreateRoomAction));
         FindRoomButton.onClick.AddListener(() => PerformOperation(FindRoomAction));
         JoinRoomButton.onClick.AddListener(() => PerformOperation(JoinRoomAction));
+
+        var request = await NetworkAPI.MatchMaking.FindMatch(ServerRegion.EU).Operate();
     }
 
     CreateRoomParameters GetCreateRoomParameters()
@@ -88,19 +90,13 @@ public class MainMenu : MonoBehaviour
 
         if (response.IsError)
         {
-            NetworkLog.Error($"Failed to List Room, Error: {response.Error}");
+            NetworkLog.Error($"Failed to Find Room, Error: {response.Error}");
             return;
         }
 
         var info = response.Value;
 
-        if (info.HasValue is false)
-        {
-            NetworkLog.Error($"Zero Rooms Found");
-            return;
-        }
-
-        await JoinRoom(info.Value);
+        await JoinRoom(info);
     }
     async UniTask JoinRoomAction()
     {
