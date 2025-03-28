@@ -104,6 +104,7 @@ namespace Wsla
     {
         public Guid ID;
         public ushort Port;
+        public RoomPrivacy Privacy;
 
         public RoomStateInfo State;
 
@@ -111,14 +112,16 @@ namespace Wsla
         {
             context.Select(ref ID);
             context.Select(ref Port);
+            context.Select(ref Privacy);
 
             context.Select(ref State);
         }
 
-        public RoomMatchmakerEntryData(Guid ID, ushort Port, RoomStateInfo State)
+        public RoomMatchmakerEntryData(Guid ID, ushort Port, RoomPrivacy Privacy, RoomStateInfo State)
         {
             this.ID = ID;
             this.Port = Port;
+            this.Privacy = Privacy;
 
             this.State = State;
         }
@@ -130,6 +133,8 @@ namespace Wsla
         public byte Capacity;
         public NetworkSceneID Scene;
         public FixedString<FS20> Password;
+        public RoomPrivacy Privacy;
+        public RoomLockPolicy Lock;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -137,14 +142,18 @@ namespace Wsla
             context.Select(ref Capacity);
             context.Select(ref Scene);
             context.Select(ref Password);
+            context.Select(ref Privacy);
+            context.Select(ref Lock);
         }
 
-        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password)
+        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password, RoomPrivacy Privacy, RoomLockPolicy Lock)
         {
             this.Name = Name;
             this.Capacity = Capacity;
             this.Scene = Scene;
             this.Password = Password;
+            this.Privacy = Privacy;
+            this.Lock = Lock;
         }
     }
 
@@ -153,36 +162,65 @@ namespace Wsla
         public byte? Occupancy;
         public byte Joins;
 
+        public bool Lock;
+
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Occupancy);
             context.Select(ref Joins);
-        }
 
-        public UpdateRoomParameters(byte? Occupancy, byte Joins)
-        {
-            this.Occupancy = Occupancy;
-            this.Joins = Joins;
+            context.Select(ref Lock);
         }
 
         public static UpdateRoomParameters Merge(UpdateRoomParameters previous, UpdateRoomParameters current)
         {
-            var occupancy = Merge(previous.Occupancy, current.Occupancy);
-            var joins = (byte)(previous.Joins + current.Joins);
+            return new UpdateRoomParameters()
+            {
+                Lock = previous.Lock || current.Lock,
+                Occupancy = MergeNullable(previous.Occupancy, current.Occupancy),
+                Joins = (byte)(previous.Joins + current.Joins),
+            };
 
-            return new UpdateRoomParameters(occupancy, joins);
+            static T? MergeNullable<T>(T? previous, T? current)
+                where T : struct
+            {
+                if (current.HasValue)
+                    return current;
+
+                if (previous.HasValue)
+                    return previous;
+
+                return null;
+            }
         }
+    }
 
-        static T? Merge<T>(T? previous, T? current)
-            where T : struct
-        {
-            if (current.HasValue)
-                return current;
+    public enum RoomPrivacy : byte
+    {
+        /// <summary>
+        /// Room will be available for anyone to join at all times
+        /// </summary>
+        Public = 0,
 
-            if (previous.HasValue)
-                return previous;
+        /// <summary>
+        /// Room will only be join-able by code (IP + Port)
+        /// </summary>
+        Private = 2,
+    }
 
-            return null;
-        }
+    /// <summary>
+    /// When a room is locked, no more people can join it at all
+    /// </summary>
+    public enum RoomLockPolicy
+    {
+        /// <summary>
+        /// Nothing special will happen
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// Room will lock after it fills
+        /// </summary>
+        AfterFill,
     }
 }

@@ -25,10 +25,9 @@ namespace Wsla.Server
             public byte Capacity { get; }
 
             public FixedString<FS20> Password { get; }
-            public bool Private => Password.Length > 0;
             public bool CheckPassword(in FixedString<FS20> value)
             {
-                if (Private is false)
+                if (Password.Length is 0)
                     return true;
 
                 return Password == value;
@@ -37,10 +36,38 @@ namespace Wsla.Server
             public byte Occupancy => Room.Clients.Count;
             public bool IsFull => Occupancy >= Capacity;
 
-            public bool Visible { get; private set; }
-            public void SetVisibility(bool value)
+            public RoomPrivacy Privacy { get; private set; }
+            public void SetPrivacy(RoomPrivacy value)
             {
-                Visible = value;
+                Privacy = value;
+            }
+            public bool IsPrivate => Privacy is RoomPrivacy.Private;
+            public bool IsPublic => IsPrivate is false;
+
+            public bool IsLocked { get; private set; }
+            /// <summary>
+            /// When a room is sealed, no new players can ever join
+            /// </summary>
+            public void Lock()
+            {
+                IsLocked = true;
+                SetPrivacy(RoomPrivacy.Private);
+            }
+
+            public RoomLockPolicy LockPolicy { get; }
+            public void ProcessLockPolicy()
+            {
+                if (IsLocked)
+                    return;
+
+                if (LockPolicy is RoomLockPolicy.None)
+                    return;
+
+                if (LockPolicy is RoomLockPolicy.AfterFill && IsFull)
+                {
+                    Lock();
+                    return;
+                }
             }
 
             public RoomStateInfo ReadState() => new RoomStateInfo(Name, Capacity, Occupancy);
@@ -56,7 +83,10 @@ namespace Wsla.Server
                     Capacity = parameters.Capacity;
                     Password = parameters.Password;
 
-                    Visible = false; //Rooms always start invisible, and turn visible optionally
+                    Privacy = parameters.Privacy;
+
+                    IsLocked = false;
+                    LockPolicy = parameters.Lock;
                 }
             }
         }
@@ -279,6 +309,12 @@ namespace Wsla.Server
             {
                 NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
 
+                if (Room.Properties.IsLocked)
+                {
+                    RejectConnection(request, WslaErrorCode.RoomLocked);
+                    return;
+                }
+
                 if (Room.Properties.IsFull)
                 {
                     NetworkLog.Error($"Room {Room} Full, Connection Request Rejected");
@@ -389,12 +425,16 @@ namespace Wsla.Server
                     Transport.SendWriter(client, writer);
                 }
 
+                //Validate Lock Policy
+                Room.Properties.ProcessLockPolicy();
+
                 //Submit Matchmaker Change
                 {
                     var change = new UpdateRoomParameters()
                     {
                         Occupancy = Room.Properties.Occupancy,
                         Joins = 1,
+                        Lock = Room.Properties.IsLocked,
                     };
 
                     RelayServer.Matchmaking.Updates.Add(Room.ID, change);

@@ -81,10 +81,7 @@ namespace Wsla.Unity
         public async Task Prepare()
         {
             if (IsPrepared)
-            {
-                NetworkLog.Error($"Network API Already Prepared/Preparing");
                 return;
-            }
 
             IsPrepared = true;
 

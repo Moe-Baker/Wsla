@@ -3,6 +3,8 @@ using Cysharp.Threading.Tasks;
 using System;
 using System.Threading;
 
+using TMPro;
+
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -14,7 +16,12 @@ public partial class Level : NetworkBehaviour
 {
     public Button DisconnectButton;
 
+    public Button CodeButton;
+    public TMP_Text CodeLabel;
+
     public static Level Instance { get; private set; }
+
+    NetworkAPI NetworkAPI => NetworkAPI.Instance;
 
     CancellationToken OnDestroyCancellationToken;
 
@@ -22,9 +29,23 @@ public partial class Level : NetworkBehaviour
     {
         Instance = this;
 
+        if (NetworkAPI.Room.IsConnected is false)
+            throw new InvalidOperationException($"Scene {gameObject.scene.name} Should Only be Loaded When Connected to a Room");
+
         OnDestroyCancellationToken = destroyCancellationToken;
 
         DisconnectButton.onClick.AddListener(DisconnectAction);
+
+        //Setup Code
+        {
+            var code = NetworkAPI.Room.ConnectionInfo.GetCode();
+
+            CodeLabel.text = code;
+            CodeButton.onClick.AddListener(() =>
+            {
+                GUIUtility.systemCopyBuffer = code;
+            });
+        }
     }
 
     public override void Set(NetworkEntity.Behaviour reference)

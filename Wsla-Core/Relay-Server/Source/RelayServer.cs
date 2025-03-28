@@ -395,7 +395,7 @@ namespace Wsla.Server
                     foreach (var room in Rooms)
                     {
                         var state = room.Properties.ReadState();
-                        var data = new RoomMatchmakerEntryData(room.ID, room.Transport.Port, state);
+                        var data = new RoomMatchmakerEntryData(room.ID, room.Transport.Port, room.Properties.Privacy, state);
                         list.Add(data);
                     }
                 }

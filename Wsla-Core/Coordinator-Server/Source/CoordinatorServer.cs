@@ -123,8 +123,6 @@ namespace Wsla.Server
                 {
                     var value = Interlocked.Add(ref Occupancy, modifier);
                     NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
-
-                    Matchmaking.ModifyOccupancy(modifier);
                 }
 
                 public bool CreateRoom(Guid id, ushort port, CreateRoomParameters parameters, int reservations)
@@ -137,7 +135,7 @@ namespace Wsla.Server
                             return false;
                         }
 
-                        var room = new Room(this, port, parameters.Name, parameters.Capacity);
+                        var room = new Room(this, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
                         Rooms.Add(id, room);
 
                         room.MakeJoinReservation(reservations);
@@ -186,6 +184,9 @@ namespace Wsla.Server
 
                         foreach (var (id, room) in Rooms)
                         {
+                            if (room.Privacy is RoomPrivacy.Private)
+                                continue;
+
                             var connection = new RoomConnectionInfo(Address, room.Port);
 
                             var name = room.Name;
@@ -205,6 +206,9 @@ namespace Wsla.Server
                     {
                         foreach (var (id, room) in Rooms)
                         {
+                            if (room.Privacy is RoomPrivacy.Private)
+                                continue;
+
                             var vacancy = room.CheckVacancy();
 
                             if (vacancy >= capacity)
@@ -221,10 +225,7 @@ namespace Wsla.Server
                     return false;
                 }
 
-                public void Dispose()
-                {
-                    Matchmaking.ModifyOccupancy(-Occupancy);
-                }
+                public void Dispose() { }
 
                 public override string ToString() => Info.ToString();
 
@@ -273,6 +274,15 @@ namespace Wsla.Server
                 public byte Occupancy;
                 public bool IsFull => Occupancy >= Capacity;
 
+                public RoomPrivacy Privacy;
+
+                public bool IsLocked;
+                void Lock()
+                {
+                    IsLocked = true;
+                    Privacy = RoomPrivacy.Private;
+                }
+
                 TimedReservationCollection JoinReservations;
                 public void MakeJoinReservation(int capacity) => JoinReservations.ReserveCapacity(capacity);
 
@@ -290,6 +300,12 @@ namespace Wsla.Server
 
                 public void UpdateRoom(UpdateRoomParameters parameters)
                 {
+                    //Lock
+                    if (parameters.Lock)
+                    {
+                        Lock();
+                    }
+
                     //Free Reservations
                     if (parameters.Joins > 0)
                     {
@@ -306,31 +322,26 @@ namespace Wsla.Server
                     }
                 }
 
-                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy)
+                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
                 {
                     this.Server = Server;
                     this.Port = Port;
                     this.Name = Name;
                     this.Capacity = Capacity;
                     this.Occupancy = Occupancy;
+                    this.Privacy = Privacy;
+
+                    IsLocked = false;
 
                     JoinReservations = new TimedReservationCollection(TimeSpan.FromSeconds(10));
                 }
-                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity) : this(Server, Port, Name, Capacity, Occupancy: 0) { }
 
                 public static Room Create(Server server, RoomMatchmakerEntryData data)
                 {
                     var state = data.State;
 
-                    return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy);
+                    return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
                 }
-            }
-
-            public static int Occupancy;
-            public static void ModifyOccupancy(int modifier)
-            {
-                var value = Interlocked.Add(ref Occupancy, modifier);
-                NetworkLog.Trace($"Matchmaking Occupancy Changed to {value}");
             }
 
             public static bool TryFindFreeServer(ServerRegion? region, out Server server)

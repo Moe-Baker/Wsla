@@ -73,5 +73,6 @@ namespace Wsla
         SocketClosed = 14,
         HttpRequestFailed = 15,
         Exception = 16,
+        RoomLocked = 17,
     }
 }

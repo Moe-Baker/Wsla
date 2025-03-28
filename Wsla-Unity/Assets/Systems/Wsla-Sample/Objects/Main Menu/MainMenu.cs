@@ -2,6 +2,8 @@ using Cysharp.Threading.Tasks;
 
 using System;
 
+using TMPro;
+
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,10 +12,17 @@ using Wsla.Unity;
 
 public class MainMenu : MonoBehaviour
 {
-    public Button CreateMatchButton;
-    public Button JoinMatchButton;
+    public Button CreateRoomButton;
+    public Button FindRoomButton;
+
+    [Space]
+
+    public Button JoinRoomButton;
+    public TMP_InputField JoinRoomCode;
 
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
+
+    CanvasGroup CanvasGroup;
 
     void Start() => Initialize().Forget();
 
@@ -21,22 +30,46 @@ public class MainMenu : MonoBehaviour
     {
         Application.runInBackground = true;
 
-        if (NetworkAPI.IsPrepared is false)
-        {
-            CreateMatchButton.interactable = false;
-            {
-                await NetworkAPI.Prepare();
-            }
-            CreateMatchButton.interactable = true;
-        }
+        CanvasGroup = gameObject.AddComponent<CanvasGroup>();
 
-        CreateMatchButton.onClick.AddListener(() => CreateRoom().Forget());
-        JoinMatchButton.onClick.AddListener(() => FindRoom().Forget());
+        CanvasGroup.interactable = false;
+        {
+            await NetworkAPI.Prepare();
+        }
+        CanvasGroup.interactable = true;
+
+        CreateRoomButton.onClick.AddListener(() => PerformOperation(CreateRoomAction));
+        FindRoomButton.onClick.AddListener(() => PerformOperation(FindRoomAction));
+        JoinRoomButton.onClick.AddListener(() => PerformOperation(JoinRoomAction));
     }
 
-    CreateRoomParameters GetCreateRoomParameters() => new CreateRoomParameters("SAMPLE-ROOM-NAME", 2, NetworkSceneID.From(1), "HELLO-WORLD");
+    CreateRoomParameters GetCreateRoomParameters()
+    {
+        var Name = "SAMPLE-ROOM-NAME";
+        var Capacity = (byte)3;
+        var Scene = NetworkSceneID.From(1);
+        var Password = new FixedString<FS20>();
+        var Privacy = RoomPrivacy.Private;
+        var Lock = RoomLockPolicy.AfterFill;
 
-    async UniTask CreateRoom()
+        return new CreateRoomParameters(Name, Capacity, Scene, Password, Privacy, Lock);
+    }
+
+    async void PerformOperation(Func<UniTask> operation)
+    {
+        CanvasGroup.interactable = false;
+
+        try
+        {
+            await operation();
+        }
+        finally
+        {
+            CanvasGroup.interactable = true;
+        }
+    }
+
+    async UniTask CreateRoomAction()
     {
         var request = GetCreateRoomParameters();
         var response = await NetworkAPI.MatchMaking.CreateRoom(ServerRegion.EU, request);
@@ -49,8 +82,7 @@ public class MainMenu : MonoBehaviour
 
         await JoinRoom(response.Value);
     }
-
-    async UniTask FindRoom()
+    async UniTask FindRoomAction()
     {
         var response = await NetworkAPI.MatchMaking.FindRoom(ServerRegion.EU, GetCreateRoomParameters());
 
@@ -68,9 +100,19 @@ public class MainMenu : MonoBehaviour
             return;
         }
 
-        await UniTask.Delay(TimeSpan.FromSeconds(3));
-
         await JoinRoom(info.Value);
+    }
+    async UniTask JoinRoomAction()
+    {
+        var code = JoinRoomCode.text;
+
+        if (RoomConnectionInfo.TryParseCode(code, out var info) is false)
+        {
+            Debug.LogError($"Invalid Code");
+            return;
+        }
+
+        await JoinRoom(info);
     }
 
     public async UniTask JoinRoom(RoomConnectionInfo info)
