@@ -124,8 +124,6 @@ namespace Wsla.Unity
             IsSpawned = false;
 
             OnDespawn?.Invoke();
-
-            Destroy();
         }
         public event Action OnDespawn;
 
