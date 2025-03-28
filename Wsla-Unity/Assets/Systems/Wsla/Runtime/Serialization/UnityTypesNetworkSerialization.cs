@@ -23,6 +23,8 @@ namespace Wsla.Unity
             NetworkSerializationResolver.Register<Vector3, BlittableNetworkSerializationResolver<Vector3>>();
             NetworkSerializationResolver.Register<Vector3Int, BlittableNetworkSerializationResolver<Vector3Int>>();
 
+            NetworkSerializationResolver.Register<Vector4, BlittableNetworkSerializationResolver<Vector4>>();
+
             NetworkSerializationResolver.Register<NetworkClient, NetworkClientSerializationResolver>();
             NetworkSerializationResolver.Register<NetworkEntity, NetworkEntitySerializationResolver>();
         }
