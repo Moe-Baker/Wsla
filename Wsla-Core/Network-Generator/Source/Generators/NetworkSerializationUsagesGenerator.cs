@@ -197,7 +197,7 @@ namespace Wsla.Generator
 
                     using (builder.CodeBlock())
                     {
-                        //Registeration Method
+                        //Registration Method
                         builder.Write("public static void Register()");
                         using (builder.CodeBlock())
                         {
@@ -228,7 +228,7 @@ namespace Wsla.Generator
                     CodeUtility.WriteAssemblyAsClass(compilation.AssemblyName, builder);
                     builder.Write("_");
                     builder.Write(id);
-                    builder.Write("SerializationRegisteration");
+                    builder.Write("SerializationRegistration");
                 }
                 void WriteNamespaceName()
                 {
@@ -236,12 +236,11 @@ namespace Wsla.Generator
                     builder.Write(".Generated");
                 }
 
-                CodeUtility.Log(builder.ToString());
-                context.AddSource($"{id}NetworkSerializationRegisteration.g.cs", builder.ToString());
+                context.AddSource($"{id}NetworkSerializationRegistration.g.cs", builder.ToString());
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                CodeUtility.Log(ex);
+                throw;
             }
         }
 
@@ -298,6 +297,8 @@ namespace Wsla.Generator
                 if (resolvers.ContainsKey(usage))
                     return true;
 
+                IterateGenericParameters(context, compilation, usage, resolvers);
+
                 if (ResolveBlittable(context, compilation, usage, resolvers))
                     return true;
 
@@ -332,6 +333,36 @@ namespace Wsla.Generator
                     return true;
 
                 return false;
+            }
+
+            static void IterateGenericParameters(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                var type = usage as INamedTypeSymbol;
+                if (type is null)
+                    return;
+
+                if (type.BaseType != null)
+                    IterateGenericParameters(context, compilation, usage.BaseType, resolvers);
+
+                if (type.IsGenericType is false)
+                    return;
+
+                var arguments = type.TypeArguments;
+                var parameters = type.TypeParameters;
+
+                for (int i = 0; i < arguments.Length; i++)
+                {
+                    var argument = arguments[i];
+                    var parameter = parameters[i];
+
+                    if (argument.TypeKind is TypeKind.TypeParameter)
+                        continue;
+
+                    if (CodeUtility.HasAttribute(parameter, compilation.MarkerAttribute) is false)
+                        continue;
+
+                    Resolve(context, compilation, argument, resolvers);
+                }
             }
 
             static bool ResolveArray(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
@@ -446,7 +477,7 @@ namespace Wsla.Generator
 
                 if (usage.IsUnmanagedType is false || usage.IsValueType is false)
                 {
-                    context.ReportDiagnostic(DiagnosticCodes.BlittlableConstraint.Create(usage));
+                    context.ReportDiagnostic(DiagnosticCodes.BlittableConstraint.Create(usage));
                     return false;
                 }
 

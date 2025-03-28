@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 
 namespace Wsla.Generator
@@ -159,14 +158,13 @@ namespace Wsla.Generator
                 foreach (var behaviour in data.Behaviours.List)
                     WriteBehaviour(context, data.Compilation, behaviour, builder, cache);
 
-                CodeUtility.Log(builder.ToString());
                 context.AddSource("SyncMembersInterfaceImplementations.g.cs", builder.ToString());
 
                 NetworkSerializationUsagesGenerator.WriteUsages(context, "SyncMembers", cache.SerializedTypes, data.Compilation.SerializationCompilation);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                CodeUtility.Log(ex);
+                throw;
             }
         }
 
@@ -337,6 +335,12 @@ namespace Wsla.Generator
                         {
                             if (EnsureInfoParameter(method) is false)
                                 continue;
+
+                            if (method.IsGenericMethod)
+                            {
+                                context.ReportDiagnostic(DiagnosticCodes.GenericRpcs.Create(method));
+                                continue;
+                            }
 
                             builder.Write("list.Add(new ");
 

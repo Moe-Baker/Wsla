@@ -3,8 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using System;
-using System.ComponentModel;
-using System.Globalization;
 using System.IO;
 using System.Threading;
 
