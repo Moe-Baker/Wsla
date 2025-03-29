@@ -20,6 +20,10 @@ public class MainMenu : MonoBehaviour
     public Button JoinRoomButton;
     public TMP_InputField JoinRoomCode;
 
+    [Space]
+
+    public Button FindMatchButton;
+
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
 
     CanvasGroup CanvasGroup;
@@ -41,8 +45,7 @@ public class MainMenu : MonoBehaviour
         CreateRoomButton.onClick.AddListener(() => PerformOperation(CreateRoomAction));
         FindRoomButton.onClick.AddListener(() => PerformOperation(FindRoomAction));
         JoinRoomButton.onClick.AddListener(() => PerformOperation(JoinRoomAction));
-
-        var request = await NetworkAPI.MatchMaking.FindMatch(ServerRegion.EU).Operate();
+        FindMatchButton.onClick.AddListener(() => PerformOperation(FindMatchAction));
     }
 
     CreateRoomParameters GetCreateRoomParameters()
@@ -109,6 +112,18 @@ public class MainMenu : MonoBehaviour
         }
 
         await JoinRoom(info);
+    }
+    async UniTask FindMatchAction()
+    {
+        var response = await NetworkAPI.MatchMaking.FindMatch(ServerRegion.EU).Operate();
+
+        if (response.IsError)
+        {
+            NetworkLog.Error($"Error on Find Match: {response.Error}");
+            return;
+        }
+
+        await JoinRoom(response.Value);
     }
 
     public async UniTask JoinRoom(RoomConnectionInfo info)

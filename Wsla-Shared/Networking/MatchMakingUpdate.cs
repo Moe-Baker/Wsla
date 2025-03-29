@@ -1,37 +1,42 @@
-﻿using System;
+﻿using Wsla.Serialization;
 
 namespace Wsla
 {
-    public enum MatchMakingProgress : byte
+    public struct StartMatchMakingRequest : IAutoNetworkSerialization
     {
-        Searching = 0,
-        Found = 1,
-        NotFound = 2,
-    }
-
-    public struct MatchMakingRequest
-    {
-        public Guid ID;
-
-        public MatchMakingRequest(Guid ID)
+        public void Select(ref AutoSerializationContext context)
         {
-            this.ID = ID;
+
         }
     }
 
-    public struct MatchMakingUpdate
+    public struct MatchmakingSuccessResponse : IAutoNetworkSerialization
     {
-        public MatchMakingProgress Progress;
-        public RoomConnectionInfo? Info;
+        public RoomConnectionInfo Info;
 
-        public MatchMakingUpdate(MatchMakingProgress Progress, RoomConnectionInfo? Info)
+        public void Select(ref AutoSerializationContext context)
         {
-            this.Progress = Progress;
+            context.Select(ref Info);
+        }
+
+        public MatchmakingSuccessResponse(RoomConnectionInfo Info)
+        {
             this.Info = Info;
         }
+    }
+    public struct MatchmakingFailResponse : IAutoNetworkSerialization
+    {
+        public WslaError Error;
 
-        public static MatchMakingUpdate Searching => new MatchMakingUpdate(MatchMakingProgress.Searching, null);
-        public static MatchMakingUpdate NotFound => new MatchMakingUpdate(MatchMakingProgress.NotFound, null);
-        public static MatchMakingUpdate Found(RoomConnectionInfo info) => new MatchMakingUpdate(MatchMakingProgress.Found, info);
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Error);
+        }
+
+        public MatchmakingFailResponse(WslaErrorCode code) : this(WslaError.From(code)) { }
+        public MatchmakingFailResponse(WslaError error)
+        {
+            this.Error = error;
+        }
     }
 }

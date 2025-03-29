@@ -15,8 +15,8 @@ namespace Wsla
     {
         public Socket Socket { get; private set; }
 
-        volatile bool Connected;
-        public bool IsConnected => Connected;
+        volatile MessagingSocketState State;
+        public MessagingSocketState GetState() => State;
 
         MessagingSocketDisconnectReason DisconnectReason;
 
@@ -29,7 +29,7 @@ namespace Wsla
 
         protected virtual void Run()
         {
-            Connected = true;
+            State = MessagingSocketState.Connected;
 
             SendLock = new SemaphoreSlim(1);
             SendBuffer = new NetDataWriter(true, 128);
@@ -322,7 +322,7 @@ namespace Wsla
 
             lock (StopLock)
             {
-                if (Connected is false)
+                if (State is MessagingSocketState.Disconnected)
                     return;
 
                 StopAction(reason);
@@ -356,7 +356,7 @@ namespace Wsla
         }
         protected virtual void StopAction(MessagingSocketDisconnectReason reason)
         {
-            Connected = false;
+            State = MessagingSocketState.Disconnected;
             DisconnectReason = reason;
 
             OnStop?.Invoke(this, reason);
@@ -369,10 +369,18 @@ namespace Wsla
         {
             lock (StopLock)
             {
-                if (Connected)
-                    OnStop += callback;
-                else
+                if (State is MessagingSocketState.Disconnected)
                     callback?.Invoke(this, DisconnectReason);
+                else
+                    OnStop += callback;
+            }
+        }
+
+        public void UnregisterStopCallback(StopDelegate callback)
+        {
+            lock (StopLock)
+            {
+                OnStop -= callback;
             }
         }
         #endregion
@@ -384,6 +392,8 @@ namespace Wsla
             CancellationSource = new CancellationTokenSource();
 
             StopLock = new object();
+
+            State = MessagingSocketState.Idle;
         }
         protected MessagingConnection(Socket Socket) : this()
         {
@@ -393,6 +403,10 @@ namespace Wsla
         protected static Socket CreateSocket() => new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     }
 
+    public enum MessagingSocketState
+    {
+        Idle, Connected, Disconnected
+    }
     public enum MessagingSocketDisconnectReason
     {
         /// <summary>

@@ -106,300 +106,330 @@ namespace Wsla.Server
 
         public static class Matchmaking
         {
-            public static List<Server> Servers { get; private set; }
-            public class Server : IDisposable
+            public static class Browser
             {
-                public RelayServerInfo Info { get; }
-
-                public MessagingPeer MessagingPeer { get; }
-
-                public ServerRegion Region => Info.Region;
-                public IPAddress Address => Info.Address;
-
-                Dictionary<Guid, Room> Rooms;
-
-                public int Occupancy;
-                public void ModifyOccupancy(int modifier)
+                public static List<Server> Servers { get; private set; }
+                public class Server : IDisposable
                 {
-                    var value = Interlocked.Add(ref Occupancy, modifier);
-                    NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
-                }
+                    public RelayServerInfo Info { get; }
 
-                public bool CreateRoom(Guid id, ushort port, CreateRoomParameters parameters, int reservations)
-                {
-                    lock (Rooms)
+                    public MessagingPeer MessagingPeer { get; }
+
+                    public ServerRegion Region => Info.Region;
+                    public IPAddress Address => Info.Address;
+
+                    Dictionary<Guid, Room> Rooms;
+
+                    public int Occupancy;
+                    public void ModifyOccupancy(int modifier)
                     {
-                        if (Rooms.ContainsKey(id))
-                        {
-                            NetworkLog.Warning($"Room with ID {id} Already Registered");
-                            return false;
-                        }
-
-                        var room = new Room(this, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
-                        Rooms.Add(id, room);
-
-                        room.MakeJoinReservation(reservations);
-
-                        return true;
+                        var value = Interlocked.Add(ref Occupancy, modifier);
+                        NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
                     }
-                }
 
-                public bool RemoveRoom(Guid id)
-                {
-                    lock (Rooms)
+                    public bool CreateRoom(Guid id, ushort port, CreateRoomParameters parameters, int reservations)
                     {
-                        if (Rooms.Remove(id, out var room) is false)
+                        lock (Rooms)
                         {
-                            NetworkLog.Warning($"No Room with ID {id} Registered");
-                            return false;
-                        }
-
-                        ModifyOccupancy(-room.Occupancy);
-                        return true;
-                    }
-                }
-
-                public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
-                {
-                    lock (Rooms)
-                    {
-                        foreach (var request in requests)
-                        {
-                            if (Rooms.TryGetValue(request.ID, out var room) is false)
+                            if (Rooms.ContainsKey(id))
                             {
-                                NetworkLog.Error($"No Room With ID {request.ID} Found to Update");
-                                continue;
+                                NetworkLog.Warning($"Room with ID {id} Already Registered");
+                                return false;
                             }
 
-                            room.UpdateRoom(request.Parameters);
+                            var room = new Room(this, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
+                            Rooms.Add(id, room);
+
+                            room.MakeJoinReservation(reservations);
+
+                            return true;
                         }
                     }
-                }
 
-                public void ListRooms(List<RoomListEntryInfo> list)
-                {
-                    lock (Rooms)
+                    public bool RemoveRoom(Guid id)
                     {
-                        list.EnsureCapacity(Rooms.Count);
-
-                        foreach (var (id, room) in Rooms)
+                        lock (Rooms)
                         {
-                            if (room.Privacy is RoomPrivacy.Private)
-                                continue;
-
-                            var connection = new RoomConnectionInfo(Address, room.Port);
-
-                            var name = room.Name;
-                            var capacity = room.Capacity;
-                            var occupancy = room.Occupancy;
-
-                            var entry = new RoomListEntryInfo(name, capacity, occupancy, connection);
-
-                            list.Add(entry);
-                        }
-                    }
-                }
-
-                public bool TryReserveJoin(int capacity, out Room target)
-                {
-                    lock (Rooms)
-                    {
-                        foreach (var (id, room) in Rooms)
-                        {
-                            if (room.Privacy is RoomPrivacy.Private)
-                                continue;
-
-                            var vacancy = room.CheckVacancy();
-
-                            if (vacancy >= capacity)
+                            if (Rooms.Remove(id, out var room) is false)
                             {
-                                room.MakeJoinReservation(capacity);
+                                NetworkLog.Warning($"No Room with ID {id} Registered");
+                                return false;
+                            }
 
-                                target = room;
+                            ModifyOccupancy(-room.Occupancy);
+                            return true;
+                        }
+                    }
+
+                    public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
+                    {
+                        lock (Rooms)
+                        {
+                            foreach (var request in requests)
+                            {
+                                if (Rooms.TryGetValue(request.ID, out var room) is false)
+                                {
+                                    NetworkLog.Error($"No Room With ID {request.ID} Found to Update");
+                                    continue;
+                                }
+
+                                room.UpdateRoom(request.Parameters);
+                            }
+                        }
+                    }
+
+                    public void ListRooms(List<RoomListEntryInfo> list)
+                    {
+                        lock (Rooms)
+                        {
+                            list.EnsureCapacity(Rooms.Count);
+
+                            foreach (var (id, room) in Rooms)
+                            {
+                                if (room.Privacy is RoomPrivacy.Private)
+                                    continue;
+
+                                var connection = new RoomConnectionInfo(Address, room.Port);
+
+                                var name = room.Name;
+                                var capacity = room.Capacity;
+                                var occupancy = room.Occupancy;
+
+                                var entry = new RoomListEntryInfo(name, capacity, occupancy, connection);
+
+                                list.Add(entry);
+                            }
+                        }
+                    }
+
+                    public bool TryReserveJoin(int capacity, out Room target)
+                    {
+                        lock (Rooms)
+                        {
+                            foreach (var (id, room) in Rooms)
+                            {
+                                if (room.Privacy is RoomPrivacy.Private)
+                                    continue;
+
+                                var vacancy = room.CheckVacancy();
+
+                                if (vacancy >= capacity)
+                                {
+                                    room.MakeJoinReservation(capacity);
+
+                                    target = room;
+                                    return true;
+                                }
+                            }
+                        }
+
+                        target = default;
+                        return false;
+                    }
+
+                    public void Dispose() { }
+
+                    public override string ToString() => Info.ToString();
+
+                    public Server(RelayServerInfo Info, MessagingPeer MessagingPeer)
+                    {
+                        this.Info = Info;
+                        this.MessagingPeer = MessagingPeer;
+
+                        Rooms = new();
+                    }
+
+                    public static Server Create(RegisterRelayRequest request, MessagingPeer peer)
+                    {
+                        var server = new Server(request.Info, peer);
+
+                        if (request.Rooms?.Count > 0)
+                        {
+                            server.Rooms.EnsureCapacity(request.Rooms.Count);
+
+                            var occupancy = 0;
+
+                            foreach (var entry in request.Rooms)
+                            {
+                                var room = Room.Create(server, entry);
+                                server.Rooms.Add(entry.ID, room);
+
+                                occupancy += room.Occupancy;
+                            }
+
+                            server.ModifyOccupancy(occupancy);
+                        }
+
+                        return server;
+                    }
+                }
+                public class Room
+                {
+                    public Server Server { get; }
+
+                    public ushort Port { get; }
+
+                    public FixedString<FS20> Name { get; }
+
+                    public byte Capacity;
+
+                    public byte Occupancy;
+                    public bool IsFull => Occupancy >= Capacity;
+
+                    public RoomPrivacy Privacy;
+
+                    public bool IsLocked;
+                    void Lock()
+                    {
+                        IsLocked = true;
+                        Privacy = RoomPrivacy.Private;
+                    }
+
+                    TimedReservationCollection JoinReservations;
+                    public void MakeJoinReservation(int capacity) => JoinReservations.ReserveCapacity(capacity);
+
+                    public int CheckVacancy()
+                    {
+                        var total = Occupancy + JoinReservations.CalculateCapacity();
+
+                        var vacancy = Capacity - total;
+                        if (vacancy < 0) vacancy = 0;
+
+                        return vacancy;
+                    }
+
+                    public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
+
+                    public void UpdateRoom(UpdateRoomParameters parameters)
+                    {
+                        //Lock
+                        if (parameters.Lock)
+                        {
+                            Lock();
+                        }
+
+                        //Free Reservations
+                        if (parameters.Joins > 0)
+                        {
+                            JoinReservations.FreeCapacity(parameters.Joins);
+                        }
+
+                        //Update Occupancy
+                        if (parameters.Occupancy.HasValue)
+                        {
+                            var delta = (parameters.Occupancy.Value - Occupancy);
+                            Server.ModifyOccupancy(delta);
+
+                            Occupancy = parameters.Occupancy.Value;
+                        }
+                    }
+
+                    public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
+                    {
+                        this.Server = Server;
+                        this.Port = Port;
+                        this.Name = Name;
+                        this.Capacity = Capacity;
+                        this.Occupancy = Occupancy;
+                        this.Privacy = Privacy;
+
+                        IsLocked = false;
+
+                        JoinReservations = new TimedReservationCollection(TimeSpan.FromSeconds(10));
+                    }
+
+                    public static Room Create(Server server, RoomMatchmakerEntryData data)
+                    {
+                        var state = data.State;
+
+                        return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
+                    }
+                }
+
+                public static void Init()
+                {
+                    Servers = new(10);
+                }
+
+                public static void RegisterServer(MessagingPeer peer, RegisterRelayRequest message)
+                {
+                    var server = Server.Create(message, peer);
+                    peer.Tag = server;
+
+                    lock (Servers)
+                    {
+                        Servers.Add(server);
+                    }
+
+                    peer.RegisterStopCallback(RelayStoppedCallback);
+                }
+                static void RelayStoppedCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
+                {
+                    if (TryReadTag(connection, out var server) is false)
+                        return;
+
+                    NetworkLog.Info($"Removing {server} Relay Server, Disconnect: {reason}");
+
+                    UnregisterServer(server);
+                }
+
+                static void UnregisterServer(Server server)
+                {
+                    lock (Servers)
+                    {
+                        if (Servers.Remove(server) is false)
+                        {
+                            NetworkLog.Warning($"No Relay Server {server} Found to Remove");
+                            return;
+                        }
+
+                        server.Dispose();
+                    }
+                }
+
+                public static bool TryFindFreeServer(ServerRegion? region, out Server server)
+                {
+                    lock (Servers)
+                    {
+                        var marker = (Found: false, Server: default(Server), Occupancy: int.MaxValue);
+
+                        for (int i = 0; i < Servers.Count; i++)
+                        {
+                            server = Servers[i];
+
+                            if (region.HasValue && region.Value != server.Region)
+                                continue;
+
+                            if (server.Occupancy < marker.Occupancy)
+                                marker = (true, server, server.Occupancy);
+                        }
+
+                        server = marker.Server;
+                        return marker.Found;
+                    }
+                }
+                public static bool TryFindFreeRoom(ServerRegion? region, int capacity, out Room room)
+                {
+                    lock (Servers)
+                    {
+                        for (int i = 0; i < Servers.Count; i++)
+                        {
+                            var server = Servers[i];
+
+                            if (region.HasValue && region.Value != server.Region)
+                                continue;
+
+                            if (server.TryReserveJoin(capacity, out room))
                                 return true;
-                            }
                         }
                     }
 
-                    target = default;
+                    room = default;
                     return false;
                 }
 
-                public void Dispose() { }
-
-                public override string ToString() => Info.ToString();
-
-                public Server(RelayServerInfo Info, MessagingPeer MessagingPeer)
+                public static void ListRegions(List<ServerRegion> list)
                 {
-                    this.Info = Info;
-                    this.MessagingPeer = MessagingPeer;
-
-                    Rooms = new();
-                }
-
-                public static Server Create(RegisterRelayRequest request, MessagingPeer peer)
-                {
-                    var server = new Server(request.Info, peer);
-
-                    if (request.Rooms?.Count > 0)
-                    {
-                        server.Rooms.EnsureCapacity(request.Rooms.Count);
-
-                        var occupancy = 0;
-
-                        foreach (var entry in request.Rooms)
-                        {
-                            var room = Room.Create(server, entry);
-                            server.Rooms.Add(entry.ID, room);
-
-                            occupancy += room.Occupancy;
-                        }
-
-                        server.ModifyOccupancy(occupancy);
-                    }
-
-                    return server;
-                }
-            }
-            public class Room
-            {
-                public Server Server { get; }
-
-                public ushort Port { get; }
-
-                public FixedString<FS20> Name { get; }
-
-                public byte Capacity;
-
-                public byte Occupancy;
-                public bool IsFull => Occupancy >= Capacity;
-
-                public RoomPrivacy Privacy;
-
-                public bool IsLocked;
-                void Lock()
-                {
-                    IsLocked = true;
-                    Privacy = RoomPrivacy.Private;
-                }
-
-                TimedReservationCollection JoinReservations;
-                public void MakeJoinReservation(int capacity) => JoinReservations.ReserveCapacity(capacity);
-
-                public int CheckVacancy()
-                {
-                    var total = Occupancy + JoinReservations.CalculateCapacity();
-
-                    var vacancy = Capacity - total;
-                    if (vacancy < 0) vacancy = 0;
-
-                    return vacancy;
-                }
-
-                public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
-
-                public void UpdateRoom(UpdateRoomParameters parameters)
-                {
-                    //Lock
-                    if (parameters.Lock)
-                    {
-                        Lock();
-                    }
-
-                    //Free Reservations
-                    if (parameters.Joins > 0)
-                    {
-                        JoinReservations.FreeCapacity(parameters.Joins);
-                    }
-
-                    //Update Occupancy
-                    if (parameters.Occupancy.HasValue)
-                    {
-                        var delta = (parameters.Occupancy.Value - Occupancy);
-                        Server.ModifyOccupancy(delta);
-
-                        Occupancy = parameters.Occupancy.Value;
-                    }
-                }
-
-                public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
-                {
-                    this.Server = Server;
-                    this.Port = Port;
-                    this.Name = Name;
-                    this.Capacity = Capacity;
-                    this.Occupancy = Occupancy;
-                    this.Privacy = Privacy;
-
-                    IsLocked = false;
-
-                    JoinReservations = new TimedReservationCollection(TimeSpan.FromSeconds(10));
-                }
-
-                public static Room Create(Server server, RoomMatchmakerEntryData data)
-                {
-                    var state = data.State;
-
-                    return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
-                }
-            }
-
-            public static class Queue
-            {
-
-            }
-
-            public static bool TryFindFreeServer(ServerRegion? region, out Server server)
-            {
-                lock (Servers)
-                {
-                    var marker = (Found: false, Server: default(Server), Occupancy: int.MaxValue);
-
-                    for (int i = 0; i < Servers.Count; i++)
-                    {
-                        server = Servers[i];
-
-                        if (region.HasValue && region.Value != server.Region)
-                            continue;
-
-                        if (server.Occupancy < marker.Occupancy)
-                            marker = (true, server, server.Occupancy);
-                    }
-
-                    server = marker.Server;
-                    return marker.Found;
-                }
-            }
-
-            public static bool TryFindFreeRoom(ServerRegion? region, int capacity, out Room room)
-            {
-                lock (Servers)
-                {
-                    for (int i = 0; i < Servers.Count; i++)
-                    {
-                        var server = Servers[i];
-
-                        if (region.HasValue && region.Value != server.Region)
-                            continue;
-
-                        if (server.TryReserveJoin(capacity, out room))
-                            return true;
-                    }
-                }
-
-                room = default;
-                return false;
-            }
-
-            static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
-
-            public class HttpEndpoints
-            {
-                [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
-                public List<ServerRegion> ListRegions()
-                {
-                    List<ServerRegion> list;
-
                     lock (Servers)
                     {
                         list = new(Servers.Count);
@@ -412,6 +442,130 @@ namespace Wsla.Server
                             list.Add(server.Region);
                         }
                     }
+                }
+                public static void ListRooms(ServerRegion region, List<RoomListEntryInfo> list)
+                {
+                    lock (Servers)
+                    {
+                        foreach (var server in Servers)
+                        {
+                            if (server.Region != region)
+                                continue;
+
+                            server.ListRooms(list);
+                        }
+                    }
+                }
+
+                public static bool TryReadTag(MessagingConnection connection, out Server server)
+                {
+                    if (connection.Tag is not Server)
+                    {
+                        NetworkLog.Warning($"Peer {connection} not Tagged as Relay Server");
+
+                        server = default;
+                        return false;
+                    }
+
+                    server = connection.Tag as Server;
+                    return true;
+                }
+            }
+
+            public static class Queue
+            {
+                static List<Ticket> List;
+                public class Ticket
+                {
+                    readonly MessagingPeer Peer;
+
+                    public void Accept(RoomConnectionInfo info)
+                    {
+                        var response = new MatchmakingSuccessResponse(info);
+                        Peer.SendMessage(response);
+                    }
+
+                    public void Fail() => Fail(WslaErrorCode.NoRoomFound);
+                    public void Fail(WslaErrorCode code)
+                    {
+                        var response = new MatchmakingFailResponse(code);
+                        Peer.SendMessage(response);
+                    }
+
+                    public Ticket(MessagingPeer Peer)
+                    {
+                        this.Peer = Peer;
+                    }
+                }
+
+                public static void Init()
+                {
+                    List = new List<Ticket>(100);
+                }
+
+                public static void Register(MessagingPeer peer, StartMatchMakingRequest request)
+                {
+                    var ticket = new Ticket(peer);
+
+                    peer.Tag = ticket;
+
+                    lock (List)
+                    {
+                        List.Add(ticket);
+                    }
+
+                    NetworkLog.Info($"Match Making Ticket Created for {peer}");
+
+                    peer.RegisterStopCallback(ClientDisconnectCallback);
+
+                    Resolve(ticket).Forget();
+                    static async Task Resolve(Ticket ticket)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2));
+                        ticket.Fail();
+                    }
+                }
+                static void ClientDisconnectCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
+                {
+                    if (TryReadTag(connection, out var ticket) is false)
+                        return;
+
+                    Remove(ticket);
+                }
+
+                static bool Remove(Ticket ticket)
+                {
+                    lock (List)
+                    {
+                        return List.Remove(ticket);
+                    }
+                }
+
+                static bool TryReadTag(MessagingConnection connection, out Ticket ticket)
+                {
+                    if (connection.Tag is not Ticket)
+                    {
+                        NetworkLog.Warning($"Peer {connection} not Tagged as Match Making Ticket");
+
+                        ticket = default;
+                        return false;
+                    }
+
+                    ticket = connection.Tag as Ticket;
+                    return true;
+                }
+            }
+
+            static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
+
+            public class HttpEndpoints
+            {
+                [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
+                public List<ServerRegion> ListRegions()
+                {
+                    var list = new List<ServerRegion>();
+
+                    Browser.ListRegions(list);
 
                     return list;
                 }
@@ -420,7 +574,7 @@ namespace Wsla.Server
                 public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
                     //Find Region
-                    if (TryFindFreeServer(message.Region, out var server) is false)
+                    if (Browser.TryFindFreeServer(message.Region, out var server) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"No Region {message.Region} Found");
 
                     var id = Guid.NewGuid();
@@ -455,16 +609,7 @@ namespace Wsla.Server
                 {
                     var list = new List<RoomListEntryInfo>();
 
-                    lock (Servers)
-                    {
-                        foreach (var server in Servers)
-                        {
-                            if (server.Region != request.Region)
-                                continue;
-
-                            server.ListRooms(list);
-                        }
-                    }
+                    Browser.ListRooms(request.Region, list);
 
                     return list;
                 }
@@ -474,7 +619,7 @@ namespace Wsla.Server
                 {
                     //Try Find Existing Room
                     {
-                        if (TryFindFreeRoom(request.Region, 1, out var room))
+                        if (Browser.TryFindFreeRoom(request.Region, 1, out var room))
                             return room.GetConnectionInfo();
                     }
 
@@ -488,112 +633,59 @@ namespace Wsla.Server
 
                     return null;
                 }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.RequestMatch)]
-                public void RequestMatch(MatchMakingRequest request)
-                {
-                    NetworkLog.Info("Match Making Request Received");
-                }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.UpdateMatch)]
-                public MatchMakingUpdate UpdateMatch(Guid ID)
-                {
-                    NetworkLog.Info("Match Making Update Requested");
-                    return MatchMakingUpdate.Searching;
-                }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CancelMatch)]
-                public void CancelMatch(Guid ID)
-                {
-                    NetworkLog.Info("Match Making Request Canceled");
-                }
             }
 
             public class MessageHandlers
             {
                 public static void RegisterHandlers(MessagingServer server)
                 {
-                    server.Dispatcher.RegisterSync<RegisterRelayRequest>(MessageHandlers.RegisterRelayHandler);
-                    server.Dispatcher.RegisterSync<CreateRoomConfirmation>(MessageHandlers.CreateRoomConfirmationHandler);
-                    server.Dispatcher.RegisterSync<RemoveRoomRequest>(MessageHandlers.RemoveRoomHandler);
-                    server.Dispatcher.RegisterSync<UpdateRoomsRequest>(MessageHandlers.UpdateRoomsHandler);
+                    server.Dispatcher.RegisterSync<RegisterRelayRequest>(RegisterRelayHandler);
+
+                    server.Dispatcher.RegisterSync<CreateRoomConfirmation>(CreateRoomConfirmationHandler);
+                    server.Dispatcher.RegisterSync<RemoveRoomRequest>(RemoveRoomHandler);
+                    server.Dispatcher.RegisterSync<UpdateRoomsRequest>(UpdateRoomsHandler);
+
+                    server.Dispatcher.RegisterSync<StartMatchMakingRequest>(StartMatchMaking);
                 }
 
                 public static void RegisterRelayHandler(MessagingPeer peer, ref RegisterRelayRequest message)
                 {
                     NetworkLog.Info($"Registering ({message.Info.Region}) Relay Server on Address: {message.Info.Address}");
 
-                    var server = Server.Create(message, peer);
-                    peer.Tag = server;
-
-                    lock (Servers)
-                    {
-                        Servers.Add(server);
-                    }
-
-                    peer.RegisterStopCallback(RelayStoppedCallback);
+                    Browser.RegisterServer(peer, message);
                 }
 
                 public static void CreateRoomConfirmationHandler(MessagingPeer peer, ref CreateRoomConfirmation message)
                 {
                     RoomCreationQueue.Fulfill(message.ID, message);
                 }
-
                 public static void RemoveRoomHandler(MessagingPeer peer, ref RemoveRoomRequest message)
                 {
-                    if (TryReadTag(peer, out var server) is false)
+                    if (Browser.TryReadTag(peer, out var server) is false)
                         return;
 
                     server.RemoveRoom(message.RoomID);
                 }
-
                 public static void UpdateRoomsHandler(MessagingPeer peer, ref UpdateRoomsRequest message)
                 {
-                    if (TryReadTag(peer, out var server) is false)
+                    if (Browser.TryReadTag(peer, out var server) is false)
                         return;
 
                     server.UpdateRooms(message.Requests);
+                }
+
+                public static void StartMatchMaking(MessagingPeer peer, ref StartMatchMakingRequest request)
+                {
+                    Queue.Register(peer, request);
                 }
             }
 
             public static void Init()
             {
-                Servers = new(10);
-
                 RoomCreationQueue = new(100);
-            }
 
-            static void RelayStoppedCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
-            {
-                if (TryReadTag(connection, out var server) is false)
-                    return;
-
-                NetworkLog.Info($"Removing {server} Relay Server, Disconnect: {reason}");
-
-                lock (Servers)
-                {
-                    if (Servers.Remove(server) is false)
-                    {
-                        NetworkLog.Warning($"No Relay Server {server} Found to Remove");
-                        return;
-                    }
-
-                    server.Dispose();
-                }
-            }
-
-            static bool TryReadTag(MessagingConnection connection, out Server server)
-            {
-                if (connection.Tag is not Server)
-                {
-                    NetworkLog.Warning($"Peer {connection} not Tagged as Relay Server");
-
-                    server = default;
-                    return false;
-                }
-
-                server = connection.Tag as Server;
-                return true;
+                Browser.Init();
+                Queue.Init();
             }
         }
     }

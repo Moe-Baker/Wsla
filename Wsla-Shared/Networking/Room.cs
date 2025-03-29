@@ -14,12 +14,18 @@ namespace Wsla
         USA = 3,
     }
 
-    public struct RoomConnectionInfo : IEquatable<RoomConnectionInfo>
+    public struct RoomConnectionInfo : IEquatable<RoomConnectionInfo>, IAutoNetworkSerialization
     {
         public IPAddress Address;
         public ushort Port;
 
         public string GetCode() => IPEndpointTextEncoder.Encode(Address, Port);
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Address);
+            context.Select(ref Port);
+        }
 
         public override string ToString() => $"[{Address}:{Port}]";
 

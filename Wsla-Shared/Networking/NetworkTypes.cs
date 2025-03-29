@@ -99,6 +99,10 @@ namespace Wsla
 
             Add<UpdateRoomRequest>(ref counter);
             Add<UpdateRoomsRequest>(ref counter);
+
+            Add<StartMatchMakingRequest>(ref counter);
+            Add<MatchmakingFailResponse>(ref counter);
+            Add<MatchmakingSuccessResponse>(ref counter);
         }
     }
 

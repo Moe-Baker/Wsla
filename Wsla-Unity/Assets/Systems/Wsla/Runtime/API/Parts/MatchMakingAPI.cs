@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using UnityEngine;
-
 namespace Wsla.Unity
 {
     [Serializable]
@@ -78,107 +76,99 @@ namespace Wsla.Unity
             return response.Value;
         }
 
-        public MatchMakingTicket FindMatch(ServerRegion region) => new MatchMakingTicket(API);
+        public MatchMakingTicket FindMatch(ServerRegion region, CancellationToken cancellation = default) => new MatchMakingTicket(CancellationToken: cancellation);
     }
 
     public class MatchMakingTicket
     {
-        readonly NetworkAPI API;
+        MessagingClient Client;
 
-        readonly Guid ID;
+        readonly CancellationToken CancellationToken;
+        bool IsCancelled => CancellationToken.IsCancellationRequested;
 
-        readonly CancellationToken ApplicationQuitToken;
+        CancellationTokenRegistration CancellationRegistration;
 
-        readonly CancellationTokenSource CancellationSource;
-        public bool IsCanceled => CancellationSource.IsCancellationRequested;
+        TaskCompletionSource<WslaResponse<RoomConnectionInfo, WslaError>> Operation;
 
-        static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(1f);
+        NetworkAPI API => NetworkAPI.Instance;
 
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> Operate()
         {
-            var token = CancellationSource.Token;
+            Client = new MessagingClient();
 
-            try
+            //Setup Operation
             {
-                await Request(token);
-                var info = await Poll(token);
+                Operation = new();
 
-                if (info.HasValue is false)
-                    return WslaError.From(WslaErrorCode.NoRoomFound);
-
-                return info.Value;
+                if (CancellationToken.CanBeCanceled)
+                    CancellationRegistration = CancellationToken.Register(CancelHandler);
             }
-            catch (OperationCanceledException)
+
+            Client.RegisterStopCallback(ClientStopCallback);
+
+            //Connect
             {
-                Cancel().Forget();
-                return WslaError.From(WslaErrorCode.OperationCanceled);
-            }
-            catch (Exception ex)
-            {
-                NetworkLog.Error(ex);
-                return WslaError.From(ex);
-            }
-        }
-
-        async Task<bool> Request(CancellationToken cancellation)
-        {
-            var request = new MatchMakingRequest(ID);
-
-            var response = await API.REST.POST(Constants.RestRoutes.RequestMatch, request, cancellation: cancellation);
-            cancellation.ThrowIfCancellationRequested();
-
-            if (response.IsError)
-                throw response.Error.ToException();
-
-            return true;
-        }
-
-        async Task<RoomConnectionInfo?> Poll(CancellationToken cancellation)
-        {
-            while (true)
-            {
-                var response = await API.REST.POST<Guid, MatchMakingUpdate>(Constants.RestRoutes.UpdateMatch, ID, cancellation: cancellation);
-                cancellation.ThrowIfCancellationRequested();
+                var response = await Client.Connect(API.CoordinatorAddress.IP, Constants.CoordinatorMessagingPort);
 
                 if (response.IsError)
-                    throw response.Error.ToException();
-
-                var update = response.Value;
-
-                switch (update.Progress)
-                {
-                    case MatchMakingProgress.Searching:
-                    {
-                        await Task.Delay(PollingInterval, cancellation);
-                        cancellation.ThrowIfCancellationRequested();
-                    }
-                    continue;
-
-                    case MatchMakingProgress.Found:
-                        return update.Info;
-
-                    case MatchMakingProgress.NotFound:
-                        return null;
-                }
+                    return response.Error;
             }
+
+            if (IsCancelled) return WslaError.From(WslaErrorCode.OperationCanceled);
+
+            //Register Dispatchers
+            {
+                Client.Dispatcher.Register<MatchmakingSuccessResponse>(SuccessHandler);
+                Client.Dispatcher.Register<MatchmakingFailResponse>(FailHandler);
+            }
+
+            //Send Request
+            {
+                var request = new StartMatchMakingRequest();
+                await Client.SendMessageAsync(request);
+            }
+
+            var result = await Operation.Task;
+
+            return result;
         }
 
-        async Task Cancel()
+        void SuccessHandler(ref MatchmakingSuccessResponse message)
         {
-            if (ApplicationQuitToken.IsCancellationRequested)
-                return;
+            Operation.TrySetResult(message.Info);
 
-            await API.REST.POST<Guid, MatchMakingUpdate>(Constants.RestRoutes.CancelMatch, ID);
+            Disconnect();
+        }
+        void FailHandler(ref MatchmakingFailResponse message)
+        {
+            Operation.TrySetResult(message.Error);
+
+            Disconnect();
+        }
+        void CancelHandler()
+        {
+            Operation.TrySetResult(WslaError.From(WslaErrorCode.OperationCanceled));
+
+            Disconnect();
         }
 
-        internal MatchMakingTicket(NetworkAPI API)
+        void Disconnect()
         {
-            this.API = API;
+            CancellationRegistration.Dispose();
 
-            ID = Guid.NewGuid();
+            Client.UnregisterStopCallback(ClientStopCallback);
+            Client.Disconnect();
+        }
 
-            ApplicationQuitToken = Application.exitCancellationToken;
-            CancellationSource = CancellationTokenSource.CreateLinkedTokenSource(ApplicationQuitToken);
+        void ClientStopCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
+        {
+            Operation.TrySetResult(WslaError.From(WslaErrorCode.TransportFailure));
+        }
+
+        public MatchMakingTicket(CancellationToken CancellationToken = default)
+        {
+            this.CancellationToken = CancellationToken;
+            CancellationRegistration = default;
         }
     }
 }

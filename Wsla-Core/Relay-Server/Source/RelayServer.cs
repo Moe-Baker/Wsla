@@ -165,7 +165,7 @@ namespace Wsla.Server
                     if (Client == null)
                         return false;
 
-                    return Client.IsConnected;
+                    return Client.GetState() is MessagingSocketState.Connected;
                 }
             }
 
