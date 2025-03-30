@@ -329,6 +329,65 @@ namespace NetworkSerializationTests
         }
     }
 
+    public class SparseArrayTests
+    {
+        [Fact]
+        public void NonAllocatingGeneralTest()
+        {
+            var source = SparseArray.From(1, 2, 3);
+            Assert.False(source.IsAllocated);
+
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+        [Fact]
+        public void AllocatingGeneralTest()
+        {
+            var source = SparseArray.Wrap([1, 2, 3, 4, 5]);
+            Assert.True(source.IsAllocated);
+
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+
+        [Fact]
+        public void EmptyTest()
+        {
+            var source = SparseArray.Empty<int>();
+
+            var clone = Utility.Duplicate(source);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+
+        [Fact]
+        public void NonAllocatingInPlaceTest()
+        {
+            var source = SparseArray.From(1, 2, 3);
+            Assert.False(source.IsAllocated);
+
+            var destination = SparseArray.Allocate<int>(source.Length);
+
+            Utility.WriteInto(ref source, ref destination);
+
+            Assert.Equal(source.ToArray(), destination.ToArray());
+        }
+        [Fact]
+        public void AllocatingInPlaceTest()
+        {
+            var source = SparseArray.Wrap([1, 2, 3, 4, 5]);
+            Assert.True(source.IsAllocated);
+
+            var destination = SparseArray.Allocate<int>(source.Length);
+
+            Utility.WriteInto(ref source, ref destination);
+
+            Assert.Equal(source.ToArray(), destination.ToArray());
+        }
+    }
+
     public class ArraySegmentTests
     {
         [Fact]
