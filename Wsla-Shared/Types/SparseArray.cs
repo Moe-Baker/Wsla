@@ -35,10 +35,10 @@ namespace Wsla
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public static SparseArray<T> Clone<T>(Span<T> input)
+        public static SparseArray<T> Clone<T>(ReadOnlySpan<T> input)
         {
             var value = Allocate<T>(input.Length);
-            var span = value.GetSpan();
+            var span = value.GetUsedSpan();
 
             input.CopyTo(span);
 
@@ -65,7 +65,7 @@ namespace Wsla
     /// </summary>
     /// <typeparam name="T"></typeparam>
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct SparseArray<[NetworkSerializationMarker] T> : IManualNetworkSerialization
+    public unsafe struct SparseArray<[NetworkSerializationMarker] T> : IManualNetworkSerialization, ISpannable<T>, IAssignableSpannable<T>
     {
         //Field order important, never change
         //Item[0, 1, 2] must always be the first fields in this struct and in the same order
@@ -77,12 +77,12 @@ namespace Wsla
         {
             get
             {
-                var span = GetSpan();
+                var span = GetUsedSpan();
                 return span[index];
             }
             set
             {
-                var span = GetSpan();
+                var span = GetUsedSpan();
                 span[index] = value;
             }
         }
@@ -94,12 +94,12 @@ namespace Wsla
         /// </summary>
         public bool IsAllocated => SparseArray.CheckAllocated(Length);
 
-        #region Collection Helpers
+        #region Span
         /// <summary>
         /// Get read/write span over the sparse list
         /// </summary>
         /// <returns></returns>
-        internal Span<T> GetSpan()
+        public Span<T> GetUsedSpan()
         {
             if (IsAllocated)
                 return Items.AsSpan();
@@ -107,12 +107,29 @@ namespace Wsla
                 return MemoryMarshal.CreateSpan(ref Item0, Length);
         }
 
-        public ReadOnlySpan<T> AsSpan() => GetSpan();
+        public void Assign(ReadOnlySpan<T> input)
+        {
+            if (input.Length > SparseArray.MaxTotalSize)
+                throw new ArgumentOutOfRangeException($"Sparse List can Contain Only a Maximum of {SparseArray.MaxTotalSize}");
 
+            Length = (byte)input.Length;
+
+            if (SparseArray.CheckAllocated(Length))
+            {
+                if (Items?.Length != Length)
+                    Items = new T[Length];
+            }
+
+            var destination = GetUsedSpan();
+
+            input.CopyTo(destination);
+        }
+        #endregion
+
+        #region Collection Helpers
         public void CopyTo(Span<T> destination)
         {
-            var source = AsSpan();
-
+            var source = GetUsedSpan();
             source.CopyTo(destination);
         }
 
@@ -129,7 +146,7 @@ namespace Wsla
         {
             NetworkSerializer.WriteValue(Length, stream);
 
-            var span = GetSpan();
+            var span = GetUsedSpan();
 
             for (int i = 0; i < Length; i++)
                 NetworkSerializer.WriteValue(in span[i], stream);
@@ -180,6 +197,12 @@ namespace Wsla
         }
         #endregion
 
+        public SparseArray<T> Clone()
+        {
+            var span = GetUsedSpan();
+            return SparseArray.Clone<T>(span);
+        }
+
         internal SparseArray(byte Length, T Item0 = default, T Item1 = default, T Item2 = default)
         {
             this.Length = Length;
@@ -215,10 +238,10 @@ namespace Wsla
         }
         internal SparseArray(int Length)
         {
+            this.Length = (byte)Length;
+
             if (Length > SparseArray.MaxTotalSize)
                 throw new ArgumentOutOfRangeException($"Sparse List can Contain Only a Maximum of {SparseArray.MaxTotalSize}");
-
-            this.Length = (byte)Length;
 
             if (SparseArray.CheckAllocated(Length))
                 Items = new T[Length];
@@ -227,5 +250,9 @@ namespace Wsla
 
             Item0 = Item1 = Item2 = default;
         }
+
+        public static implicit operator SparseArray<T>(T Item0) => SparseArray.From(Item0);
+        public static implicit operator SparseArray<T>((T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2);
+        public static implicit operator SparseArray<T>((T, T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2, tuple.Item3);
     }
 }

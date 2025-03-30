@@ -22,8 +22,6 @@ namespace Wsla.Unity
         {
             base.Set(value);
 
-            var qa = 5;
-
             ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () => new HttpClient());
             UrlCache = new UrlStringCache();
 

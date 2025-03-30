@@ -14,13 +14,15 @@ unsafe class Playground
 
     static void Run()
     {
-        var array = SparseArray.Clone([1, 2, 3, 4]);
+        var text = new FixedString<FS20>("Hello World");
+        Console.WriteLine(text.IndexOf("world", StringComparison.OrdinalIgnoreCase));
 
-        Console.WriteLine($"Length: {array.Length} | Is Allocated: {array.IsAllocated}");
+        var value = SparseArray.From(1, 2, 3);
 
-        foreach (var item in array)
-        {
-            Console.WriteLine(item);
-        }
+        var clone = value.Clone();
+        clone.Reverse<SparseArray<int>, int>();
+
+        Console.WriteLine(value.IndexOf(1));
+        Console.WriteLine(clone.IndexOf(1));
     }
 }

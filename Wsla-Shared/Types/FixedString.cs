@@ -27,7 +27,7 @@ namespace Wsla
             where TLeft : IFixedString
             where TRight : IFixedString
         {
-            return MemoryExtensions.Equals(left.AsSpan(), right.AsSpan(), comparison);
+            return MemoryExtensions.Equals(left.GetUsedSpan(), right.GetUsedSpan(), comparison);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -42,7 +42,7 @@ namespace Wsla
             where TLeft : IFixedString
             where TRight : IFixedString
         {
-            return MemoryExtensions.CompareTo(left.AsSpan(), right.AsSpan(), comparison);
+            return MemoryExtensions.CompareTo(left.GetUsedSpan(), right.GetUsedSpan(), comparison);
         }
 
         public static class FNVHash
@@ -81,19 +81,33 @@ namespace Wsla
         char this[int index] { get; }
         int Max { get; }
 
+        /// <summary>
+        /// Get the total span that this fixed string has access to (the entire fixed storage)
+        /// </summary>
+        /// <returns></returns>
         Span<char> GetTotalSpan();
 
-        ReadOnlySpan<char> AsSpan();
+        /// <summary>
+        /// Gets a span of the used characters in this fixed string
+        /// </summary>
+        /// <returns></returns>
+        Span<char> GetUsedSpan();
     }
     public unsafe struct FixedString<TStorage> : IFixedString,
+        ISpannable<char>, IAssignableSpannable<char>,
         IEquatable<FixedString<FS20>>, IEquatable<FixedString<FS40>>, IEquatable<FixedString<FS60>>, IEquatable<FixedString<FS80>>, IEquatable<string>,
         IComparable<FixedString<FS20>>, IComparable<FixedString<FS40>>, IComparable<FixedString<FS60>>, IComparable<FixedString<FS80>>, IComparable<string>
-        where TStorage : IFixedStringStorage, new()
+        where TStorage : struct, IFixedStringStorage
     {
         TStorage Storage;
 
         public int Length { get; private set; }
-        void IFixedString.SetLength(int value)
+        /// <summary>
+        /// Sets the length of this fixed string while respecting its Storage's max value
+        /// </summary>
+        /// <param name="value"></param>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public void SetLength(int value)
         {
             if (value < 0 || value > Storage.Max)
                 throw new ArgumentOutOfRangeException($"Fixed String {typeof(TStorage).Name} Only  Supports Length of [{0}-{Storage.Max}]");
@@ -103,11 +117,19 @@ namespace Wsla
 
         public int Max => Storage.Max;
 
-        public char this[int index] => GetTotalSpan()[index];
-
-        public override int GetHashCode() => FixedString.FNVHash.Compute(GetTotalSpan());
-
-        public override string ToString() => AsSpan().ToString();
+        public char this[int index]
+        {
+            get
+            {
+                var span = GetUsedSpan();
+                return span[index];
+            }
+            set
+            {
+                var span = GetUsedSpan();
+                span[index] = value;
+            }
+        }
 
         #region Equality
         public override bool Equals(object obj)
@@ -146,7 +168,7 @@ namespace Wsla
         public bool Equals(string other) => Equals(other, StringComparison.Ordinal);
         public bool Equals(string other, StringComparison comparison)
         {
-            return MemoryExtensions.Equals(AsSpan(), other.AsSpan(), comparison);
+            return MemoryExtensions.Equals(GetUsedSpan(), other.AsSpan(), comparison);
         }
         public static bool operator ==(FixedString<TStorage> left, string right) => left.Equals(right);
         public static bool operator !=(FixedString<TStorage> left, string right) => !left.Equals(right);
@@ -170,39 +192,50 @@ namespace Wsla
         public int CompareTo(string other) => CompareTo(other, StringComparison.Ordinal);
         public int CompareTo(string other, StringComparison comparison)
         {
-            return MemoryExtensions.CompareTo(AsSpan(), other.AsSpan(), comparison);
+            return MemoryExtensions.CompareTo(GetUsedSpan(), other.AsSpan(), comparison);
         }
         #endregion
 
         #region Span
-        Span<char> IFixedString.GetTotalSpan() => GetTotalSpan();
-        Span<char> GetTotalSpan() => Storage.GetSpan();
+        public Span<char> GetTotalSpan() => Storage.GetSpan();
+        public Span<char> GetUsedSpan() => Storage.GetSpan().Slice(0, Length);
 
-        public ReadOnlySpan<char> AsSpan() => GetTotalSpan().Slice(0, Length);
+        public void Assign(ReadOnlySpan<char> input)
+        {
+            SetLength(input.Length);
+
+            var destination = GetTotalSpan();
+            input.CopyTo(destination);
+        }
         #endregion
 
         #region Implicit Converters
         public static implicit operator FixedString<TStorage>(string input) => new FixedString<TStorage>(input);
         public static implicit operator FixedString<TStorage>(ReadOnlySpan<char> input) => new FixedString<TStorage>(input);
 
-        public static implicit operator FixedString<TStorage>(FixedString<FS20> other) => new FixedString<TStorage>(other.AsSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS40> other) => new FixedString<TStorage>(other.AsSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS60> other) => new FixedString<TStorage>(other.AsSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS80> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS20> other) => new FixedString<TStorage>(other.GetUsedSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS40> other) => new FixedString<TStorage>(other.GetUsedSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS60> other) => new FixedString<TStorage>(other.GetUsedSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS80> other) => new FixedString<TStorage>(other.GetUsedSpan());
         #endregion
+
+        public FixedString<TStorage> Clone()
+        {
+            var characters = GetUsedSpan();
+            return new FixedString<TStorage>(characters);
+        }
+
+        public override int GetHashCode() => FixedString.FNVHash.Compute(GetUsedSpan());
+
+        public override string ToString() => GetUsedSpan().ToString();
 
         public FixedString(ReadOnlySpan<char> input)
         {
             Unsafe.SkipInit(out this);
 
-            if (input.Length > Storage.Max)
-                throw new ArgumentOutOfRangeException($"Fixed String {typeof(TStorage).Name} Only  Supports Length of [{0}-{Storage.Max}]");
-
-            Length = input.Length;
             Storage = new TStorage();
 
-            var characters = GetTotalSpan();
-            input.CopyTo(characters);
+            Assign(input);
         }
     }
 
@@ -256,7 +289,7 @@ namespace Wsla
 
         public override void Write(in TString value, INetworkStream stream)
         {
-            var source = value.AsSpan();
+            var source = value.GetUsedSpan();
 
             Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
 
@@ -345,7 +378,7 @@ namespace Wsla
 
         public override void Write(Utf8JsonWriter writer, TString value, JsonSerializerOptions options)
         {
-            var characters = value.AsSpan();
+            var characters = value.GetUsedSpan();
             writer.WriteStringValue(characters);
         }
     }
