@@ -387,7 +387,7 @@ namespace Wsla.Server
                     }
                 }
 
-                public static bool TryFindFreeServer(ServerRegion? region, out Server server)
+                public static bool TryFindFreeServer(SparseArray<ServerRegion> regions, out Server server)
                 {
                     lock (Servers)
                     {
@@ -397,7 +397,7 @@ namespace Wsla.Server
                         {
                             server = Servers[i];
 
-                            if (region.HasValue && region.Value != server.Region)
+                            if (regions.Contains(server.Region) is false)
                                 continue;
 
                             if (server.Occupancy < marker.Occupancy)
@@ -408,7 +408,7 @@ namespace Wsla.Server
                         return marker.Found;
                     }
                 }
-                public static bool TryFindFreeRoom(ServerRegion? region, int capacity, out Room room)
+                public static bool TryFindFreeRoom(SparseArray<ServerRegion> regions, int capacity, out Room room)
                 {
                     lock (Servers)
                     {
@@ -416,7 +416,7 @@ namespace Wsla.Server
                         {
                             var server = Servers[i];
 
-                            if (region.HasValue && region.Value != server.Region)
+                            if (regions.Contains(server.Region) is false)
                                 continue;
 
                             if (server.TryReserveJoin(capacity, out room))
@@ -443,13 +443,13 @@ namespace Wsla.Server
                         }
                     }
                 }
-                public static void ListRooms(ServerRegion region, List<RoomListEntryInfo> list)
+                public static void ListRooms(SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
                 {
                     lock (Servers)
                     {
                         foreach (var server in Servers)
                         {
-                            if (server.Region != region)
+                            if (regions.Contains(server.Region) is false)
                                 continue;
 
                             server.ListRooms(list);
@@ -574,8 +574,8 @@ namespace Wsla.Server
                 public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
                     //Find Region
-                    if (Browser.TryFindFreeServer(message.Region, out var server) is false)
-                        throw new ProviderException(ResponseStatus.BadRequest, $"No Region {message.Region} Found");
+                    if (Browser.TryFindFreeServer(message.Regions, out var server) is false)
+                        throw new ProviderException(ResponseStatus.BadRequest, $"Regions not Available");
 
                     var id = Guid.NewGuid();
 
@@ -609,7 +609,7 @@ namespace Wsla.Server
                 {
                     var list = new List<RoomListEntryInfo>();
 
-                    Browser.ListRooms(request.Region, list);
+                    Browser.ListRooms(request.Regions, list);
 
                     return list;
                 }
@@ -619,14 +619,14 @@ namespace Wsla.Server
                 {
                     //Try Find Existing Room
                     {
-                        if (Browser.TryFindFreeRoom(request.Region, 1, out var room))
+                        if (Browser.TryFindFreeRoom(request.Regions, 1, out var room))
                             return room.GetConnectionInfo();
                     }
 
                     //Try Create Room
                     if (request.CreateRoom.HasValue)
                     {
-                        var create = new CreateRoomRequest(request.Region, request.CreateRoom.Value);
+                        var create = new CreateRoomRequest(request.Regions, request.CreateRoom.Value);
 
                         return await CreateRoom(create);
                     }

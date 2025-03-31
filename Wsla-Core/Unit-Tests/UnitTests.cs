@@ -49,7 +49,7 @@ namespace NetworkSerializationTests
     public class FixedStringTests
     {
         [Fact]
-        void Fixed20Test()
+        public void Fixed20Test()
         {
             var source = new FixedString<FS20>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -57,7 +57,7 @@ namespace NetworkSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed40Test()
+        public void Fixed40Test()
         {
             var source = new FixedString<FS40>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -65,7 +65,7 @@ namespace NetworkSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed60Test()
+        public void Fixed60Test()
         {
             var source = new FixedString<FS60>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -73,7 +73,7 @@ namespace NetworkSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed80Test()
+        public void Fixed80Test()
         {
             var source = new FixedString<FS80>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -82,7 +82,7 @@ namespace NetworkSerializationTests
         }
 
         [Fact]
-        void MinTestTest()
+        public void MinTestTest()
         {
             var source = new FixedString<FS20>("");
             var clone = Utility.Duplicate(source);
@@ -91,7 +91,7 @@ namespace NetworkSerializationTests
         }
 
         [Fact]
-        void MaxTest()
+        public void MaxTest()
         {
             var source = new FixedString<FS80>(new string(char.MaxValue, 80));
             var clone = Utility.Duplicate(source);
@@ -100,7 +100,7 @@ namespace NetworkSerializationTests
         }
 
         [Fact]
-        void ImplicitConversion()
+        public void ImplicitConversion()
         {
             FixedString<FS20> f20 = new FixedString<FS20>("Hello World");
 
@@ -115,7 +115,7 @@ namespace NetworkSerializationTests
         }
 
         [Fact]
-        void BinaryLengthTest()
+        public void BinaryLengthTest()
         {
             var instance = new FixedString<FS20>("Hello World");
 
@@ -215,7 +215,7 @@ namespace NetworkSerializationTests
     public class NullableTests
     {
         [Fact]
-        void ValueTest()
+        public void ValueTest()
         {
             var original = new Nullable<int>(42);
             var clone = Utility.Duplicate(original);
@@ -224,7 +224,7 @@ namespace NetworkSerializationTests
         }
 
         [Fact]
-        void NullTest()
+        public void NullTest()
         {
             var original = new Nullable<int>();
             var clone = Utility.Duplicate(original);
@@ -544,35 +544,35 @@ namespace NetworkSerializationTests
         }
     }
 
-    public class JsonIPAddress
+    public class AttributesCollectionTests
     {
         [Fact]
-        public void Serialize()
+        public void Usage()
         {
-            var original = new IPAddress(stackalloc byte[] { 10, 0, 0, 10 });
-            var json = JsonSerializer.Serialize(original, SharedAPI.JsonOptions);
-            var clone = JsonSerializer.Deserialize<IPAddress>(json, options: SharedAPI.JsonOptions);
+            var source = new AttributeCollection();
 
-            Assert.Equal(original, clone);
-        }
+            source.SetValue("hello", "world");
 
-        [Fact]
-        public void Warpper()
-        {
-            var original = new Wrapper()
+            TestType("var1", 1234);
+            TestType("var3", TimeSpan.FromSeconds(2.5f));
+            TestType("var4", 12.5f);
+            TestType("var5", 12.5);
+            TestType("var5", Guid.NewGuid());
+
+            var clone = Utility.Duplicate(source);
+
+            void TestType<T>(FixedString<FS20> key, T original)
+                where T : IEquatable<T>, ISpanFormattable
             {
-                Address = new IPAddress(stackalloc byte[] { 10, 0, 0, 10 })
-            };
+                source.SetValue(key, original);
 
-            var json = JsonSerializer.Serialize(original, options: SharedAPI.JsonOptions);
-            var clone = JsonSerializer.Deserialize<Wrapper>(json, options: SharedAPI.JsonOptions);
+                if (source.TryParseValue(key, out T clone) is false)
+                    throw new NotImplementedException();
 
-            Assert.Equal(original.Address, clone.Address);
-        }
+                Assert.Equal(original, clone);
+            }
 
-        public struct Wrapper
-        {
-            public IPAddress Address;
+            Assert.Equal(source.Dictionary, clone.Dictionary);
         }
     }
 
@@ -613,7 +613,7 @@ namespace JsonSerializationTests
     public class FixedStringTests
     {
         [Fact]
-        void Fixed20Test()
+        public void Fixed20Test()
         {
             var source = new FixedString<FS20>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -621,7 +621,7 @@ namespace JsonSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed40Test()
+        public void Fixed40Test()
         {
             var source = new FixedString<FS40>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -629,7 +629,7 @@ namespace JsonSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed60Test()
+        public void Fixed60Test()
         {
             var source = new FixedString<FS60>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -637,7 +637,7 @@ namespace JsonSerializationTests
             Assert.Equal(source.ToString(), clone.ToString());
         }
         [Fact]
-        void Fixed80Test()
+        public void Fixed80Test()
         {
             var source = new FixedString<FS80>("Hello World");
             var clone = Utility.Duplicate(source);
@@ -646,7 +646,7 @@ namespace JsonSerializationTests
         }
 
         [Fact]
-        void MinTestTest()
+        public void MinTestTest()
         {
             var source = new FixedString<FS20>("");
             var clone = Utility.Duplicate(source);
@@ -655,7 +655,7 @@ namespace JsonSerializationTests
         }
 
         [Fact]
-        void MaxTest()
+        public void MaxTest()
         {
             var source = new FixedString<FS80>(new string('A', 80));
             var clone = Utility.Duplicate(source);
@@ -667,7 +667,7 @@ namespace JsonSerializationTests
     public class IPAddressTests
     {
         [Fact]
-        void MinTest()
+        public void MinTest()
         {
             var source = new IPAddress([0, 0, 0, 0]);
             var clone = Utility.Duplicate(source);
@@ -676,7 +676,7 @@ namespace JsonSerializationTests
         }
 
         [Fact]
-        void MaxTest()
+        public void MaxTest()
         {
             var source = new IPAddress([255, 255, 255, 255]);
             var clone = Utility.Duplicate(source);
@@ -685,20 +685,63 @@ namespace JsonSerializationTests
         }
 
         [Fact]
-        void OverflowTest()
+        public void OverflowTest()
         {
             var json = '"' + new string('0', 100) + '"';
             var clone = JsonSerializer.Deserialize<IPAddress>(json, options: SharedAPI.JsonOptions);
         }
     }
 
+    public class SparseArrayTests
+    {
+        JsonSerializerOptions SerializerOptions;
+
+        [Fact]
+        public void NonAllocatingGeneralTest()
+        {
+            var source = SparseArray.From(1, 2, 3);
+            Assert.False(source.IsAllocated);
+
+            var clone = Utility.Duplicate(source, SerializerOptions);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+        [Fact]
+        public void AllocatingGeneralTest()
+        {
+            var source = SparseArray.Wrap([1, 2, 3, 4, 5]);
+            Assert.True(source.IsAllocated);
+
+            var clone = Utility.Duplicate(source, SerializerOptions);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+
+        [Fact]
+        public void EmptyTest()
+        {
+            var source = SparseArray.Empty<int>();
+
+            var clone = Utility.Duplicate(source, SerializerOptions);
+
+            Assert.Equal(source.ToArray(), clone.ToArray());
+        }
+
+        public SparseArrayTests()
+        {
+            SerializerOptions = new JsonSerializerOptions(SharedAPI.JsonOptions);
+            SerializerOptions.Converters.Add(new SparseArrayJsonConverter<int>());
+        }
+    }
+
     public static class Utility
     {
-        public static T Duplicate<[NetworkSerializationMarker] T>(T original)
+        public static T Duplicate<[NetworkSerializationMarker] T>(T original) => Duplicate(original, SharedAPI.JsonOptions);
+        public static T Duplicate<[NetworkSerializationMarker] T>(T original, JsonSerializerOptions options)
         {
-            var json = JsonSerializer.Serialize(original, options: SharedAPI.JsonOptions);
+            var json = JsonSerializer.Serialize(original, options: options);
 
-            var clone = JsonSerializer.Deserialize<T>(json, options: SharedAPI.JsonOptions);
+            var clone = JsonSerializer.Deserialize<T>(json, options: options);
 
             return clone;
         }

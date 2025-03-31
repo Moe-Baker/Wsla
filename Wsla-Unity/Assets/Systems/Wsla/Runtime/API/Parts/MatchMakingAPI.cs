@@ -27,9 +27,9 @@ namespace Wsla.Unity
             return WslaResponse<WslaError>.Success;
         }
 
-        public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(ServerRegion? region, CreateRoomParameters parameters)
+        public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
         {
-            var request = new CreateRoomRequest(region, parameters);
+            var request = new CreateRoomRequest(regions, parameters);
             return CreateRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(CreateRoomRequest request)
@@ -44,9 +44,9 @@ namespace Wsla.Unity
             return new RoomConnectionInfo(info.Address, info.Port);
         }
 
-        public Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(ServerRegion? region, CreateRoomParameters? create = default)
+        public Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(SparseArray<ServerRegion> regions, CreateRoomParameters? create = default)
         {
-            var request = new FindRoomRequest(region, create);
+            var request = new FindRoomRequest(regions, create);
             return FindRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(FindRoomRequest request)
@@ -64,9 +64,9 @@ namespace Wsla.Unity
             return info.Value;
         }
 
-        public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(ServerRegion region)
+        public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(SparseArray<ServerRegion> regions)
         {
-            var request = new ListRoomsRequest(region);
+            var request = new ListRoomsRequest(regions);
 
             var response = await API.REST.POST<ListRoomsRequest, List<RoomListEntryInfo>>(Constants.RestRoutes.ListRooms, request);
 
@@ -76,11 +76,16 @@ namespace Wsla.Unity
             return response.Value;
         }
 
-        public MatchMakingTicket FindMatch(ServerRegion region, CancellationToken cancellation = default) => new MatchMakingTicket(CancellationToken: cancellation);
+        public MatchMakingTicket FindMatch(SparseArray<ServerRegion> regions, CancellationToken cancellation = default)
+        {
+            return new MatchMakingTicket(regions, CancellationToken: cancellation);
+        }
     }
 
     public class MatchMakingTicket
     {
+        SparseArray<ServerRegion> Regions;
+
         MessagingClient Client;
 
         readonly CancellationToken CancellationToken;
@@ -124,7 +129,7 @@ namespace Wsla.Unity
 
             //Send Request
             {
-                var request = new StartMatchMakingRequest();
+                var request = new StartMatchMakingRequest(Regions);
                 await Client.SendMessageAsync(request);
             }
 
@@ -165,8 +170,10 @@ namespace Wsla.Unity
             Operation.TrySetResult(WslaError.From(WslaErrorCode.TransportFailure));
         }
 
-        public MatchMakingTicket(CancellationToken CancellationToken = default)
+        public MatchMakingTicket(SparseArray<ServerRegion> Regions, CancellationToken CancellationToken = default)
         {
+            this.Regions = Regions;
+
             this.CancellationToken = CancellationToken;
             CancellationRegistration = default;
         }

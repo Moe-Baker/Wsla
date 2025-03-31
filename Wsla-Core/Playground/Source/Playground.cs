@@ -14,15 +14,25 @@ unsafe class Playground
 
     static void Run()
     {
-        var text = new FixedString<FS20>("Hello World");
-        Console.WriteLine(text.IndexOf("world", StringComparison.OrdinalIgnoreCase));
+        var attributes = new AttributeCollection();
 
-        var value = SparseArray.From(1, 2, 3);
+        attributes.SetValue("hello", "world");
 
-        var clone = value.Clone();
-        clone.Reverse<SparseArray<int>, int>();
+        Test("var1", 1234);
+        Test("var3", DateTime.Now);
+        Test("var4", 12.5f);
+        Test("var5", 12.5);
+        Test("var5", Guid.NewGuid());
 
-        Console.WriteLine(value.IndexOf(1));
-        Console.WriteLine(clone.IndexOf(1));
+        void Test<T>(FixedString<FS20> key, T original)
+            where T : IEquatable<T>, ISpanFormattable
+        {
+            attributes.SetValue(key, original);
+
+            if (attributes.TryParseValue(key, out T clone) is false)
+                throw new NotImplementedException();
+
+            Console.WriteLine($"{original} : {clone}");
+        }
     }
 }

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -71,6 +73,66 @@ namespace Wsla
                 return Unsafe.As<uint, int>(ref hash);
             }
         }
+
+        public class Comparer : IEqualityComparer<FixedString<FS20>>,
+            IEqualityComparer<FixedString<FS40>>,
+            IEqualityComparer<FixedString<FS60>>,
+            IEqualityComparer<FixedString<FS80>>
+        {
+            public bool IgnoreCase { get; }
+
+            public bool Equals(FixedString<FS20> x, FixedString<FS20> y)
+            {
+                var comparison = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                return FixedString.Equals(in x, in y, comparison);
+            }
+            public int GetHashCode(FixedString<FS20> target)
+            {
+                var span = target.AsSpan();
+                return FixedString.FNVHash.Compute(span, ignoreCase: IgnoreCase);
+            }
+
+            public bool Equals(FixedString<FS40> x, FixedString<FS40> y)
+            {
+                var comparison = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                return FixedString.Equals(in x, in y, comparison);
+            }
+            public int GetHashCode(FixedString<FS40> target)
+            {
+                var span = target.AsSpan();
+                return FixedString.FNVHash.Compute(span, ignoreCase: IgnoreCase);
+            }
+
+            public bool Equals(FixedString<FS60> x, FixedString<FS60> y)
+            {
+                var comparison = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                return FixedString.Equals(in x, in y, comparison);
+            }
+            public int GetHashCode(FixedString<FS60> target)
+            {
+                var span = target.AsSpan();
+                return FixedString.FNVHash.Compute(span, ignoreCase: IgnoreCase);
+            }
+
+            public bool Equals(FixedString<FS80> x, FixedString<FS80> y)
+            {
+                var comparison = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                return FixedString.Equals(in x, in y, comparison);
+            }
+            public int GetHashCode(FixedString<FS80> target)
+            {
+                var span = target.AsSpan();
+                return FixedString.FNVHash.Compute(span, ignoreCase: IgnoreCase);
+            }
+
+            public Comparer(bool IgnoreCase)
+            {
+                this.IgnoreCase = IgnoreCase;
+            }
+
+            public static Comparer Ordinal { get; } = new Comparer(false);
+            public static Comparer OrdinalIgnoreCase { get; } = new Comparer(true);
+        }
     }
 
     public interface IFixedString
@@ -92,6 +154,8 @@ namespace Wsla
         /// </summary>
         /// <returns></returns>
         Span<char> GetUsedSpan();
+
+        ReadOnlySpan<char> AsSpan();
     }
     public unsafe struct FixedString<TStorage> : IFixedString,
         ISpannable<char>, IAssignableSpannable<char>,
@@ -168,7 +232,7 @@ namespace Wsla
         public bool Equals(string other) => Equals(other, StringComparison.Ordinal);
         public bool Equals(string other, StringComparison comparison)
         {
-            return MemoryExtensions.Equals(GetUsedSpan(), other.AsSpan(), comparison);
+            return MemoryExtensions.Equals(AsSpan(), other.AsSpan(), comparison);
         }
         public static bool operator ==(FixedString<TStorage> left, string right) => left.Equals(right);
         public static bool operator !=(FixedString<TStorage> left, string right) => !left.Equals(right);
@@ -192,13 +256,15 @@ namespace Wsla
         public int CompareTo(string other) => CompareTo(other, StringComparison.Ordinal);
         public int CompareTo(string other, StringComparison comparison)
         {
-            return MemoryExtensions.CompareTo(GetUsedSpan(), other.AsSpan(), comparison);
+            return MemoryExtensions.CompareTo(AsSpan(), other.AsSpan(), comparison);
         }
         #endregion
 
         #region Span
         public Span<char> GetTotalSpan() => Storage.GetSpan();
         public Span<char> GetUsedSpan() => Storage.GetSpan().Slice(0, Length);
+
+        public ReadOnlySpan<char> AsSpan() => GetUsedSpan();
 
         public void Assign(ReadOnlySpan<char> input)
         {
@@ -213,21 +279,23 @@ namespace Wsla
         public static implicit operator FixedString<TStorage>(string input) => new FixedString<TStorage>(input);
         public static implicit operator FixedString<TStorage>(ReadOnlySpan<char> input) => new FixedString<TStorage>(input);
 
-        public static implicit operator FixedString<TStorage>(FixedString<FS20> other) => new FixedString<TStorage>(other.GetUsedSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS40> other) => new FixedString<TStorage>(other.GetUsedSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS60> other) => new FixedString<TStorage>(other.GetUsedSpan());
-        public static implicit operator FixedString<TStorage>(FixedString<FS80> other) => new FixedString<TStorage>(other.GetUsedSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS20> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS40> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS60> other) => new FixedString<TStorage>(other.AsSpan());
+        public static implicit operator FixedString<TStorage>(FixedString<FS80> other) => new FixedString<TStorage>(other.AsSpan());
+
+        public static implicit operator ReadOnlySpan<char>(FixedString<TStorage> text) => text.AsSpan();
         #endregion
 
         public FixedString<TStorage> Clone()
         {
-            var characters = GetUsedSpan();
+            var characters = AsSpan();
             return new FixedString<TStorage>(characters);
         }
 
-        public override int GetHashCode() => FixedString.FNVHash.Compute(GetUsedSpan());
+        public override int GetHashCode() => FixedString.FNVHash.Compute(AsSpan());
 
-        public override string ToString() => GetUsedSpan().ToString();
+        public override string ToString() => AsSpan().ToString();
 
         public FixedString(ReadOnlySpan<char> input)
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -7,14 +8,15 @@ namespace Wsla
 {
     public struct CreateRoomRequest
     {
-        public ServerRegion? Region;
+        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
+        public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters Parameters;
 
-        public CreateRoomRequest(ServerRegion? Region, CreateRoomParameters Parameters)
+        public CreateRoomRequest(SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
         {
             this.Parameters = Parameters;
-            this.Region = Region;
+            this.Regions = Regions;
         }
     }
 
@@ -89,11 +91,12 @@ namespace Wsla
 
     public struct ListRoomsRequest
     {
-        public ServerRegion Region;
+        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
+        public SparseArray<ServerRegion> Regions;
 
-        public ListRoomsRequest(ServerRegion Region)
+        public ListRoomsRequest(SparseArray<ServerRegion> Regions)
         {
-            this.Region = Region;
+            this.Regions = Regions;
         }
     }
 
@@ -132,13 +135,14 @@ namespace Wsla
 
     public struct FindRoomRequest
     {
-        public ServerRegion? Region;
+        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
+        public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters? CreateRoom;
 
-        public FindRoomRequest(ServerRegion? Region, CreateRoomParameters? CreateRoom)
+        public FindRoomRequest(SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
         {
-            this.Region = Region;
+            this.Regions = Regions;
             this.CreateRoom = CreateRoom;
         }
     }

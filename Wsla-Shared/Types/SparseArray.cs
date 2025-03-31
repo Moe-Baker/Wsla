@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -43,6 +46,15 @@ namespace Wsla
             input.CopyTo(span);
 
             return value;
+        }
+        public static SparseArray<T> Clone<T>(List<T> list)
+        {
+            var array = Allocate<T>(list.Count);
+
+            for (int i = 0; i < list.Count; i++)
+                array[i] = list[i];
+
+            return array;
         }
 
         /// <summary>
@@ -88,6 +100,13 @@ namespace Wsla
         }
 
         public byte Length { get; private set; }
+        public void SetLength(int value)
+        {
+            if (value > SparseArray.MaxTotalSize)
+                throw new ArgumentOutOfRangeException($"Sparse List can Contain Only a Maximum of {SparseArray.MaxTotalSize}");
+
+            Length = (byte)value;
+        }
 
         /// <summary>
         /// Is this sparse list backend by an internal array?
@@ -109,10 +128,7 @@ namespace Wsla
 
         public void Assign(ReadOnlySpan<T> input)
         {
-            if (input.Length > SparseArray.MaxTotalSize)
-                throw new ArgumentOutOfRangeException($"Sparse List can Contain Only a Maximum of {SparseArray.MaxTotalSize}");
-
-            Length = (byte)input.Length;
+            SetLength(input.Length);
 
             if (SparseArray.CheckAllocated(Length))
             {
@@ -254,5 +270,69 @@ namespace Wsla
         public static implicit operator SparseArray<T>(T Item0) => SparseArray.From(Item0);
         public static implicit operator SparseArray<T>((T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2);
         public static implicit operator SparseArray<T>((T, T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2, tuple.Item3);
+    }
+
+    public class SparseArrayJsonConverter<T> : JsonConverter<SparseArray<T>>
+    {
+        public override void Write(Utf8JsonWriter writer, SparseArray<T> value, JsonSerializerOptions options)
+        {
+            writer.WriteStartArray();
+
+            for (int i = 0; i < value.Length; i++)
+                JsonSerializer.Serialize(writer, value[i], options: options);
+
+            writer.WriteEndArray();
+        }
+        public override SparseArray<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType is not JsonTokenType.StartArray)
+                throw new JsonException($"Must be a Collection");
+
+            SparseArray<T> value = SparseArray.Allocate<T>(SparseArray.MaxNonAllocatedSize);
+
+            //Happy case, elements fit inside SparseArray.MaxNonAllocatedSize
+            {
+                for (int i = 0; true; i++)
+                {
+                    if (reader.Read() is false)
+                        throw new JsonException($"No Collection End Token Found");
+
+                    if (reader.TokenType is JsonTokenType.EndArray)
+                    {
+                        value.SetLength(i);
+                        return value;
+                    }
+
+                    if (i >= value.Length)
+                        break;
+
+                    value[i] = JsonSerializer.Deserialize<T>(ref reader);
+                    continue;
+                }
+            }
+
+            //Worst case scenario, elements bigger than sparse array
+            {
+                var list = new List<T>(value.Length * 2);
+
+                for (int i = 0; i < value.Length; i++)
+                    list.Add(value[i]);
+
+                while (true)
+                {
+                    var element = JsonSerializer.Deserialize<T>(ref reader);
+                    list.Add(element);
+
+                    if (reader.Read() is false)
+                        throw new JsonException($"No Collection End Token Found");
+
+                    if (reader.TokenType is JsonTokenType.EndArray)
+                    {
+                        value = SparseArray.Clone(list);
+                        return value;
+                    }
+                }
+            }
+        }
     }
 }
