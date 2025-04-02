@@ -18,7 +18,7 @@ namespace Wsla.Unity
         [field: Space]
 
         [field: SerializeField]
-        public GameIDProperty GameID { get; private set; }
+        public ApplicationIDProperty ApplicationID { get; private set; }
 
         [field: SerializeField]
         public GameVersionProperty GameVersion { get; private set; }
@@ -66,7 +66,7 @@ namespace Wsla.Unity
             NetworkLog.Handler = LogHandler;
 
             GameVersion = GameVersion.Initialize();
-            GameID = GameID.Initialize();
+            ApplicationID = ApplicationID.Initialize();
 
             REST.Set(this);
             MatchMaking.Set(this);

@@ -75,5 +75,6 @@ namespace Wsla
         Exception = 16,
         RoomLocked = 17,
         NoRoomFound = 18,
+        ApplicationNotFound = 19,
     }
 }

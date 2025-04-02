@@ -181,6 +181,8 @@ namespace Wsla
 
         public int Max => Storage.Max;
 
+        public string AsString => ToString();
+
         public char this[int index]
         {
             get

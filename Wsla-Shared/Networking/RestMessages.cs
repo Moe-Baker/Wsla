@@ -8,13 +8,16 @@ namespace Wsla
 {
     public struct CreateRoomRequest
     {
+        public FixedString<FS20> Application;
+
         [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters Parameters;
 
-        public CreateRoomRequest(SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
+        public CreateRoomRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
         {
+            this.Application = ApplicationName;
             this.Parameters = Parameters;
             this.Regions = Regions;
         }
@@ -22,18 +25,21 @@ namespace Wsla
 
     public struct CreateRoomCommand : IAutoNetworkSerialization
     {
-        public Guid ID;
+        public ApplicationID ApplicationID;
+        public Guid RoomID;
         public CreateRoomParameters Parameters;
 
         public void Select(ref AutoSerializationContext context)
         {
-            context.Select(ref ID);
+            context.Select(ref ApplicationID);
+            context.Select(ref RoomID);
             context.Select(ref Parameters);
         }
 
-        public CreateRoomCommand(Guid ID, CreateRoomParameters Parameters)
+        public CreateRoomCommand(ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters Parameters)
         {
-            this.ID = ID;
+            this.ApplicationID = ApplicationID;
+            this.RoomID = RoomID;
             this.Parameters = Parameters;
         }
     }
@@ -91,11 +97,14 @@ namespace Wsla
 
     public struct ListRoomsRequest
     {
+        public FixedString<FS20> Application;
+
         [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
-        public ListRoomsRequest(SparseArray<ServerRegion> Regions)
+        public ListRoomsRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
         {
+            this.Application = ApplicationName;
             this.Regions = Regions;
         }
     }
@@ -135,13 +144,16 @@ namespace Wsla
 
     public struct FindRoomRequest
     {
+        public FixedString<FS20> Application;
+
         [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters? CreateRoom;
 
-        public FindRoomRequest(SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
+        public FindRoomRequest(FixedString<FS20> Application, SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
         {
+            this.Application = Application;
             this.Regions = Regions;
             this.CreateRoom = CreateRoom;
         }

@@ -40,19 +40,52 @@ namespace Wsla.Server
         }
 
         public static ConfigurationProperty Configuration { get; private set; }
-        public class ConfigurationProperty : ServerConfigurationData
+        public class ConfigurationProperty
         {
+            public ApplicationsData Applications;
+            public class ApplicationsData
+            {
+                public string[] Names { get; }
+
+                public bool TryGetID(ReadOnlySpan<char> name, out ApplicationID id)
+                {
+                    for (byte i = 0; i < Names.Length; i++)
+                    {
+                        if (MemoryExtensions.Equals(Names[i], name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            id = new ApplicationID(i);
+                            return true;
+                        }
+                    }
+
+                    id = default;
+                    return false;
+                }
+
+                public ApplicationsData(Data.ApplicationData[] data)
+                {
+                    Names = new string[data.Length];
+
+                    for (int i = 0; i < Names.Length; i++)
+                        Names[i] = data[i].Name;
+                }
+            }
+
             public static async Task<ConfigurationProperty> Create(Data data)
             {
                 return new ConfigurationProperty()
                 {
-
+                    Applications = new(data.Applications)
                 };
             }
 
             public class Data : ServerConfigurationData
             {
-
+                public ApplicationData[] Applications;
+                public struct ApplicationData
+                {
+                    public string Name;
+                }
             }
         }
         static async Task LoadConfig()
@@ -127,7 +160,7 @@ namespace Wsla.Server
                         NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
                     }
 
-                    public bool CreateRoom(Guid id, ushort port, CreateRoomParameters parameters, int reservations)
+                    public bool CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
                     {
                         lock (Rooms)
                         {
@@ -137,7 +170,7 @@ namespace Wsla.Server
                                 return false;
                             }
 
-                            var room = new Room(this, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
+                            var room = new Room(this, application, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
                             Rooms.Add(id, room);
 
                             room.MakeJoinReservation(reservations);
@@ -178,15 +211,16 @@ namespace Wsla.Server
                         }
                     }
 
-                    public void ListRooms(List<RoomListEntryInfo> list)
+                    public void ListRooms(ApplicationID application, List<RoomListEntryInfo> list)
                     {
                         lock (Rooms)
                         {
-                            list.EnsureCapacity(Rooms.Count);
-
                             foreach (var (id, room) in Rooms)
                             {
                                 if (room.Privacy is RoomPrivacy.Private)
+                                    continue;
+
+                                if (room.Application != application)
                                     continue;
 
                                 var connection = new RoomConnectionInfo(Address, room.Port);
@@ -202,13 +236,16 @@ namespace Wsla.Server
                         }
                     }
 
-                    public bool TryReserveJoin(int capacity, out Room target)
+                    public bool TryReserveJoin(ApplicationID application, int capacity, out Room target)
                     {
                         lock (Rooms)
                         {
                             foreach (var (id, room) in Rooms)
                             {
                                 if (room.Privacy is RoomPrivacy.Private)
+                                    continue;
+
+                                if (room.Application != application)
                                     continue;
 
                                 var vacancy = room.CheckVacancy();
@@ -267,6 +304,8 @@ namespace Wsla.Server
                 {
                     public Server Server { get; }
 
+                    public ApplicationID Application { get; }
+
                     public ushort Port { get; }
 
                     public FixedString<FS20> Name { get; }
@@ -324,8 +363,9 @@ namespace Wsla.Server
                         }
                     }
 
-                    public Room(Server Server, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
+                    public Room(Server Server, ApplicationID Application, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
                     {
+                        this.Application = Application;
                         this.Server = Server;
                         this.Port = Port;
                         this.Name = Name;
@@ -342,7 +382,7 @@ namespace Wsla.Server
                     {
                         var state = data.State;
 
-                        return new Room(server, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
+                        return new Room(server, data.Application, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
                     }
                 }
 
@@ -408,7 +448,7 @@ namespace Wsla.Server
                         return marker.Found;
                     }
                 }
-                public static bool TryFindFreeRoom(SparseArray<ServerRegion> regions, int capacity, out Room room)
+                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, int capacity, out Room room)
                 {
                     lock (Servers)
                     {
@@ -419,7 +459,7 @@ namespace Wsla.Server
                             if (regions.Contains(server.Region) is false)
                                 continue;
 
-                            if (server.TryReserveJoin(capacity, out room))
+                            if (server.TryReserveJoin(application, capacity, out room))
                                 return true;
                         }
                     }
@@ -432,8 +472,6 @@ namespace Wsla.Server
                 {
                     lock (Servers)
                     {
-                        list = new(Servers.Count);
-
                         foreach (var server in Servers)
                         {
                             if (list.Contains(server.Region))
@@ -443,7 +481,7 @@ namespace Wsla.Server
                         }
                     }
                 }
-                public static void ListRooms(SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
+                public static void ListRooms(ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
                 {
                     lock (Servers)
                     {
@@ -452,7 +490,7 @@ namespace Wsla.Server
                             if (regions.Contains(server.Region) is false)
                                 continue;
 
-                            server.ListRooms(list);
+                            server.ListRooms(application, list);
                         }
                     }
                 }
@@ -506,6 +544,12 @@ namespace Wsla.Server
                 public static void Register(MessagingPeer peer, StartMatchMakingRequest request)
                 {
                     var ticket = new Ticket(peer);
+
+                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                    {
+                        ticket.Fail(WslaErrorCode.ApplicationNotFound);
+                        return;
+                    }
 
                     peer.Tag = ticket;
 
@@ -573,17 +617,20 @@ namespace Wsla.Server
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
                 public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
+                    if (Configuration.Applications.TryGetID(message.Application, out var applicationID) is false)
+                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
+
                     //Find Region
                     if (Browser.TryFindFreeServer(message.Regions, out var server) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"Regions not Available");
 
-                    var id = Guid.NewGuid();
+                    var roomID = Guid.NewGuid();
 
-                    var operation = RoomCreationQueue.Create(id, server.MessagingPeer.DisconnectCancellationToken);
+                    var operation = RoomCreationQueue.Create(roomID, server.MessagingPeer.DisconnectCancellationToken);
 
                     //Forward Request to Relay
                     {
-                        var request = new CreateRoomCommand(id, message.Parameters);
+                        var request = new CreateRoomCommand(applicationID, roomID, message.Parameters);
                         server.MessagingPeer.SendMessage(request);
                     }
 
@@ -599,7 +646,7 @@ namespace Wsla.Server
                         throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
                     }
 
-                    server.CreateRoom(id, Confirmation.Port, message.Parameters, 1);
+                    server.CreateRoom(applicationID, roomID, Confirmation.Port, message.Parameters, 1);
 
                     return new RoomConnectionInfo(server.Address, Confirmation.Port);
                 }
@@ -607,9 +654,12 @@ namespace Wsla.Server
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
                 public List<RoomListEntryInfo> ListRooms(ListRoomsRequest request)
                 {
+                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
+
                     var list = new List<RoomListEntryInfo>();
 
-                    Browser.ListRooms(request.Regions, list);
+                    Browser.ListRooms(applicationID, request.Regions, list);
 
                     return list;
                 }
@@ -617,16 +667,19 @@ namespace Wsla.Server
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.FindRoom)]
                 public async Task<RoomConnectionInfo?> FindRoom(FindRoomRequest request)
                 {
+                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
+
                     //Try Find Existing Room
                     {
-                        if (Browser.TryFindFreeRoom(request.Regions, 1, out var room))
+                        if (Browser.TryFindFreeRoom(applicationID, request.Regions, 1, out var room))
                             return room.GetConnectionInfo();
                     }
 
                     //Try Create Room
                     if (request.CreateRoom.HasValue)
                     {
-                        var create = new CreateRoomRequest(request.Regions, request.CreateRoom.Value);
+                        var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
 
                         return await CreateRoom(create);
                     }

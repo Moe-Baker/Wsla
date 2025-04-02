@@ -12,7 +12,7 @@ namespace Wsla.Unity
     partial class NetworkAPI
     {
         [Serializable]
-        public struct GameIDProperty
+        public struct ApplicationIDProperty
         {
             [field: SerializeField]
             public bool Override { get; private set; }
@@ -24,7 +24,7 @@ namespace Wsla.Unity
 
             public FixedString<FS20> Value { get; private set; }
 
-            internal GameIDProperty Initialize()
+            internal ApplicationIDProperty Initialize()
             {
                 if (Override)
                     Value = Manual;
@@ -43,7 +43,7 @@ namespace Wsla.Unity
             }
 
 #if UNITY_EDITOR
-            [CustomPropertyDrawer(typeof(GameIDProperty))]
+            [CustomPropertyDrawer(typeof(ApplicationIDProperty))]
             class Drawer : PropertyDrawer
             {
                 public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
@@ -53,7 +53,7 @@ namespace Wsla.Unity
 
                 public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
                 {
-                    var Override = property.FindBackingFieldRelative(nameof(GameIDProperty.Override));
+                    var Override = property.FindBackingFieldRelative(nameof(ApplicationIDProperty.Override));
 
                     //Draw Checkbox
                     {
@@ -75,7 +75,7 @@ namespace Wsla.Unity
 
                         //Field
                         {
-                            var Manual = property.FindPropertyRelative(nameof(GameIDProperty.Manual));
+                            var Manual = property.FindPropertyRelative(nameof(ApplicationIDProperty.Manual));
 
                             Manual.stringValue = EditorGUI.TextField(rect, Manual.stringValue);
                         }

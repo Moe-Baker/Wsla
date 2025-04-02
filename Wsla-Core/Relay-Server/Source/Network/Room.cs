@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -13,7 +12,8 @@ namespace Wsla.Server
 {
     public class Room : IDisposable
     {
-        public Guid ID { get; }
+        public ApplicationID ApplicationID { get; }
+        public Guid RoomID { get; }
 
         RoomThreadDispatcher.Processor? ThreadProcessor;
         internal RoomThreadDispatcher.Processor.PoolsProperty Pools => ThreadProcessor.Pools;
@@ -437,7 +437,7 @@ namespace Wsla.Server
                         Lock = Room.Properties.IsLocked,
                     };
 
-                    RelayServer.Matchmaking.Updates.Add(Room.ID, change);
+                    RelayServer.Matchmaking.Updates.Add(Room.RoomID, change);
                 }
             }
             void DisconnectHandler(NetPeer peer, DisconnectInfo info)
@@ -531,7 +531,7 @@ namespace Wsla.Server
                             Occupancy = Room.Properties.Occupancy,
                         };
 
-                        RelayServer.Matchmaking.Updates.Add(Room.ID, change);
+                        RelayServer.Matchmaking.Updates.Add(Room.RoomID, change);
                     }
                 }
             }
@@ -1120,9 +1120,10 @@ namespace Wsla.Server
             Entities.Dispose();
         }
 
-        public Room(Guid id, CreateRoomParameters parameters)
+        public Room(ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters parameters)
         {
-            this.ID = id;
+            this.RoomID = RoomID;
+            this.ApplicationID = ApplicationID;
 
             Properties = new PropertiesProperty(this, parameters);
             InactivityMonitor = new InactivityMonitorProperty(this);

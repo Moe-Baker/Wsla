@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Wsla
@@ -49,6 +51,32 @@ namespace Wsla
             {
                 NetworkLog.Error(ex);
             }
+        }
+
+        public static string FormatString<T>(this IEnumerable<T> collection)
+        {
+            return FormatString(collection, x => x.ToString());
+        }
+        public static string FormatString<T>(this IEnumerable<T> collection, Func<T, string> formatter)
+        {
+            var builder = new StringBuilder();
+
+            builder.Append('[');
+
+            var index = 0;
+            foreach (var element in collection)
+            {
+                if (index is not 0)
+                    builder.Append(", ");
+
+                builder.Append(formatter(element));
+
+                index += 1;
+            }
+
+            builder.Append(']');
+
+            return builder.ToString();
         }
     }
 }

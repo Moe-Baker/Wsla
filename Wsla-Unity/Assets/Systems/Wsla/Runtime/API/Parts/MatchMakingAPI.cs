@@ -19,17 +19,16 @@ namespace Wsla.Unity
 
             Regions = response.Value;
 
-            NetworkLog.Trace($"Region Servers ({Regions.Count})");
-
-            foreach (var region in Regions)
-                NetworkLog.Trace($"Region: {region}");
+            NetworkLog.Trace($"Region Servers {Regions.FormatString()}");
 
             return WslaResponse<WslaError>.Success;
         }
 
         public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
         {
-            var request = new CreateRoomRequest(regions, parameters);
+            NetworkLog.Info(API.ApplicationID.Value);
+
+            var request = new CreateRoomRequest(API.ApplicationID.Value, regions, parameters);
             return CreateRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(CreateRoomRequest request)
@@ -46,7 +45,7 @@ namespace Wsla.Unity
 
         public Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(SparseArray<ServerRegion> regions, CreateRoomParameters? create = default)
         {
-            var request = new FindRoomRequest(regions, create);
+            var request = new FindRoomRequest(API.ApplicationID.Value, regions, create);
             return FindRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(FindRoomRequest request)
@@ -66,7 +65,7 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(SparseArray<ServerRegion> regions)
         {
-            var request = new ListRoomsRequest(regions);
+            var request = new ListRoomsRequest(API.ApplicationID.Value, regions);
 
             var response = await API.REST.POST<ListRoomsRequest, List<RoomListEntryInfo>>(Constants.RestRoutes.ListRooms, request);
 
@@ -129,7 +128,7 @@ namespace Wsla.Unity
 
             //Send Request
             {
-                var request = new StartMatchMakingRequest(Regions);
+                var request = new StartMatchMakingRequest(API.ApplicationID.Value, Regions);
                 await Client.SendMessageAsync(request);
             }
 

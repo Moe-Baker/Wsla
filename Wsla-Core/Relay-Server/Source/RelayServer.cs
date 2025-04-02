@@ -30,7 +30,7 @@ namespace Wsla.Server
         }
 
         public static ConfigurationProperty Configuration { get; private set; }
-        public class ConfigurationProperty : ServerConfigurationData
+        public class ConfigurationProperty
         {
             public IPAddress CoordinatorAddress { get; init; }
 
@@ -45,14 +45,12 @@ namespace Wsla.Server
             public static async Task<ConfigurationProperty> Create(Data data)
             {
                 IPAddress CoordinatorAddress;
-
                 //Resolve Coordinator Hostname
                 {
                     CoordinatorAddress = await ResolveHostName(data.CoordinatorHostname);
                 }
 
                 IPAddress PublicAddress;
-
                 //Resolve Public Address
                 {
                     if (string.IsNullOrEmpty(data.PublicHostname))
@@ -61,10 +59,13 @@ namespace Wsla.Server
                         PublicAddress = await ResolveHostName(data.PublicHostname);
                 }
 
+                int RealtimeThreadAllowance;
                 //Validate Realtime Thread Allowance
                 {
                     if (data.RealtimeThreadAllowance is 0)
-                        data.RealtimeThreadAllowance = Environment.ProcessorCount;
+                        RealtimeThreadAllowance = Environment.ProcessorCount;
+                    else
+                        RealtimeThreadAllowance = data.RealtimeThreadAllowance;
                 }
 
                 return new ConfigurationProperty()
@@ -77,7 +78,7 @@ namespace Wsla.Server
                     PublicAddress = PublicAddress,
 
                     RealtimeFixedTime = data.RealtimeFixedTime,
-                    RealtimeThreadAllowance = data.RealtimeThreadAllowance,
+                    RealtimeThreadAllowance = RealtimeThreadAllowance,
                 };
             }
 
@@ -100,24 +101,24 @@ namespace Wsla.Server
                 return collection[0];
             }
 
-            public class Data : ServerConfigurationData
+            public class Data
             {
-                [JsonInclude, JsonPropertyName("Coordinator Hostname")]
+                [JsonPropertyName("Coordinator Hostname")]
                 public string CoordinatorHostname;
 
-                [JsonInclude, JsonPropertyName("Realtime Thread Allowance")]
+                [JsonPropertyName("Realtime Thread Allowance")]
                 public int RealtimeThreadAllowance;
 
-                [JsonInclude, JsonPropertyName("Realtime Fixed Time")]
+                [JsonPropertyName("Realtime Fixed Time")]
                 public ushort RealtimeFixedTime;
 
-                [JsonInclude, JsonPropertyName("Region")]
+                [JsonPropertyName("Region")]
                 public ServerRegion Region;
 
-                [JsonInclude, JsonPropertyName("ID")]
+                [JsonPropertyName("ID")]
                 public int ID;
 
-                [JsonInclude, JsonPropertyName("Public Hostname")]
+                [JsonPropertyName("Public Hostname")]
                 public string PublicHostname;
             }
         }
@@ -147,7 +148,7 @@ namespace Wsla.Server
 
             public static Room CreateRoom(CreateRoomCommand command)
             {
-                var instance = new Room(command.ID, command.Parameters);
+                var instance = new Room(command.ApplicationID, command.RoomID, command.Parameters);
 
                 instance.Start(ThreadDispatcher);
 
@@ -327,7 +328,7 @@ namespace Wsla.Server
 
                     RegisterRoom(room);
 
-                    var confirmation = new CreateRoomConfirmation(room.ID, room.Transport.Port);
+                    var confirmation = new CreateRoomConfirmation(room.RoomID, room.Transport.Port);
                     Messaging.Send(confirmation);
                 }
             }
@@ -365,9 +366,9 @@ namespace Wsla.Server
                         return false;
                 }
 
-                Updates.Remove(room.ID);
+                Updates.Remove(room.RoomID);
 
-                var request = new RemoveRoomRequest(room.ID);
+                var request = new RemoveRoomRequest(room.RoomID);
                 Messaging.Send(request);
 
                 return true;
@@ -395,7 +396,7 @@ namespace Wsla.Server
                     foreach (var room in Rooms)
                     {
                         var state = room.Properties.ReadState();
-                        var data = new RoomMatchmakerEntryData(room.ID, room.Transport.Port, room.Properties.Privacy, state);
+                        var data = new RoomMatchmakerEntryData(room.ApplicationID, room.RoomID, room.Transport.Port, room.Properties.Privacy, state);
                         list.Add(data);
                     }
                 }

@@ -4,15 +4,19 @@ namespace Wsla
 {
     public struct StartMatchMakingRequest : IAutoNetworkSerialization
     {
+        public FixedString<FS20> Application;
+
         public SparseArray<ServerRegion> Regions;
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref Application);
             context.Select(ref Regions);
         }
 
-        public StartMatchMakingRequest(SparseArray<ServerRegion> Regions)
+        public StartMatchMakingRequest(FixedString<FS20> Application, SparseArray<ServerRegion> Regions)
         {
+            this.Application = Application;
             this.Regions = Regions;
         }
     }

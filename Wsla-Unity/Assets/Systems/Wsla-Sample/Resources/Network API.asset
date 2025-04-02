@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <CoordinatorAddress>k__BackingField:
     <Hostname>k__BackingField: 10.0.0.10
-  <GameID>k__BackingField:
-    <Override>k__BackingField: 0
-    Manual: 
+  <ApplicationID>k__BackingField:
+    <Override>k__BackingField: 1
+    Manual: Wsla-Sample
   <GameVersion>k__BackingField:
     <Override>k__BackingField: 0
     Major: 0

@@ -3,5 +3,12 @@
   "Coordinator Hostname": "10.0.0.10",
 
   //Thread Count for Realtime Communication, 0 equals System Processor Count
-  "Realtime Thread Allowance": 0
+  "Realtime Thread Allowance": 0,
+
+  "Applications":
+  [
+    {
+      "Name": "Wsla-Sample"
+    }
+  ]
 }
