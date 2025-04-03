@@ -92,10 +92,10 @@ namespace Wsla.Server
             //Copy Buffer
             if (Input.AvailableBytes > 0 && payload.Stream is not null)
             {
-                var source = Input.PeekAvailableSpan();
+                var source = Input.PeekAvailableMemory();
 
                 payload.Stream.SetPosition(0);
-                var destination = payload.Stream.PopSpan(source.Length);
+                var destination = payload.Stream.PopMemory(source.Length);
 
                 source.CopyTo(destination);
             }
@@ -129,8 +129,8 @@ namespace Wsla.Server
                 //Write Payload
                 if (payload.Stream is not null)
                 {
-                    var source = payload.Stream.PeekAllocatedSpan();
-                    var destination = output.PopSpan(source.Length);
+                    var source = payload.Stream.PeekAllocatedMemory();
+                    var destination = output.PopMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }

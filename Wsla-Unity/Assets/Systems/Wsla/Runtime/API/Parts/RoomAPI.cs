@@ -541,7 +541,7 @@ namespace Wsla.Unity
                 }
 
                 //Despawn Instructed Entities
-                while (reader.Available > 0)
+                while (reader.AvailableBytes > 0)
                 {
                     var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
                     var behaviour = NetworkSerializer.ReadValue<EntityDisconnectBehaviour>(reader);
@@ -623,7 +623,6 @@ namespace Wsla.Unity
                 {
                     var definition = NetworkSerializer.ReadValue<NetworkEntityDefinition>(reader);
                     var instance = Assimilate(definition);
-                    instance.InvokeTraitReader(reader);
                     list.Add(instance);
                 }
             }
@@ -637,8 +636,6 @@ namespace Wsla.Unity
                 internal NetworkEntityID Token;
                 internal NetworkEntityResource Resource;
                 internal NetworkEntityAuthorityMode Authority;
-
-                internal NetDataWriter TraitWriter;
 
                 public SpawnOptions SetResource(NetworkEntityResource value)
                 {
@@ -668,12 +665,6 @@ namespace Wsla.Unity
                     }
 
                     Authority = mode;
-                    return this;
-                }
-
-                public SpawnOptions WriteTrait<T>(in T value)
-                {
-                    NetworkSerializer.WriteValue(in value, TraitWriter);
                     return this;
                 }
 
@@ -709,13 +700,6 @@ namespace Wsla.Unity
                         var request = new SpawnPrefabEntityRequest(Token, Resource, Authority, Room.Scene.Version);
                         NetworkSerializer.WriteHeader(in request, writer);
 
-                        //Write Attribute
-                        {
-                            var source = TraitWriter.PeekAllocatedSpan();
-                            var destination = writer.PopSpan(source.Length);
-                            source.CopyTo(destination);
-                        }
-
                         Room.Transport.SendWriter(in writer);
                     }
 
@@ -732,11 +716,7 @@ namespace Wsla.Unity
                     Authority = NetworkEntityAuthorityMode.Explicit;
 
                     ResourceAssigned = false;
-
-                    TraitWriter = TraitWriterPool.Take();
                 }
-
-                static SinglePacketWriter TraitWriterPool = SinglePacketWriter.Create(512);
             }
 
             public void Despawn(NetworkEntity entity)
@@ -805,8 +785,6 @@ namespace Wsla.Unity
 
                 var instance = Assimilate(definition);
 
-                instance.InvokeTraitReader(reader);
-
                 instance.Spawn();
                 instance.Replicate();
             }
@@ -857,12 +835,6 @@ namespace Wsla.Unity
                 var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
 
                 var instance = Assimilate(definition);
-
-                //Read Attribute
-                {
-                    options.TraitWriter.SetPosition(0);
-                    instance.InvokeTraitReader(options.TraitWriter);
-                }
 
                 instance.Spawn();
 

@@ -3,7 +3,7 @@ using UnityEngine;
 using Wsla;
 using Wsla.Unity;
 
-public partial class Player : NetworkBehaviour, ITraitHandler<Vector3>
+public partial class Player : NetworkBehaviour
 {
     [SerializeField]
     float MovementSpeed = 5f;
@@ -31,16 +31,9 @@ public partial class Player : NetworkBehaviour, ITraitHandler<Vector3>
     {
         base.Set(reference);
 
-        Network.Entity.AssignTraitHandler(this);
-
         MoveIndex = Animator.IndexFloat("Move");
 
         Network.Entity.OnSpawn += SpawnCallback;
-    }
-
-    public void ApplyTrait(Vector3 value)
-    {
-        transform.position = value;
     }
 
     void SpawnCallback()

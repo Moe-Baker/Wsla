@@ -5,40 +5,41 @@ namespace Wsla.Serialization
     public interface INetworkStream
     {
         int Position { get; set; }
-        int Available { get; }
+        int Capacity { get; }
+        int Available => (Capacity - Position);
 
         void EnsureFit(int extra);
 
-        Span<byte> GetSpan(int start, int length);
+        Memory<byte> GetMemory(int start, int length);
     }
 
     public static class NetworkStreamExtensions
     {
-        public static Span<byte> PeekAvailableSpan<TStream>(this TStream stream)
+        public static Memory<byte> PeekAvailableMemory<TStream>(this TStream stream)
             where TStream : INetworkStream
         {
-            return stream.GetSpan(stream.Position, stream.Available);
+            return stream.GetMemory(stream.Position, stream.Available);
         }
-        public static Span<byte> PopAvailableSpan<TStream>(this TStream stream)
+        public static Memory<byte> PopAvailableMemory<TStream>(this TStream stream)
             where TStream : INetworkStream
         {
-            var span = PeekAvailableSpan(stream);
+            var span = PeekAvailableMemory(stream);
             stream.Position += span.Length;
             return span;
         }
 
-        public static Span<byte> PeekAllocatedSpan<TStream>(this TStream stream)
+        public static Memory<byte> PeekAllocatedMemory<TStream>(this TStream stream)
             where TStream : INetworkStream
         {
-            return stream.GetSpan(0, stream.Position);
+            return stream.GetMemory(0, stream.Position);
         }
 
-        public static Span<byte> PopSpan<TStream>(this TStream stream, int length)
+        public static Memory<byte> PopMemory<TStream>(this TStream stream, int length)
             where TStream : INetworkStream
         {
             stream.EnsureFit(length);
 
-            var buffer = stream.GetSpan(stream.Position, length);
+            var buffer = stream.GetMemory(stream.Position, length);
             stream.Position += length;
             return buffer;
         }
@@ -48,9 +49,9 @@ namespace Wsla.Serialization
         {
             stream.EnsureFit(1);
 
-            var buffer = stream.GetSpan(stream.Position, 1);
+            var buffer = stream.GetMemory(stream.Position, 1);
             stream.Position += 1;
-            return ref buffer[0];
+            return ref buffer.Span[0];
         }
     }
 }

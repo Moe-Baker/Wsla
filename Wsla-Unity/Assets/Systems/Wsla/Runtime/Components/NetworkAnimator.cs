@@ -400,7 +400,7 @@ namespace Wsla.Unity
                 //Bools
                 {
                     var bytes = BitStream.BitsToBytes(Bools.Length);
-                    var buffer = stream.PopSpan(bytes);
+                    var buffer = stream.PopMemory(bytes).Span;
                     var bits = new BitStream(buffer);
 
                     WriteBoolsState(ref bits, ref mask);
@@ -417,7 +417,7 @@ namespace Wsla.Unity
                 //Bools
                 {
                     var bytes = BitStream.BitsToBytes(Bools.Length);
-                    var buffer = stream.PopSpan(bytes);
+                    var buffer = stream.PopMemory(bytes).Span;
                     var bits = new BitStream(buffer);
 
                     ReadBoolsState(ref bits, ref mask);
@@ -764,7 +764,7 @@ namespace Wsla.Unity
         {
             var length = BitStream.BitsToBytes(Parameters.Count + Layers.Count);
 
-            var buffer = stream.PopSpan(length);
+            var buffer = stream.PopMemory(length).Span;
 
             return new BitStream(buffer);
         }

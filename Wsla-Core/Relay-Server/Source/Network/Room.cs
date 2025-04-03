@@ -647,9 +647,6 @@ namespace Wsla.Server
 
                 var entity = new NetworkEntity(Room, message.SpawnToken, NetworkEntityOrigin.Prefab, message.Resource, sender, message.Authority);
 
-                //Read Trait if any
-                entity.AssignTrait(reader, reader.Available);
-
                 Register(entity);
 
                 //Respond to Sender
@@ -664,8 +661,6 @@ namespace Wsla.Server
 
                     var command = new SpawnPrefabEntityCommand(entity.ID, entity.Resource, entity.Authority, entity.Owner.ID);
                     NetworkSerializer.WriteHeader(in command, writer);
-
-                    entity.WriteTrait(writer);
 
                     Transport.BroadcastWriter(writer, except: sender);
                 }
@@ -870,8 +865,8 @@ namespace Wsla.Server
 
                 //Write Arguments
                 {
-                    var source = input.PeekAvailableSpan();
-                    var destination = output.PopSpan(source.Length);
+                    var source = input.PeekAvailableMemory();
+                    var destination = output.PopMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }
@@ -938,8 +933,8 @@ namespace Wsla.Server
 
                 //Write Value
                 {
-                    var source = input.PeekAvailableSpan();
-                    var destination = output.PopSpan(source.Length);
+                    var source = input.PeekAvailableMemory();
+                    var destination = output.PopMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }

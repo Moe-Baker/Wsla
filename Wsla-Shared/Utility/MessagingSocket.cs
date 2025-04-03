@@ -46,7 +46,7 @@ namespace Wsla
         #region Send
         SemaphoreSlim SendLock;
 
-        NetDataWriter SendBuffer;
+        INetworkStream SendBuffer;
 
         public void SendMessage<[NetworkSerializationMarker] T>(T data) => SendMessageAsync(data).Forget();
         public async Task SendMessageAsync<[NetworkSerializationMarker] T>(T data)
@@ -55,12 +55,11 @@ namespace Wsla
             {
                 await SendLock.WaitAsync(DisconnectCancellationToken);
 
-                ArraySegment<byte> LengthBuffer;
+                Memory<byte> LengthBuffer;
 
                 //Allocate Length
                 {
-                    LengthBuffer = new ArraySegment<byte>(SendBuffer.Data, SendBuffer.Position, LengthHeaderSize);
-                    SendBuffer.Position += LengthHeaderSize;
+                    LengthBuffer = SendBuffer.PopMemory(LengthHeaderSize);
                 }
 
                 NetworkSerializer.WriteHeader(in data, SendBuffer);
@@ -69,11 +68,11 @@ namespace Wsla
                 {
                     var length = (ushort)(SendBuffer.Position - LengthHeaderSize);
 
-                    if (BitConverter.TryWriteBytes(LengthBuffer, length) is false)
+                    if (BitConverter.TryWriteBytes(LengthBuffer.Span, length) is false)
                         throw new NotImplementedException();
                 }
 
-                var memory = SendBuffer.Data.AsMemory(0, SendBuffer.Position);
+                var memory = SendBuffer.PeekAllocatedMemory();
                 await Socket.SendAsync(memory, SocketFlags.None, DisconnectCancellationToken);
                 if (DisconnectCancellationToken.IsCancellationRequested)
                     return;
@@ -97,8 +96,7 @@ namespace Wsla
             }
             finally
             {
-                SendBuffer.Reset();
-
+                SendBuffer.Position = 0;
                 SendLock.Release();
             }
         }
@@ -138,7 +136,7 @@ namespace Wsla
         #endregion
 
         #region Receive
-        NetDataWriter ReceiveBuffer;
+        INetworkStream ReceiveBuffer;
 
         protected async Task Receive(CancellationToken cancellation)
         {
@@ -148,7 +146,7 @@ namespace Wsla
                 {
                     ReceiveBuffer.EnsureFit(100);
 
-                    var memory = ReceiveBuffer.Data.AsMemory(ReceiveBuffer.Position);
+                    var memory = ReceiveBuffer.PeekAvailableMemory();
 
                     var read = await Socket.ReceiveAsync(memory, SocketFlags.None, cancellation);
                     if (cancellation.IsCancellationRequested)
@@ -210,8 +208,8 @@ namespace Wsla
             //Read Length
             {
                 available -= LengthHeaderSize;
-                var buffer = ReceiveBuffer.PopSpan(LengthHeaderSize);
-                length = BitConverter.ToUInt16(buffer);
+                var buffer = ReceiveBuffer.PopMemory(LengthHeaderSize);
+                length = BitConverter.ToUInt16(buffer.Span);
             }
 
             if (available < length)
@@ -250,16 +248,12 @@ namespace Wsla
                 //Most likely a fragment from the next message
                 //TCP is a stream protocol after all
 
-                fixed (byte* destination = ReceiveBuffer.Data)
-                {
-                    var source = destination + ReceiveBuffer.Length; //Where to copy from
-                    var capacity = ReceiveBuffer.Capacity; //Length of the destination
-                    var count = cursor - ReceiveBuffer.Position; //Bytes to copy
+                var total = ReceiveBuffer.GetMemory(0, ReceiveBuffer.Capacity);
+                var remaining = ReceiveBuffer.GetMemory(ReceiveBuffer.Position, (cursor - ReceiveBuffer.Position));
 
-                    Buffer.MemoryCopy(source, destination, capacity, count);
+                remaining.CopyTo(total); //Move the remaining data back to the start, discarding any already read data
 
-                    ReceiveBuffer.Position = count;
-                }
+                ReceiveBuffer.Position = remaining.Length; //Set the pointer to the end of the remaining data so that we continue reading it
             }
             else
             {

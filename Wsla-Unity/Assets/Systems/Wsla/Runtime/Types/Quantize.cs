@@ -345,7 +345,7 @@ namespace Wsla.Unity
         static void Write<T>(INetworkStream stream, T value, int bytes)
             where T : unmanaged
         {
-            var buffer = stream.PopSpan(bytes);
+            var buffer = stream.PopMemory(bytes).Span;
 
             fixed (byte* destination = buffer)
             {
@@ -357,7 +357,7 @@ namespace Wsla.Unity
         {
             var value = default(T);
 
-            var buffer = stream.PopSpan(bytes);
+            var buffer = stream.PopMemory(bytes).Span;
 
             fixed (byte* source = buffer)
             {

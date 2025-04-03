@@ -66,9 +66,9 @@ namespace Wsla.Serialization
                 public static void Write<TValue>(in TValue value, INetworkStream stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.PopSpan(sizeof(TValue));
+                    var span = stream.PopMemory(sizeof(TValue));
 
-                    fixed (byte* destination = span)
+                    fixed (byte* destination = span.Span)
                     {
                         if (UseMemCopy)
                         {
@@ -87,9 +87,9 @@ namespace Wsla.Serialization
                 public static void Read<TValue>(ref TValue value, INetworkStream stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.PopSpan(sizeof(TValue));
+                    var span = stream.PopMemory(sizeof(TValue));
 
-                    fixed (byte* source = span)
+                    fixed (byte* source = span.Span)
                     {
                         if (UseMemCopy)
                         {
@@ -219,12 +219,12 @@ namespace Wsla.Serialization
                 /// <param name="stream"></param>
                 public static void Write(bool value, INetworkStream stream)
                 {
-                    var span = stream.PopSpan(1);
+                    var span = stream.PopMemory(1);
 
                     if (value)
-                        span[0] = Values.IsNull;
+                        span.Span[0] = Values.IsNull;
                     else
-                        span[0] = Values.NotNull;
+                        span.Span[0] = Values.NotNull;
                 }
 
                 /// <summary>
@@ -234,9 +234,9 @@ namespace Wsla.Serialization
                 /// <returns>true for null, false if not</returns>
                 public static bool Read(INetworkStream stream)
                 {
-                    var span = stream.PopSpan(1);
+                    var span = stream.PopMemory(1);
 
-                    if (span[0] == Values.IsNull)
+                    if (span.Span[0] == Values.IsNull)
                         return true;
                     else
                         return false;

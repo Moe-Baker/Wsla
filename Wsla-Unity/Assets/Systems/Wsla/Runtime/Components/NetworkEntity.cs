@@ -88,22 +88,6 @@ namespace Wsla.Unity
             }
         }
 
-        #region Trait
-        ITraitHandler TraitHandler;
-        public void AssignTraitHandler(ITraitHandler value)
-        {
-            TraitHandler = value;
-        }
-
-        internal void InvokeTraitReader(INetworkStream stream)
-        {
-            if (TraitHandler is null)
-                return;
-
-            TraitHandler.ReadTrait(stream);
-        }
-        #endregion
-
         #region Spawn
         public bool IsSpawned { get; private set; }
 

@@ -368,14 +368,14 @@ namespace Wsla
             buffer = buffer.Slice(0, length);
 
             //Pop (length header + characters buffer) size span
-            var destination = stream.PopSpan(1 + length);
+            var destination = stream.PopMemory(1 + length);
 
             //Write Length
-            destination[0] = length;
+            destination.Span[0] = length;
 
             //Write characters
             destination = destination.Slice(1, length);
-            buffer.CopyTo(destination);
+            buffer.CopyTo(destination.Span);
         }
         public override void Read(ref TString value, INetworkStream stream)
         {
@@ -387,10 +387,10 @@ namespace Wsla
                 return;
             }
 
-            var binary = stream.PopSpan(length);
+            var binary = stream.PopMemory(length);
 
             var characters = value.GetTotalSpan();
-            var count = Encoder.GetChars(binary, characters);
+            var count = Encoder.GetChars(binary.Span, characters);
             value.SetLength(count);
         }
     }

@@ -159,8 +159,8 @@ namespace Wsla.Unity
         {
             if (ValueWriter.Length > 0)
             {
-                var source = ValueWriter.PeekAllocatedSpan();
-                var destination = output.PopSpan(source.Length);
+                var source = ValueWriter.PeekAllocatedMemory().Span;
+                var destination = output.PopMemory(source.Length).Span;
                 source.CopyTo(destination);
             }
         }

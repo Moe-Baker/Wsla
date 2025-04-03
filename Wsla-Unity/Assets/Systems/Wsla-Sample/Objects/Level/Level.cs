@@ -96,7 +96,6 @@ public partial class Level : NetworkBehaviour
             Network.Room.Entities.Spawn()
                 .SetResource(new NetworkEntityResource(0))
                 .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-                .WriteTrait(new Vector3(UnityEngine.Random.Range(-5, 5), 0, UnityEngine.Random.Range(-5, 5)))
                 .SetAuthority(NetworkEntityAuthorityMode.Transferable)
                 .Send();
 

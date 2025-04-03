@@ -6,14 +6,16 @@ namespace LiteNetLib.Utils
 {
     partial class NetDataWriter : INetworkStream
     {
-        public int Position
+        int INetworkStream.Position
         {
             get => _position;
             set => _position = value;
         }
 
-        public int Available => _data.Length - _position;
+        int INetworkStream.Capacity => _data.Length;
 
-        public Span<byte> GetSpan(int start, int length) => Data.AsSpan(start, length);
+        Memory<byte> INetworkStream.GetMemory(int start, int length) => Data.AsMemory(start, length);
+
+        void INetworkStream.EnsureFit(int extra) => EnsureFit(extra);
     }
 }

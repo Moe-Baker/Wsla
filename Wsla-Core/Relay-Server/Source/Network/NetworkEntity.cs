@@ -36,48 +36,14 @@ namespace Wsla.Server
         internal RemoteSyncBufferCollection<NetworkVariableID> VariableBuffer;
         #endregion
 
-        #region Trait
-        public NetDataWriter? TraitWriter;
-        public bool HasTrait => TraitWriter is not null;
-
-        internal void AssignTrait(NetPacketReader reader, int length)
-        {
-            if (length is 0)
-                return;
-
-            TraitWriter = Room.Pools.MultiPackerWriter.Retrieve();
-
-            //Copy over data
-            {
-                var source = reader.PopAvailableSpan();
-                var destination = TraitWriter.PopSpan(source.Length);
-                source.CopyTo(destination);
-            }
-        }
-        #endregion
-
         public void WriteDefinition(NetDataWriter writer)
         {
             var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID, TransferToken);
             NetworkSerializer.WriteValue(in definition, writer);
-
-            WriteTrait(writer);
-        }
-        public void WriteTrait(NetDataWriter writer)
-        {
-            if (HasTrait)
-            {
-                var source = TraitWriter.PeekAllocatedSpan();
-                var destination = writer.PopSpan(source.Length);
-                source.CopyTo(destination);
-            }
         }
 
         public void Dispose()
         {
-            if (HasTrait)
-                Room.Pools.MultiPackerWriter.Return(TraitWriter);
-
             RpcBuffer.Dispose();
             VariableBuffer.Dispose();
         }

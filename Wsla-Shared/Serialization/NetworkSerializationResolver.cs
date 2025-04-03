@@ -238,8 +238,8 @@ namespace Wsla.Serialization
                 var length = Encoder.GetByteCount(value);
                 NetworkSerializer.Helper.Length.Write(length + 1, stream);
 
-                var buffer = stream.PopSpan(length);
-                Encoder.GetBytes(value, buffer);
+                var buffer = stream.PopMemory(length);
+                Encoder.GetBytes(value, buffer.Span);
             }
             else
             {
@@ -250,9 +250,9 @@ namespace Wsla.Serialization
                 var length = Encoder.GetBytes(value, buffer);
                 NetworkSerializer.Helper.Length.Write(length + 1, stream);
 
-                var destination = stream.PopSpan(length);
+                var destination = stream.PopMemory(length);
 
-                buffer.Slice(0, length).CopyTo(destination);
+                buffer.Slice(0, length).CopyTo(destination.Span);
             }
 
             var count = Encoder.GetByteCount(value);
@@ -270,9 +270,9 @@ namespace Wsla.Serialization
 
             length -= 1;
 
-            var span = stream.PopSpan(length);
+            var span = stream.PopMemory(length);
 
-            value = Encoder.GetString(span);
+            value = Encoder.GetString(span.Span);
         }
     }
 
@@ -305,9 +305,9 @@ namespace Wsla.Serialization
                 {
                     stream.PopByte() = V4ID;
 
-                    var span = stream.PopSpan(V4Size);
+                    var span = stream.PopMemory(V4Size);
 
-                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
+                    if (value.TryWriteBytes(span.Span, out var written) is false || written != span.Length)
                         throw new NotImplementedException();
                 }
                 break;
@@ -316,9 +316,9 @@ namespace Wsla.Serialization
                 {
                     stream.PopByte() = V6ID;
 
-                    var span = stream.PopSpan(V6Size);
+                    var span = stream.PopMemory(V6Size);
 
-                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
+                    if (value.TryWriteBytes(span.Span, out var written) is false || written != span.Length)
                         throw new NotImplementedException();
                 }
                 break;
@@ -335,15 +335,15 @@ namespace Wsla.Serialization
             {
                 case V4ID: //IPv4
                 {
-                    var span = stream.PopSpan(V4Size);
-                    value = new IPAddress(span);
+                    var span = stream.PopMemory(V4Size);
+                    value = new IPAddress(span.Span);
                 }
                 break;
 
                 case V6ID: //IPv6
                 {
-                    var span = stream.PopSpan(V6Size);
-                    value = new IPAddress(span);
+                    var span = stream.PopMemory(V6Size);
+                    value = new IPAddress(span.Span);
                 }
                 break;
             }

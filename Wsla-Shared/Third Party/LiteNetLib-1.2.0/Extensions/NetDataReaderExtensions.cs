@@ -12,15 +12,15 @@ namespace LiteNetLib.Utils
             set => _position = value;
         }
 
-        public int Available => _dataSize - _position;
+        int INetworkStream.Capacity => _dataSize;
 
-        public Span<byte> GetSpan(int start, int length) => _data.AsSpan(start, length);
+        Memory<byte> INetworkStream.GetMemory(int start, int length) => _data.AsMemory(start, length);
 
-        public void EnsureFit(int extra)
+        void INetworkStream.EnsureFit(int extra)
         {
 #if DEBUG
-            if (extra > Available)
-                throw new ArgumentOutOfRangeException($"Can't Read More Data than Availabile in Net Data Reader, Available: {Available}, Required: {extra}");
+            if (extra > AvailableBytes)
+                throw new ArgumentOutOfRangeException($"Can't Read More Data than Available in Net Data Reader, Available: {AvailableBytes}, Required: {extra}");
 #endif
         }
     }
