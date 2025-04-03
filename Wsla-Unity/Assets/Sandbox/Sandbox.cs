@@ -1,5 +1,6 @@
 using LiteNetLib.Utils;
 
+using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -15,9 +16,22 @@ public class Sandbox : MonoBehaviour
 {
     public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
     {
-        var collection = new int[] { 1, 2, 3, 4, 5 };
+        var collection = new AttributeCollection(10);
 
-        Debug.Log(collection.FormatString());
+        collection.SetValue("var1", 1);
+        collection.SetValue("var2", 2);
+        collection.SetValue("var3", 3);
+        collection.SetValue("var4", DateTime.Now);
+        collection.SetValue("var5", TimeSpan.FromSeconds(2.5));
+        collection.SetValue("var6", Guid.NewGuid());
+
+        var json = JsonSerializer.Serialize(collection, SharedAPI.JsonOptions);
+
+        Debug.Log(json);
+
+        var clone = JsonSerializer.Deserialize<AttributeCollection>(json, SharedAPI.JsonOptions);
+
+        Debug.Log(clone.Dictionary.FormatString());
 
         return ButtonFieldOperation.None;
     });

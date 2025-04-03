@@ -398,14 +398,18 @@ namespace Wsla
     public unsafe class FixedStringJsonConverter<TString> : JsonConverter<TString>
         where TString : IFixedString, new()
     {
-        public override TString Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override TString ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            if (reader.TokenType is JsonTokenType.Null)
-                return default;
+            return ReadValue(ref reader);
+        }
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, TString value, JsonSerializerOptions options)
+        {
+            var characters = value.AsSpan();
+            writer.WritePropertyName(characters);
+        }
 
-            if (reader.TokenType is not JsonTokenType.String)
-                throw new JsonException($"Cannot Convert {reader.TokenType} to Fixed String");
-
+        TString ReadValue(ref Utf8JsonReader reader)
+        {
             if (reader.ValueIsEscaped)
                 throw new JsonException($"Cannot Convert Escaped String to Fixed String");
 
@@ -446,9 +450,19 @@ namespace Wsla
             }
         }
 
+        public override TString Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType is JsonTokenType.Null)
+                return default;
+
+            if (reader.TokenType is not JsonTokenType.String)
+                throw new JsonException($"Cannot Convert {reader.TokenType} to Fixed String");
+
+            return ReadValue(ref reader);
+        }
         public override void Write(Utf8JsonWriter writer, TString value, JsonSerializerOptions options)
         {
-            var characters = value.GetUsedSpan();
+            var characters = value.AsSpan();
             writer.WriteStringValue(characters);
         }
     }

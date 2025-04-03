@@ -12,7 +12,7 @@ namespace Wsla
     [JsonConverter(typeof(WrapperJsonConverter))]
     public class AttributeCollection : IManualNetworkSerialization
     {
-        internal Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary;
+        public Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary;
 
         public bool TryGetValue(FixedString<FS20> key, out FixedString<FS40> value) => Dictionary.TryGetValue(key, out value);
 
@@ -86,7 +86,10 @@ namespace Wsla
             }
         }
 
-        public AttributeCollection() : this(CreateDictionary(0)) { }
+        public Dictionary<FixedString<FS20>, FixedString<FS40>>.Enumerator GetEnumerator() => Dictionary.GetEnumerator();
+
+        public AttributeCollection() : this(0) { }
+        public AttributeCollection(int capacity) : this(CreateDictionary(capacity)) { }
         public AttributeCollection(Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary)
         {
             this.Dictionary = Dictionary;
