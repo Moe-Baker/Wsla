@@ -373,7 +373,12 @@ namespace Wsla.Server
                 for (int i = 0; i < spawnTokens.Length; i++)
                     client.AddSpawnToken(spawnTokens[i]);
 
-                var peer = request.Accept(client);
+                var peer = request.Accept();
+
+                client.AssignPeer(peer);
+                peer.Tag = client;
+
+                ConnectHandler(peer);
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
@@ -389,7 +394,6 @@ namespace Wsla.Server
             void ConnectHandler(NetPeer peer)
             {
                 var client = RetrieveFromPeer(peer);
-                client.AssignPeer(peer);
 
                 NetworkLog.Info($"Client {client} Connected");
 
@@ -555,7 +559,7 @@ namespace Wsla.Server
                 foreach (var client in Collection)
                     return client;
 
-                throw new InvalidOperationException($"No Registerd Clients to Choose From");
+                throw new InvalidOperationException($"No Registered Clients to Choose From");
             }
 
             internal void WriteState(NetDataWriter writer)
@@ -583,7 +587,6 @@ namespace Wsla.Server
                 Versions = new VersionCollection(Capacity);
 
                 Transport.Listener.ConnectionRequestEvent += RequestHandler;
-                Transport.Listener.PeerConnectedEvent += ConnectHandler;
                 Transport.Listener.PeerDisconnectedEvent += DisconnectHandler;
             }
         }

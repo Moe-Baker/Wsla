@@ -157,9 +157,6 @@ namespace Wsla.Unity
                     }
 
                     handler(reader, channel, delivery);
-
-                    if (reader.KeepAlive is false)
-                        reader.Recycle();
                 }
 
                 public delegate void TypeDelegate<T>(ref T message, NetPacketReader reader, byte channel, DeliveryMethod delivery);
@@ -171,8 +168,44 @@ namespace Wsla.Unity
 
                     void Surrogate(NetPacketReader reader, byte channel, DeliveryMethod delivery)
                     {
-                        NetworkSerializer.ReadValue(reader, out T data);
-                        handler(ref data, reader, channel, delivery);
+                        try
+                        {
+                            NetworkSerializer.ReadValue(reader, out T data);
+                            handler(ref data, reader, channel, delivery);
+                        }
+                        catch (Exception ex)
+                        {
+                            NetworkLog.Error(ex);
+                        }
+                        finally
+                        {
+                            reader.Recycle();
+                        }
+                    }
+                }
+
+                public delegate UniTask AsyncTypeDelegate<T>(T message, NetPacketReader reader, byte channel, DeliveryMethod delivery);
+                public void RegisterAsync<[NetworkSerializationMarker] T>(AsyncTypeDelegate<T> handler)
+                {
+                    var id = NetworkTypes.Get<T>();
+
+                    Handlers[id] = Surrogate;
+
+                    async void Surrogate(NetPacketReader reader, byte channel, DeliveryMethod delivery)
+                    {
+                        try
+                        {
+                            NetworkSerializer.ReadValue(reader, out T data);
+                            await handler(data, reader, channel, delivery);
+                        }
+                        catch (Exception ex)
+                        {
+                            NetworkLog.Error(ex);
+                        }
+                        finally
+                        {
+                            reader.Recycle();
+                        }
                     }
                 }
 
@@ -425,11 +458,9 @@ namespace Wsla.Unity
 
             TransportProperty Transport => Room.Transport;
 
-            void ConnectionResponseHandler(ref ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            UniTask ConnectionResponseHandler(ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                reader.KeepAlive = true;
-
-                Room.ReadState(message, reader).Forget();
+                return Room.ReadState(message, reader);
             }
 
             internal void ReadState(NetPacketReader reader, ClientConnectionResponse message)
@@ -569,7 +600,7 @@ namespace Wsla.Unity
 
                 Collection = new ExpandArray<NetworkClient>(10, NetworkClientID.Max.Value, 10);
 
-                Transport.Dispatcher.Register<ClientConnectionResponse>(ConnectionResponseHandler);
+                Transport.Dispatcher.RegisterAsync<ClientConnectionResponse>(ConnectionResponseHandler);
 
                 Transport.Dispatcher.Register<ClientConnectMessage>(ConnectHandler);
                 Transport.Dispatcher.Register<ClientDisconnectMessage>(DisconnectHandler);
@@ -1302,8 +1333,6 @@ namespace Wsla.Unity
                 Scene.ApplyState();
             }
             Transport.Listener.Resume();
-
-            reader.Recycle();
         }
     }
 }

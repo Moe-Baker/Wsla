@@ -1,6 +1,5 @@
 ﻿using System.Net;
 using System.Threading;
-
 using LiteNetLib.Utils;
 
 namespace LiteNetLib
@@ -50,16 +49,37 @@ namespace LiteNetLib
             _listener = listener;
         }
 
+        public NetPeer AcceptIfKey(string key)
+        {
+            if (!TryActivate())
+                return null;
+            try
+            {
+                if (Data.GetString() == key)
+                    Result = ConnectionRequestResult.Accept;
+            }
+            catch
+            {
+                NetDebug.WriteError("[AC] Invalid incoming data");
+            }
+            if (Result == ConnectionRequestResult.Accept)
+                return _listener.OnConnectionSolved(this, null, 0, 0);
+
+            Result = ConnectionRequestResult.Reject;
+            _listener.OnConnectionSolved(this, null, 0, 0);
+            return null;
+        }
+
         /// <summary>
         /// Accept connection and get new NetPeer as result
         /// </summary>
         /// <returns>Connected NetPeer</returns>
-        public NetPeer Accept(object tag = null)
+        public NetPeer Accept()
         {
             if (!TryActivate())
                 return null;
             Result = ConnectionRequestResult.Accept;
-            return _listener.OnConnectionSolved(this, null, 0, 0, tag);
+            return _listener.OnConnectionSolved(this, null, 0, 0);
         }
 
         public void Reject(byte[] rejectData, int start, int length, bool force)
