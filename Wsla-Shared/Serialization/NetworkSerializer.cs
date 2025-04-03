@@ -91,11 +91,21 @@ namespace Wsla.Serialization
                 var entry = NetworkSerializationResolver.Implicit.Get(type);
                 entry.Write(value, ref stream);
             }
+            public static void WriteValue(Type type, object value, INetworkStream stream)
+            {
+                var source = BinarySource.From(stream);
+                WriteValue(type, value, ref source);
+            }
 
             public static object ReadValue(Type type, ref BinarySource stream)
             {
                 var entry = NetworkSerializationResolver.Implicit.Get(type);
                 return entry.Read(ref stream);
+            }
+            public static object ReadValue(Type type, INetworkStream stream)
+            {
+                var source = BinarySource.From(stream);
+                return ReadValue(type, ref source);
             }
         }
 

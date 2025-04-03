@@ -149,7 +149,7 @@ namespace Wsla
         }
     }
 
-    public struct FindRoomRequest
+    public struct FindRoomRequest : IAutoNetworkSerialization
     {
         public FixedString<FS20> Application;
 
@@ -157,6 +157,13 @@ namespace Wsla
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters? CreateRoom;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Application);
+            context.Select(ref Regions);
+            context.Select(ref CreateRoom);
+        }
 
         public FindRoomRequest(FixedString<FS20> Application, SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
         {

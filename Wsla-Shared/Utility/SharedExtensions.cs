@@ -59,6 +59,9 @@ namespace Wsla
         }
         public static string FormatString<T>(this IEnumerable<T> collection, Func<T, string> formatter)
         {
+            if (collection is null)
+                return "NULL";
+
             var builder = new StringBuilder();
 
             builder.Append('[');

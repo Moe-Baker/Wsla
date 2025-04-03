@@ -50,17 +50,14 @@ namespace Wsla.Unity
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(FindRoomRequest request)
         {
-            var response = await API.REST.POST<FindRoomRequest, RoomConnectionInfo?>(Constants.RestRoutes.FindRoom, request);
+            var response = await API.REST.POST<FindRoomRequest, RoomConnectionInfo>(Constants.RestRoutes.FindRoom, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
 
             var info = response.Value;
 
-            if (info.HasValue is false)
-                return WslaError.From(WslaErrorCode.NoRoomFound);
-
-            return info.Value;
+            return info;
         }
 
         public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(SparseArray<ServerRegion> regions)

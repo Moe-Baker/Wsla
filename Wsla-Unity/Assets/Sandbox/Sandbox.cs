@@ -1,4 +1,7 @@
+using LiteNetLib.Utils;
+
 using System;
+using System.Net;
 
 using Toolbox;
 
@@ -11,29 +14,27 @@ public class Sandbox : MonoBehaviour
 {
     public ButtonField Execute = ButtonField.Create<Sandbox>(self =>
     {
-        var source = BinarySource.From(stackalloc byte[200]);
+        RoomConnectionInfo? source = new RoomConnectionInfo(IPAddress.Loopback, 4550);
 
-        var request = new CreateRoomRequest()
-        {
-            Application = "My App",
-            Regions = (ServerRegion.Asia, ServerRegion.EU, ServerRegion.USA),
-            Parameters = new CreateRoomParameters()
-            {
-                Name = "My Room",
-                Capacity = 10,
-                Scene = NetworkSceneID.From(1),
-                Password = "Hello Password",
-                Privacy = RoomPrivacy.Private,
-                Lock = RoomLockPolicy.AfterFill,
-            }
-        };
+        var clone = Duplicate(source);
 
-        NetworkSerializer.WriteValue(request, ref source);
-
-        source.Position = 0;
-
-        var clone = NetworkSerializer.ReadValue<CreateRoomRequest>(ref source);
+        Debug.Log(clone);
 
         return ButtonFieldOperation.None;
     });
+
+    public static T Duplicate<[NetworkSerializationMarker] T>(T original)
+    {
+        var writer = new NetDataWriter(true, 512);
+
+        NetworkSerializer.WriteValue(in original, writer);
+
+        var reader = new NetDataReader(writer);
+
+        var clone = NetworkSerializer.ReadValue<T>(reader);
+
+        Debug.Assert(reader.Position == writer.Length);
+
+        return clone;
+    }
 }
