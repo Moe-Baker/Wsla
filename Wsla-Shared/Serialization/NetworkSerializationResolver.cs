@@ -40,6 +40,67 @@ namespace Wsla.Serialization
             return Instance;
         }
 
+        public static class Implicit
+        {
+            static Dictionary<Type, IEntry> Dictionary;
+            public interface IEntry
+            {
+                void Write(object value, INetworkStream stream);
+
+                object Read(INetworkStream stream);
+                void Read(ref object value, INetworkStream stream);
+            }
+            class Entry<T> : IEntry
+            {
+                NetworkSerializationResolver<T> Resolver;
+
+                public void Write(object value, INetworkStream stream)
+                {
+                    var cast = (T)value;
+                    Resolver.Write(in cast, stream);
+                }
+
+                public object Read(INetworkStream stream)
+                {
+                    var cast = default(T);
+                    Resolver.Read(ref cast, stream);
+                    return cast;
+                }
+                public void Read(ref object value, INetworkStream stream)
+                {
+                    var cast = (T)value;
+                    Resolver.Read(ref cast, stream);
+                    value = cast;
+                }
+
+                public Entry(NetworkSerializationResolver<T> Resolver)
+                {
+                    this.Resolver = Resolver;
+                }
+            }
+
+            public static IEntry Get(Type type)
+            {
+                if (Dictionary.TryGetValue(type, out var entry) is false)
+                    throw new ArgumentException($"No Implicit Serialization Resolver Registered for Type ({type})");
+
+                return entry;
+            }
+
+            public static void Register<T>(NetworkSerializationResolver<T> resolver)
+            {
+                var type = typeof(T);
+                var entry = new Entry<T>(resolver);
+
+                Dictionary[type] = entry;
+            }
+
+            static Implicit()
+            {
+                Dictionary = new();
+            }
+        }
+
         internal static class Collection<TValue>
         {
             internal static NetworkSerializationResolver<TValue> Instance;
