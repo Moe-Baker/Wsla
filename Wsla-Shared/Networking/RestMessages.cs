@@ -6,7 +6,7 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    public struct CreateRoomRequest
+    public struct CreateRoomRequest : IAutoNetworkSerialization
     {
         public FixedString<FS20> Application;
 
@@ -14,6 +14,13 @@ namespace Wsla
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters Parameters;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Application);
+            context.Select(ref Regions);
+            context.Select(ref Parameters);
+        }
 
         public CreateRoomRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
         {

@@ -357,7 +357,7 @@ namespace Wsla
     {
         Encoding Encoder => Encoding.UTF8;
 
-        public override void Write(in TString value, INetworkStream stream)
+        public override void Write(in TString value, ref BinarySource stream)
         {
             var source = value.GetUsedSpan();
 
@@ -368,18 +368,18 @@ namespace Wsla
             buffer = buffer.Slice(0, length);
 
             //Pop (length header + characters buffer) size span
-            var destination = stream.PopMemory(1 + length);
+            var destination = stream.AllocateSpan(1 + length);
 
             //Write Length
-            destination.Span[0] = length;
+            destination[0] = length;
 
             //Write characters
             destination = destination.Slice(1, length);
-            buffer.CopyTo(destination.Span);
+            buffer.CopyTo(destination);
         }
-        public override void Read(ref TString value, INetworkStream stream)
+        public override void Read(ref TString value, ref BinarySource stream)
         {
-            var length = stream.PopByte();
+            var length = stream.ReadByte();
 
             if (length is 0)
             {
@@ -387,10 +387,10 @@ namespace Wsla
                 return;
             }
 
-            var binary = stream.PopMemory(length);
+            var binary = stream.ReadSpan(length);
 
             var characters = value.GetTotalSpan();
-            var count = Encoder.GetChars(binary.Span, characters);
+            var count = Encoder.GetChars(binary, characters);
             value.SetLength(count);
         }
     }

@@ -7,6 +7,7 @@
 		<Nullable>enable</Nullable>
 		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 	</PropertyGroup>
 
 	<ItemGroup>

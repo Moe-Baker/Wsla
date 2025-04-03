@@ -53,19 +53,19 @@ namespace Wsla
             Dictionary[key] = text;
         }
 
-        public void Write(INetworkStream stream)
+        public void Write(ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue((byte)Dictionary.Count, stream);
+            NetworkSerializer.WriteValue((byte)Dictionary.Count, ref stream);
 
             foreach (var (key, value) in Dictionary)
             {
-                NetworkSerializer.WriteValue(in key, stream);
-                NetworkSerializer.WriteValue(in value, stream);
+                NetworkSerializer.WriteValue(in key, ref stream);
+                NetworkSerializer.WriteValue(in value, ref stream);
             }
         }
-        public void Read(INetworkStream stream)
+        public void Read(ref BinarySource stream)
         {
-            var length = NetworkSerializer.ReadValue<byte>(stream);
+            var length = NetworkSerializer.ReadValue<byte>(ref stream);
 
             if (Dictionary is null)
             {
@@ -79,8 +79,8 @@ namespace Wsla
 
             for (int i = 0; i < length; i++)
             {
-                var key = NetworkSerializer.ReadValue<FixedString<FS20>>(stream);
-                var value = NetworkSerializer.ReadValue<FixedString<FS40>>(stream);
+                var key = NetworkSerializer.ReadValue<FixedString<FS20>>(ref stream);
+                var value = NetworkSerializer.ReadValue<FixedString<FS40>>(ref stream);
 
                 Dictionary.Add(key, value);
             }

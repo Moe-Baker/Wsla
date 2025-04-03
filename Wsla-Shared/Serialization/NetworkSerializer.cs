@@ -7,44 +7,96 @@ namespace Wsla.Serialization
 {
     public static class NetworkSerializer
     {
-        public static void WriteValue<[NetworkSerializationMarker] TValue>(in TValue value, INetworkStream stream)
+        public static class Source
+        {
+
+        }
+
+        public static void WriteValue<[NetworkSerializationMarker] TValue>(in TValue value, ref BinarySource stream)
         {
             var resolver = NetworkSerializationResolver.Retrieve<TValue>();
 
-            resolver.Write(in value, stream);
+            resolver.Write(in value, ref stream);
+        }
+        public static void WriteValue<[NetworkSerializationMarker] TValue>(in TValue value, INetworkStream stream)
+        {
+            var source = new BinarySource(stream);
+
+            WriteValue(in value, ref source);
         }
 
-        public static void WriteHeader<[NetworkSerializationMarker] TValue>(in TValue value, INetworkStream stream)
+        public static void WriteHeader<[NetworkSerializationMarker] TValue>(in TValue value, ref BinarySource stream)
         {
             var type = typeof(TValue);
 
-            WriteValue(in type, stream);
-            WriteValue(in value, stream);
+            WriteValue(in type, ref stream);
+            WriteValue(in value, ref stream);
+        }
+        public static void WriteHeader<[NetworkSerializationMarker] TValue>(in TValue value, INetworkStream stream)
+        {
+            var source = new BinarySource(stream);
+
+            WriteHeader(in value, ref source);
         }
 
-        public static void ReadValue<[NetworkSerializationMarker] TValue>(ref TValue value, INetworkStream stream)
+        public static void ReadValue<[NetworkSerializationMarker] TValue>(ref TValue value, ref BinarySource stream)
         {
             var resolver = NetworkSerializationResolver.Retrieve<TValue>();
 
-            resolver.Read(ref value, stream);
+            resolver.Read(ref value, ref stream);
         }
-        public static void ReadValue<[NetworkSerializationMarker] TValue>(INetworkStream stream, out TValue value)
+        public static void ReadValue<[NetworkSerializationMarker] TValue>(ref TValue value, INetworkStream stream)
+        {
+            var source = new BinarySource(stream);
+
+            ReadValue(ref value, ref source);
+        }
+
+        public static void ReadValue<[NetworkSerializationMarker] TValue>(ref BinarySource stream, out TValue value)
         {
             value = default;
 
             var resolver = NetworkSerializationResolver.Retrieve<TValue>();
 
-            resolver.Read(ref value, stream);
+            resolver.Read(ref value, ref stream);
         }
-        public static TValue ReadValue<[NetworkSerializationMarker] TValue>(INetworkStream stream)
+        public static void ReadValue<[NetworkSerializationMarker] TValue>(INetworkStream stream, out TValue value)
+        {
+            var source = new BinarySource(stream);
+
+            ReadValue(ref source, out value);
+        }
+
+        public static TValue ReadValue<[NetworkSerializationMarker] TValue>(ref BinarySource stream)
         {
             var instance = default(TValue);
 
             var resolver = NetworkSerializationResolver.Retrieve<TValue>();
 
-            resolver.Read(ref instance, stream);
+            resolver.Read(ref instance, ref stream);
 
             return instance;
+        }
+        public static TValue ReadValue<[NetworkSerializationMarker] TValue>(INetworkStream stream)
+        {
+            var source = new BinarySource(stream);
+
+            return ReadValue<TValue>(ref source);
+        }
+
+        public static class Implicit
+        {
+            public static void WriteValue(Type type, object value, ref BinarySource stream)
+            {
+                var entry = NetworkSerializationResolver.Implicit.Get(type);
+                entry.Write(value, ref stream);
+            }
+
+            public static object ReadValue(Type type, ref BinarySource stream)
+            {
+                var entry = NetworkSerializationResolver.Implicit.Get(type);
+                return entry.Read(ref stream);
+            }
         }
 
         public static class Helper
@@ -63,12 +115,12 @@ namespace Wsla.Serialization
                     }
                 }
 
-                public static void Write<TValue>(in TValue value, INetworkStream stream)
+                public static void Write<TValue>(in TValue value, ref BinarySource stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.PopMemory(sizeof(TValue));
+                    var span = stream.AllocateSpan(sizeof(TValue));
 
-                    fixed (byte* destination = span.Span)
+                    fixed (byte* destination = span)
                     {
                         if (UseMemCopy)
                         {
@@ -84,12 +136,12 @@ namespace Wsla.Serialization
                         }
                     }
                 }
-                public static void Read<TValue>(ref TValue value, INetworkStream stream)
+                public static void Read<TValue>(ref TValue value, ref BinarySource stream)
                     where TValue : unmanaged
                 {
-                    var span = stream.PopMemory(sizeof(TValue));
+                    var span = stream.ReadSpan(sizeof(TValue));
 
-                    fixed (byte* source = span.Span)
+                    fixed (byte* source = span)
                     {
                         if (UseMemCopy)
                         {
@@ -123,7 +175,7 @@ namespace Wsla.Serialization
                     /// <param name="collection"></param>
                     /// <param name="stream"></param>
                     /// <returns>true if null, false if not</returns>
-                    public static bool Write<TValue>(in TValue collection, INetworkStream stream)
+                    public static bool Write<TValue>(in TValue collection, ref BinarySource stream)
                         where TValue : ICollection
                     {
                         ushort length;
@@ -131,13 +183,13 @@ namespace Wsla.Serialization
                         if (collection is null)
                         {
                             length = 0;
-                            NetworkSerializer.WriteValue(in length, stream);
+                            NetworkSerializer.WriteValue(in length, ref stream);
                             return true;
                         }
                         else
                         {
                             length = (ushort)(collection.Count + 1);
-                            NetworkSerializer.WriteValue(in length, stream);
+                            NetworkSerializer.WriteValue(in length, ref stream);
                             return false;
                         }
                     }
@@ -149,20 +201,20 @@ namespace Wsla.Serialization
                     /// <param name="collection"></param>
                     /// <param name="stream"></param>
                     /// <returns>true if null, false if not</returns>
-                    public static bool Write<TValue>(in TValue collection, int count, INetworkStream stream)
+                    public static bool Write<TValue>(in TValue collection, int count, ref BinarySource stream)
                     {
                         ushort length;
 
                         if (collection is null)
                         {
                             length = 0;
-                            NetworkSerializer.WriteValue(in length, stream);
+                            NetworkSerializer.WriteValue(in length, ref stream);
                             return true;
                         }
                         else
                         {
                             length = (ushort)(count + 1);
-                            NetworkSerializer.WriteValue(in length, stream);
+                            NetworkSerializer.WriteValue(in length, ref stream);
                             return false;
                         }
                     }
@@ -173,9 +225,9 @@ namespace Wsla.Serialization
                     /// <param name="stream"></param>
                     /// <param name="length"></param>
                     /// <returns>true if null, false if not</returns>
-                    public static bool Read(INetworkStream stream, out int length)
+                    public static bool Read(ref BinarySource stream, out int length)
                     {
-                        length = NetworkSerializer.ReadValue<ushort>(stream);
+                        length = NetworkSerializer.ReadValue<ushort>(ref stream);
 
                         if (length == 0)
                             return true;
@@ -202,11 +254,11 @@ namespace Wsla.Serialization
                 /// <param name="value"></param>
                 /// <param name="stream"></param>
                 /// <returns>true if null, false if not</returns>
-                public static bool Write<TValue>(in TValue value, INetworkStream stream)
+                public static bool Write<TValue>(in TValue value, ref BinarySource stream)
                 {
                     bool IsNull = value is null;
 
-                    Write(IsNull, stream);
+                    Write(IsNull, ref stream);
 
                     return IsNull;
                 }
@@ -217,14 +269,12 @@ namespace Wsla.Serialization
                 /// <typeparam name="TValue"></typeparam>
                 /// <param name="value"></param>
                 /// <param name="stream"></param>
-                public static void Write(bool value, INetworkStream stream)
+                public static void Write(bool value, ref BinarySource stream)
                 {
-                    var span = stream.PopMemory(1);
-
                     if (value)
-                        span.Span[0] = Values.IsNull;
+                        stream.WriteByte(Values.IsNull);
                     else
-                        span.Span[0] = Values.NotNull;
+                        stream.WriteByte(Values.NotNull);
                 }
 
                 /// <summary>
@@ -232,11 +282,9 @@ namespace Wsla.Serialization
                 /// </summary>
                 /// <param name="stream"></param>
                 /// <returns>true for null, false if not</returns>
-                public static bool Read(INetworkStream stream)
+                public static bool Read(ref BinarySource stream)
                 {
-                    var span = stream.PopMemory(1);
-
-                    if (span.Span[0] == Values.IsNull)
+                    if (stream.ReadByte() == Values.IsNull)
                         return true;
                     else
                         return false;
@@ -245,20 +293,20 @@ namespace Wsla.Serialization
 
             public static class Length
             {
-                public static void Write<TValue>(in TValue collection, INetworkStream stream)
+                public static void Write<TValue>(in TValue collection, ref BinarySource stream)
                     where TValue : ICollection
                 {
-                    NetworkSerializer.WriteValue((ushort)(collection.Count), stream);
+                    NetworkSerializer.WriteValue((ushort)(collection.Count), ref stream);
                 }
 
-                public static void Write(int value, INetworkStream stream)
+                public static void Write(int value, ref BinarySource stream)
                 {
-                    NetworkSerializer.WriteValue((ushort)(value), stream);
+                    NetworkSerializer.WriteValue((ushort)(value), ref stream);
                 }
 
-                public static int Read(INetworkStream stream)
+                public static int Read(ref BinarySource stream)
                 {
-                    return NetworkSerializer.ReadValue<ushort>(stream);
+                    return NetworkSerializer.ReadValue<ushort>(ref stream);
                 }
             }
         }

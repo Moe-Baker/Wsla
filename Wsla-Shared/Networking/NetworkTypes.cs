@@ -108,17 +108,17 @@ namespace Wsla
 
     public class NetworkTypeSerializationResolver : NetworkSerializationResolver<Type>
     {
-        public override void Write(in Type value, INetworkStream stream)
+        public override void Write(in Type value, ref BinarySource stream)
         {
             if (NetworkTypes.TryGet(value, out var id) is false)
                 throw new ArgumentException($"Type ({value}) not Registered as NetworkType");
 
-            NetworkSerializer.WriteValue(in id, stream);
+            NetworkSerializer.WriteValue(in id, ref stream);
         }
 
-        public override void Read(ref Type value, INetworkStream stream)
+        public override void Read(ref Type value, ref BinarySource stream)
         {
-            var id = ReadValue(stream);
+            var id = ReadValue(ref stream);
 
             if (NetworkTypes.TryGet(id, out var type) is false)
                 throw new ArgumentException($"No NetworkType with ID {id} Registered");
@@ -126,7 +126,7 @@ namespace Wsla
             value = type;
         }
 
-        public static byte ReadValue(INetworkStream stream)
-            => NetworkSerializer.ReadValue<byte>(stream);
+        public static byte ReadValue(ref BinarySource stream)
+            => NetworkSerializer.ReadValue<byte>(ref stream);
     }
 }

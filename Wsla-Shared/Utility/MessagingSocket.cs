@@ -444,7 +444,8 @@ namespace Wsla
 
             public void Dispatch(INetworkStream reader)
             {
-                var id = NetworkTypeSerializationResolver.ReadValue(reader);
+                var source = BinarySource.From(reader);
+                var id = NetworkTypeSerializationResolver.ReadValue(ref source);
 
                 var handler = Handlers[id];
                 if (handler is null)
@@ -539,7 +540,8 @@ namespace Wsla
 
             public void Dispatch(MessagingPeer peer, INetworkStream packet)
             {
-                var id = NetworkTypeSerializationResolver.ReadValue(packet);
+                var source = BinarySource.From(packet);
+                var id = NetworkTypeSerializationResolver.ReadValue(ref source);
 
                 var handler = Handlers[id];
                 if (handler is null)

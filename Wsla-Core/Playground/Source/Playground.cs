@@ -1,4 +1,5 @@
 ﻿using Wsla;
+using Wsla.Serialization;
 
 unsafe class Playground
 {
@@ -14,25 +15,31 @@ unsafe class Playground
 
     static void Run()
     {
-        var attributes = new AttributeCollection();
+        var source = BinarySource.From(stackalloc byte[200]);
 
-        attributes.SetValue("hello", "world");
-
-        Test("var1", 1234);
-        Test("var3", DateTime.Now);
-        Test("var4", 12.5f);
-        Test("var5", 12.5);
-        Test("var5", Guid.NewGuid());
-
-        void Test<T>(FixedString<FS20> key, T original)
-            where T : IEquatable<T>, ISpanFormattable
+        var request = new CreateRoomRequest()
         {
-            attributes.SetValue(key, original);
+            Application = "My App",
+            Regions = (ServerRegion.Asia, ServerRegion.EU, ServerRegion.USA),
+            Parameters = new CreateRoomParameters()
+            {
+                Name = "My Room",
+                Capacity = 10,
+                Scene = NetworkSceneID.From(1),
+                Password = "Hello Password",
+                Privacy = RoomPrivacy.Private,
+                Lock = RoomLockPolicy.AfterFill,
+            }
+        };
 
-            if (attributes.TryParseValue(key, out T clone) is false)
-                throw new NotImplementedException();
+        NetworkSerializer.WriteValue(request, ref source);
 
-            Console.WriteLine($"{original} : {clone}");
-        }
+        source.Position = 0;
+
+        var clone = NetworkSerializer.ReadValue<CreateRoomRequest>(ref source);
+
+        Console.WriteLine(clone.Application);
+
+        Console.WriteLine(clone.Application);
     }
 }

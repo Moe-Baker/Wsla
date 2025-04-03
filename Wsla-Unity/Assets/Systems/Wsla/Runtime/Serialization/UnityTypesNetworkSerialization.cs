@@ -34,17 +34,17 @@ namespace Wsla.Unity
     {
         NetworkAPI API => NetworkAPI.Instance;
 
-        public override void Write(in NetworkClient value, INetworkStream stream)
+        public override void Write(in NetworkClient value, ref BinarySource stream)
         {
             if (value == null)
-                NetworkSerializer.WriteValue(NetworkClientID.None, stream);
+                NetworkSerializer.WriteValue(NetworkClientID.None, ref stream);
             else
-                NetworkSerializer.WriteValue(value.ID, stream);
+                NetworkSerializer.WriteValue(value.ID, ref stream);
         }
 
-        public override void Read(ref NetworkClient value, INetworkStream stream)
+        public override void Read(ref NetworkClient value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(stream, out NetworkClientID id);
+            NetworkSerializer.ReadValue(ref stream, out NetworkClientID id);
 
             if (id == NetworkClientID.None)
             {
@@ -62,24 +62,24 @@ namespace Wsla.Unity
     {
         NetworkAPI API => NetworkAPI.Instance;
 
-        public override void Write(in NetworkEntity value, INetworkStream stream)
+        public override void Write(in NetworkEntity value, ref BinarySource stream)
         {
             if (value == null)
             {
-                NetworkSerializer.WriteValue(NetworkEntityID.None, stream);
+                NetworkSerializer.WriteValue(NetworkEntityID.None, ref stream);
             }
             else
             {
                 if (value.IsSpawned is false)
                     throw new InvalidOperationException($"Can't Serialize Entity {value} Since it's not Spawned");
 
-                NetworkSerializer.WriteValue(value.ID, stream);
+                NetworkSerializer.WriteValue(value.ID, ref stream);
             }
         }
 
-        public override void Read(ref NetworkEntity value, INetworkStream stream)
+        public override void Read(ref NetworkEntity value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(stream, out NetworkEntityID id);
+            NetworkSerializer.ReadValue(ref stream, out NetworkEntityID id);
 
             if (id == NetworkEntityID.None)
             {
@@ -96,22 +96,22 @@ namespace Wsla.Unity
     public class NetworkBehaviourSerializationResolver<T> : NetworkSerializationResolver<T>
         where T : class, INetworkBehaviour
     {
-        public override void Write(in T value, INetworkStream stream)
+        public override void Write(in T value, ref BinarySource stream)
         {
             if (value == null)
             {
-                NetworkSerializer.WriteValue(NetworkBehaviourID.None, stream);
+                NetworkSerializer.WriteValue(NetworkBehaviourID.None, ref stream);
             }
             else
             {
-                NetworkSerializer.WriteValue(value.Network.ID, stream);
-                NetworkSerializer.WriteValue(value.Network.Entity, stream);
+                NetworkSerializer.WriteValue(value.Network.ID, ref stream);
+                NetworkSerializer.WriteValue(value.Network.Entity, ref stream);
             }
         }
 
-        public override void Read(ref T value, INetworkStream stream)
+        public override void Read(ref T value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(stream, out NetworkBehaviourID id);
+            NetworkSerializer.ReadValue(ref stream, out NetworkBehaviourID id);
 
             if (id == NetworkBehaviourID.None)
             {
@@ -119,7 +119,7 @@ namespace Wsla.Unity
                 return;
             }
 
-            NetworkSerializer.ReadValue(stream, out NetworkEntity entity);
+            NetworkSerializer.ReadValue(ref stream, out NetworkEntity entity);
 
             if (entity.Behaviours.TryGet(id, out var behaviour) is false)
                 throw new InvalidOperationException($"No Behaviour with ID {id} Found on Entity ({entity})");

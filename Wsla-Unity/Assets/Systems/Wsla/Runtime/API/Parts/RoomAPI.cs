@@ -147,7 +147,8 @@ namespace Wsla.Unity
 
                 void ReceiveCallback(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
                 {
-                    var id = NetworkTypeSerializationResolver.ReadValue(reader);
+                    var source = BinarySource.From(reader);
+                    var id = NetworkTypeSerializationResolver.ReadValue(ref source);
 
                     var handler = Handlers[id];
                     if (handler is null)

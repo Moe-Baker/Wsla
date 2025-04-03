@@ -158,18 +158,18 @@ namespace Wsla
         #endregion
 
         #region Network Serialization
-        public void Write(INetworkStream stream)
+        public void Write(ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(Length, stream);
+            NetworkSerializer.WriteValue(Length, ref stream);
 
             var span = GetUsedSpan();
 
             for (int i = 0; i < Length; i++)
-                NetworkSerializer.WriteValue(in span[i], stream);
+                NetworkSerializer.WriteValue(in span[i], ref stream);
         }
-        public void Read(INetworkStream stream)
+        public void Read(ref BinarySource stream)
         {
-            Length = NetworkSerializer.ReadValue<byte>(stream);
+            Length = NetworkSerializer.ReadValue<byte>(ref stream);
 
             //Prepare Container
             if (SparseArray.CheckAllocated(Length))
@@ -179,7 +179,7 @@ namespace Wsla
             }
 
             for (int i = 0; i < Length; i++)
-                this[i] = NetworkSerializer.ReadValue<T>(stream);
+                this[i] = NetworkSerializer.ReadValue<T>(ref stream);
         }
         #endregion
 

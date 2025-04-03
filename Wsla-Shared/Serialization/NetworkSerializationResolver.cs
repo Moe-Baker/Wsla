@@ -26,18 +26,7 @@ namespace Wsla.Serialization
                 return;
 
             Collection<TValue>.Instance = resolver;
-        }
-
-        public static NetworkSerializationResolver<TValue> Retrieve<TValue>()
-        {
-            ref var Instance = ref Collection<TValue>.Instance;
-
-#if DEBUG
-            if (Instance is null)
-                throw new NullReferenceException($"No Serialization Resolver Defined for Type ({typeof(TValue)})");
-#endif
-
-            return Instance;
+            Implicit.Register(resolver);
         }
 
         public static class Implicit
@@ -45,31 +34,31 @@ namespace Wsla.Serialization
             static Dictionary<Type, IEntry> Dictionary;
             public interface IEntry
             {
-                void Write(object value, INetworkStream stream);
+                void Write(object value, ref BinarySource stream);
 
-                object Read(INetworkStream stream);
-                void Read(ref object value, INetworkStream stream);
+                object Read(ref BinarySource stream);
+                void Read(ref object value, ref BinarySource stream);
             }
             class Entry<T> : IEntry
             {
                 NetworkSerializationResolver<T> Resolver;
 
-                public void Write(object value, INetworkStream stream)
+                public void Write(object value, ref BinarySource stream)
                 {
                     var cast = (T)value;
-                    Resolver.Write(in cast, stream);
+                    Resolver.Write(in cast, ref stream);
                 }
 
-                public object Read(INetworkStream stream)
+                public object Read(ref BinarySource stream)
                 {
                     var cast = default(T);
-                    Resolver.Read(ref cast, stream);
+                    Resolver.Read(ref cast, ref stream);
                     return cast;
                 }
-                public void Read(ref object value, INetworkStream stream)
+                public void Read(ref object value, ref BinarySource stream)
                 {
                     var cast = (T)value;
-                    Resolver.Read(ref cast, stream);
+                    Resolver.Read(ref cast, ref stream);
                     value = cast;
                 }
 
@@ -99,6 +88,18 @@ namespace Wsla.Serialization
             {
                 Dictionary = new();
             }
+        }
+
+        public static NetworkSerializationResolver<TValue> Retrieve<TValue>()
+        {
+            ref var Instance = ref Collection<TValue>.Instance;
+
+#if DEBUG
+            if (Instance is null)
+                throw new NullReferenceException($"No Serialization Resolver Defined for Type ({typeof(TValue)})");
+#endif
+
+            return Instance;
         }
 
         internal static class Collection<TValue>
@@ -165,26 +166,22 @@ namespace Wsla.Serialization
     }
     public abstract class NetworkSerializationResolver<TValue>
     {
-        public abstract void Write(in TValue value, INetworkStream stream);
-        public abstract void Read(ref TValue value, INetworkStream stream);
+        public abstract void Write(in TValue value, ref BinarySource stream);
+        public abstract void Read(ref TValue value, ref BinarySource stream);
     }
 
     public class BoolNetworkSerializationResolver : NetworkSerializationResolver<bool>
     {
-        public override void Write(in bool value, INetworkStream stream)
+        public override void Write(in bool value, ref BinarySource stream)
         {
-            ref var octet = ref stream.PopByte();
-
             if (value)
-                octet = 1;
+                stream.WriteByte(1);
             else
-                octet = 0;
+                stream.WriteByte(0);
         }
-        public override void Read(ref bool value, INetworkStream stream)
+        public override void Read(ref bool value, ref BinarySource stream)
         {
-            var octet = stream.PopByte();
-
-            if (octet is 1)
+            if (stream.ReadByte() is 1)
                 value = true;
             else
                 value = false;
@@ -193,26 +190,26 @@ namespace Wsla.Serialization
 
     public class DateTimeSerializationResolver : NetworkSerializationResolver<DateTime>
     {
-        public override void Write(in DateTime value, INetworkStream stream)
+        public override void Write(in DateTime value, ref BinarySource stream)
         {
             long binary = value.ToBinary();
-            NetworkSerializer.WriteValue(in binary, stream);
+            NetworkSerializer.WriteValue(in binary, ref stream);
         }
-        public override void Read(ref DateTime value, INetworkStream stream)
+        public override void Read(ref DateTime value, ref BinarySource stream)
         {
-            var binary = NetworkSerializer.ReadValue<long>(stream);
+            var binary = NetworkSerializer.ReadValue<long>(ref stream);
             value = DateTime.FromBinary(binary);
         }
     }
     public class TimeSpanSerializationResolver : NetworkSerializationResolver<TimeSpan>
     {
-        public override void Write(in TimeSpan value, INetworkStream stream)
+        public override void Write(in TimeSpan value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(value.Ticks, stream);
+            NetworkSerializer.WriteValue(value.Ticks, ref stream);
         }
-        public override void Read(ref TimeSpan value, INetworkStream stream)
+        public override void Read(ref TimeSpan value, ref BinarySource stream)
         {
-            var ticks = NetworkSerializer.ReadValue<long>(stream);
+            var ticks = NetworkSerializer.ReadValue<long>(ref stream);
             value = new TimeSpan(ticks);
         }
     }
@@ -225,21 +222,21 @@ namespace Wsla.Serialization
 
         public const int StackOptimizationLimit = 1024;
 
-        public override void Write(in string value, INetworkStream stream)
+        public override void Write(in string value, ref BinarySource stream)
         {
             if (value is null)
             {
-                NetworkSerializer.Helper.Length.Write(0, stream);
+                NetworkSerializer.Helper.Length.Write(0, ref stream);
                 return;
             }
 
             if (value.Length > StackOptimizationLimit)
             {
                 var length = Encoder.GetByteCount(value);
-                NetworkSerializer.Helper.Length.Write(length + 1, stream);
+                NetworkSerializer.Helper.Length.Write(length + 1, ref stream);
 
-                var buffer = stream.PopMemory(length);
-                Encoder.GetBytes(value, buffer.Span);
+                var buffer = stream.AllocateSpan(length);
+                Encoder.GetBytes(value, buffer);
             }
             else
             {
@@ -248,19 +245,19 @@ namespace Wsla.Serialization
                 Span<byte> buffer = stackalloc byte[Encoder.GetMaxByteCount(value.Length)];
 
                 var length = Encoder.GetBytes(value, buffer);
-                NetworkSerializer.Helper.Length.Write(length + 1, stream);
+                NetworkSerializer.Helper.Length.Write(length + 1, ref stream);
 
-                var destination = stream.PopMemory(length);
+                var destination = stream.AllocateSpan(length);
 
-                buffer.Slice(0, length).CopyTo(destination.Span);
+                buffer.Slice(0, length).CopyTo(destination);
             }
 
             var count = Encoder.GetByteCount(value);
         }
 
-        public override void Read(ref string value, INetworkStream stream)
+        public override void Read(ref string value, ref BinarySource stream)
         {
-            var length = NetworkSerializer.Helper.Length.Read(stream);
+            var length = NetworkSerializer.Helper.Length.Read(ref stream);
 
             if (length is 0)
             {
@@ -270,22 +267,22 @@ namespace Wsla.Serialization
 
             length -= 1;
 
-            var span = stream.PopMemory(length);
+            var span = stream.ReadSpan(length);
 
-            value = Encoder.GetString(span.Span);
+            value = Encoder.GetString(span);
         }
     }
 
     public unsafe class EnumNetworkSerializationResolver<TEnum> : NetworkSerializationResolver<TEnum>
         where TEnum : unmanaged, Enum
     {
-        public override void Write(in TEnum value, INetworkStream stream)
+        public override void Write(in TEnum value, ref BinarySource stream)
         {
-            NetworkSerializer.Helper.Blittable.Write(in value, stream);
+            NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
         }
-        public override void Read(ref TEnum value, INetworkStream stream)
+        public override void Read(ref TEnum value, ref BinarySource stream)
         {
-            NetworkSerializer.Helper.Blittable.Read(ref value, stream);
+            NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
         }
     }
 
@@ -297,28 +294,28 @@ namespace Wsla.Serialization
         const int V6Size = 16;
         const int V6ID = 2;
 
-        public override void Write(in IPAddress value, INetworkStream stream)
+        public override void Write(in IPAddress value, ref BinarySource stream)
         {
             switch (value.AddressFamily)
             {
                 case AddressFamily.InterNetwork:
                 {
-                    stream.PopByte() = V4ID;
+                    stream.WriteByte(V4ID);
 
-                    var span = stream.PopMemory(V4Size);
+                    var span = stream.AllocateSpan(V4Size);
 
-                    if (value.TryWriteBytes(span.Span, out var written) is false || written != span.Length)
+                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
                         throw new NotImplementedException();
                 }
                 break;
 
                 case AddressFamily.InterNetworkV6:
                 {
-                    stream.PopByte() = V6ID;
+                    stream.WriteByte(V6ID);
 
-                    var span = stream.PopMemory(V6Size);
+                    var span = stream.AllocateSpan(V6Size);
 
-                    if (value.TryWriteBytes(span.Span, out var written) is false || written != span.Length)
+                    if (value.TryWriteBytes(span, out var written) is false || written != span.Length)
                         throw new NotImplementedException();
                 }
                 break;
@@ -327,23 +324,23 @@ namespace Wsla.Serialization
                     throw new NotImplementedException("Can Only Serialize IP v4/v6 Addresses");
             }
         }
-        public override void Read(ref IPAddress value, INetworkStream stream)
+        public override void Read(ref IPAddress value, ref BinarySource stream)
         {
-            var type = stream.PopByte();
+            var type = stream.ReadByte();
 
             switch (type)
             {
                 case V4ID: //IPv4
                 {
-                    var span = stream.PopMemory(V4Size);
-                    value = new IPAddress(span.Span);
+                    var span = stream.ReadSpan(V4Size);
+                    value = new IPAddress(span);
                 }
                 break;
 
                 case V6ID: //IPv6
                 {
-                    var span = stream.PopMemory(V6Size);
-                    value = new IPAddress(span.Span);
+                    var span = stream.ReadSpan(V6Size);
+                    value = new IPAddress(span);
                 }
                 break;
             }
@@ -353,152 +350,152 @@ namespace Wsla.Serialization
     #region Tuple
     public class TupleSerializationResolver : NetworkSerializationResolver<ValueTuple>
     {
-        public override void Write(in ValueTuple value, INetworkStream stream) { }
-        public override void Read(ref ValueTuple value, INetworkStream stream) { }
+        public override void Write(in ValueTuple value, ref BinarySource stream) { }
+        public override void Read(ref ValueTuple value, ref BinarySource stream) { }
     }
     public class TupleSerializationResolver<T1> : NetworkSerializationResolver<ValueTuple<T1>>
     {
-        public override void Write(in ValueTuple<T1> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
         }
-        public override void Read(ref ValueTuple<T1> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2> : NetworkSerializationResolver<ValueTuple<T1, T2>>
     {
-        public override void Write(in ValueTuple<T1, T2> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3> : NetworkSerializationResolver<ValueTuple<T1, T2, T3>>
     {
-        public override void Write(in ValueTuple<T1, T2, T3> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3, T4> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4>>
     {
-        public override void Write(in ValueTuple<T1, T2, T3, T4> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3, T4> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
-            NetworkSerializer.WriteValue(in value.Item4, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
+            NetworkSerializer.WriteValue(in value.Item4, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3, T4> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3, T4> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
-            NetworkSerializer.ReadValue(ref value.Item4, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item4, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3, T4, T5> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5>>
     {
-        public override void Write(in ValueTuple<T1, T2, T3, T4, T5> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
-            NetworkSerializer.WriteValue(in value.Item4, stream);
-            NetworkSerializer.WriteValue(in value.Item5, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
+            NetworkSerializer.WriteValue(in value.Item4, ref stream);
+            NetworkSerializer.WriteValue(in value.Item5, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
-            NetworkSerializer.ReadValue(ref value.Item4, stream);
-            NetworkSerializer.ReadValue(ref value.Item5, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item4, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item5, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
-        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
-            NetworkSerializer.WriteValue(in value.Item4, stream);
-            NetworkSerializer.WriteValue(in value.Item5, stream);
-            NetworkSerializer.WriteValue(in value.Item6, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
+            NetworkSerializer.WriteValue(in value.Item4, ref stream);
+            NetworkSerializer.WriteValue(in value.Item5, ref stream);
+            NetworkSerializer.WriteValue(in value.Item6, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
-            NetworkSerializer.ReadValue(ref value.Item4, stream);
-            NetworkSerializer.ReadValue(ref value.Item5, stream);
-            NetworkSerializer.ReadValue(ref value.Item6, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item4, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item5, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item6, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
-        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
-            NetworkSerializer.WriteValue(in value.Item4, stream);
-            NetworkSerializer.WriteValue(in value.Item5, stream);
-            NetworkSerializer.WriteValue(in value.Item6, stream);
-            NetworkSerializer.WriteValue(in value.Item7, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
+            NetworkSerializer.WriteValue(in value.Item4, ref stream);
+            NetworkSerializer.WriteValue(in value.Item5, ref stream);
+            NetworkSerializer.WriteValue(in value.Item6, ref stream);
+            NetworkSerializer.WriteValue(in value.Item7, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
-            NetworkSerializer.ReadValue(ref value.Item4, stream);
-            NetworkSerializer.ReadValue(ref value.Item5, stream);
-            NetworkSerializer.ReadValue(ref value.Item6, stream);
-            NetworkSerializer.ReadValue(ref value.Item7, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item4, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item5, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item6, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item7, ref stream);
         }
     }
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7, TRest> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest>>
         where TRest : struct
     {
-        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, INetworkStream stream)
+        public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, ref BinarySource stream)
         {
-            NetworkSerializer.WriteValue(in value.Item1, stream);
-            NetworkSerializer.WriteValue(in value.Item2, stream);
-            NetworkSerializer.WriteValue(in value.Item3, stream);
-            NetworkSerializer.WriteValue(in value.Item4, stream);
-            NetworkSerializer.WriteValue(in value.Item5, stream);
-            NetworkSerializer.WriteValue(in value.Item6, stream);
-            NetworkSerializer.WriteValue(in value.Item7, stream);
-            NetworkSerializer.WriteValue(in value.Rest, stream);
+            NetworkSerializer.WriteValue(in value.Item1, ref stream);
+            NetworkSerializer.WriteValue(in value.Item2, ref stream);
+            NetworkSerializer.WriteValue(in value.Item3, ref stream);
+            NetworkSerializer.WriteValue(in value.Item4, ref stream);
+            NetworkSerializer.WriteValue(in value.Item5, ref stream);
+            NetworkSerializer.WriteValue(in value.Item6, ref stream);
+            NetworkSerializer.WriteValue(in value.Item7, ref stream);
+            NetworkSerializer.WriteValue(in value.Rest, ref stream);
         }
-        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, INetworkStream stream)
+        public override void Read(ref ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest> value, ref BinarySource stream)
         {
-            NetworkSerializer.ReadValue(ref value.Item1, stream);
-            NetworkSerializer.ReadValue(ref value.Item2, stream);
-            NetworkSerializer.ReadValue(ref value.Item3, stream);
-            NetworkSerializer.ReadValue(ref value.Item4, stream);
-            NetworkSerializer.ReadValue(ref value.Item5, stream);
-            NetworkSerializer.ReadValue(ref value.Item6, stream);
-            NetworkSerializer.ReadValue(ref value.Item7, stream);
-            NetworkSerializer.ReadValue(ref value.Rest, stream);
+            NetworkSerializer.ReadValue(ref value.Item1, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item2, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item3, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item4, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item5, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item6, ref stream);
+            NetworkSerializer.ReadValue(ref value.Item7, ref stream);
+            NetworkSerializer.ReadValue(ref value.Rest, ref stream);
         }
     }
     #endregion
@@ -506,29 +503,29 @@ namespace Wsla.Serialization
     public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
         where T : struct
     {
-        public override void Write(in Nullable<T> value, INetworkStream stream)
+        public override void Write(in Nullable<T> value, ref BinarySource stream)
         {
             if (value.HasValue)
             {
-                NetworkSerializer.Helper.Nullability.Write(false, stream);
+                NetworkSerializer.Helper.Nullability.Write(false, ref stream);
 
-                NetworkSerializer.WriteValue(value.Value, stream);
+                NetworkSerializer.WriteValue(value.Value, ref stream);
             }
             else
             {
-                NetworkSerializer.Helper.Nullability.Write(true, stream);
+                NetworkSerializer.Helper.Nullability.Write(true, ref stream);
             }
         }
-        public override void Read(ref Nullable<T> value, INetworkStream stream)
+        public override void Read(ref Nullable<T> value, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Read(stream))
+            if (NetworkSerializer.Helper.Nullability.Read(ref stream))
             {
                 value = default;
             }
             else
             {
                 var reference = value.GetValueOrDefault();
-                NetworkSerializer.ReadValue(ref reference, stream);
+                NetworkSerializer.ReadValue(ref reference, ref stream);
                 value = new Nullable<T>(reference);
             }
         }
@@ -536,18 +533,18 @@ namespace Wsla.Serialization
 
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
     {
-        public override void Write(in TValue[] array, INetworkStream stream)
+        public override void Write(in TValue[] array, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in array, stream))
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in array, ref stream))
                 return;
 
             for (int i = 0; i < array.Length; i++)
-                NetworkSerializer.WriteValue(in array[i], stream);
+                NetworkSerializer.WriteValue(in array[i], ref stream);
         }
 
-        public override void Read(ref TValue[] array, INetworkStream stream)
+        public override void Read(ref TValue[] array, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
             {
                 array = default;
                 return;
@@ -556,7 +553,7 @@ namespace Wsla.Serialization
             EnsureLength(ref array, length);
 
             for (int i = 0; i < length; i++)
-                NetworkSerializer.ReadValue(ref array[i], stream);
+                NetworkSerializer.ReadValue(ref array[i], ref stream);
         }
 
         void EnsureLength(ref TValue[] array, int length)
@@ -573,24 +570,24 @@ namespace Wsla.Serialization
 
     public class ArraySegmentNetworkSerializationResolver<TValue> : NetworkSerializationResolver<ArraySegment<TValue>>
     {
-        public override void Write(in ArraySegment<TValue> segment, INetworkStream stream)
+        public override void Write(in ArraySegment<TValue> segment, ref BinarySource stream)
         {
-            NetworkSerializer.Helper.Length.Write(segment.Count, stream);
+            NetworkSerializer.Helper.Length.Write(segment.Count, ref stream);
 
             for (int i = 0; i < segment.Count; i++)
-                NetworkSerializer.WriteValue(segment[i], stream);
+                NetworkSerializer.WriteValue(segment[i], ref stream);
         }
 
-        public override void Read(ref ArraySegment<TValue> segment, INetworkStream stream)
+        public override void Read(ref ArraySegment<TValue> segment, ref BinarySource stream)
         {
-            var length = NetworkSerializer.Helper.Length.Read(stream);
+            var length = NetworkSerializer.Helper.Length.Read(ref stream);
 
             EnsureCount(ref segment, length);
 
             for (int i = 0; i < length; i++)
             {
                 var item = segment[i];
-                NetworkSerializer.ReadValue(ref item, stream);
+                NetworkSerializer.ReadValue(ref item, ref stream);
                 segment[i] = item;
             }
         }
@@ -616,18 +613,18 @@ namespace Wsla.Serialization
 
     public class ListNetworkSerializationResolver<TValue> : NetworkSerializationResolver<List<TValue>>
     {
-        public override void Write(in List<TValue> list, INetworkStream stream)
+        public override void Write(in List<TValue> list, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in list, stream))
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in list, ref stream))
                 return;
 
             for (int i = 0; i < list.Count; i++)
-                NetworkSerializer.WriteValue(list[i], stream);
+                NetworkSerializer.WriteValue(list[i], ref stream);
         }
 
-        public override void Read(ref List<TValue> list, INetworkStream stream)
+        public override void Read(ref List<TValue> list, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
             {
                 list = default;
                 return;
@@ -639,13 +636,13 @@ namespace Wsla.Serialization
             {
                 if (i >= list.Count)
                 {
-                    NetworkSerializer.ReadValue(stream, out TValue item);
+                    NetworkSerializer.ReadValue(ref stream, out TValue item);
                     list.Add(item);
                 }
                 else
                 {
                     var item = list[i];
-                    NetworkSerializer.ReadValue(ref item, stream);
+                    NetworkSerializer.ReadValue(ref item, ref stream);
                     list[i] = item;
                 }
             }
@@ -665,21 +662,21 @@ namespace Wsla.Serialization
 
     public class DictionaryNetworkSerializationResolver<TKey, TValue> : NetworkSerializationResolver<Dictionary<TKey, TValue>>
     {
-        public override void Write(in Dictionary<TKey, TValue> collection, INetworkStream stream)
+        public override void Write(in Dictionary<TKey, TValue> collection, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Write(in collection, stream))
+            if (NetworkSerializer.Helper.Nullability.Length.Write(in collection, ref stream))
                 return;
 
             foreach (var (key, value) in collection)
             {
-                NetworkSerializer.WriteValue(in key, stream);
-                NetworkSerializer.WriteValue(in value, stream);
+                NetworkSerializer.WriteValue(in key, ref stream);
+                NetworkSerializer.WriteValue(in value, ref stream);
             }
         }
 
-        public override void Read(ref Dictionary<TKey, TValue> collection, INetworkStream stream)
+        public override void Read(ref Dictionary<TKey, TValue> collection, ref BinarySource stream)
         {
-            if (NetworkSerializer.Helper.Nullability.Length.Read(stream, out var length))
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
             {
                 collection = null;
                 return;
@@ -697,8 +694,8 @@ namespace Wsla.Serialization
 
             for (int i = 0; i < length; i++)
             {
-                var key = NetworkSerializer.ReadValue<TKey>(stream);
-                var value = NetworkSerializer.ReadValue<TValue>(stream);
+                var key = NetworkSerializer.ReadValue<TKey>(ref stream);
+                var value = NetworkSerializer.ReadValue<TValue>(ref stream);
 
                 collection.Add(key, value);
             }
@@ -711,16 +708,16 @@ namespace Wsla.Serialization
     {
         readonly bool IsNullable;
 
-        public override void Write(in TValue value, INetworkStream stream)
+        public override void Write(in TValue value, ref BinarySource stream)
         {
-            if (IsNullable && NetworkSerializer.Helper.Nullability.Write(in value, stream))
+            if (IsNullable && NetworkSerializer.Helper.Nullability.Write(in value, ref stream))
                 return;
 
-            value.Write(stream);
+            value.Write(ref stream);
         }
-        public override void Read(ref TValue value, INetworkStream stream)
+        public override void Read(ref TValue value, ref BinarySource stream)
         {
-            if (IsNullable && NetworkSerializer.Helper.Nullability.Read(stream))
+            if (IsNullable && NetworkSerializer.Helper.Nullability.Read(ref stream))
             {
                 value = default;
                 return;
@@ -728,7 +725,7 @@ namespace Wsla.Serialization
 
             value ??= new();
 
-            value.Read(stream);
+            value.Read(ref stream);
         }
 
         public ManualNetworkSerializationResolver()
@@ -738,8 +735,8 @@ namespace Wsla.Serialization
     }
     public interface IManualNetworkSerialization
     {
-        void Write(INetworkStream stream);
-        void Read(INetworkStream stream);
+        void Write(ref BinarySource stream);
+        void Read(ref BinarySource stream);
     }
     #endregion
 
@@ -749,18 +746,20 @@ namespace Wsla.Serialization
     {
         readonly bool IsNullable;
 
-        public override void Write(in TValue value, INetworkStream stream)
+        public override void Write(in TValue value, ref BinarySource stream)
         {
-            if (IsNullable && NetworkSerializer.Helper.Nullability.Write(in value, stream))
+            if (IsNullable && NetworkSerializer.Helper.Nullability.Write(in value, ref stream))
                 return;
 
-            var context = new AutoSerializationContext(stream, AutoSerializationMode.Write);
+            var context = new AutoSerializationContext(ref stream, AutoSerializationMode.Write);
 
             value.Select(ref context);
+
+            stream = context.Stream;
         }
-        public override void Read(ref TValue value, INetworkStream stream)
+        public override void Read(ref TValue value, ref BinarySource stream)
         {
-            if (IsNullable && NetworkSerializer.Helper.Nullability.Read(stream))
+            if (IsNullable && NetworkSerializer.Helper.Nullability.Read(ref stream))
             {
                 value = default;
                 return;
@@ -768,8 +767,10 @@ namespace Wsla.Serialization
 
             value ??= new();
 
-            var context = new AutoSerializationContext(stream, AutoSerializationMode.Read);
+            var context = new AutoSerializationContext(ref stream, AutoSerializationMode.Read);
             value.Select(ref context);
+
+            stream = context.Stream;
         }
 
         public AutoNetworkSerializationResolver()
@@ -781,32 +782,33 @@ namespace Wsla.Serialization
     {
         void Select(ref AutoSerializationContext context);
     }
-    public readonly ref struct AutoSerializationContext
+
+    public ref struct AutoSerializationContext
     {
-        public INetworkStream Stream { get; }
+        internal BinarySource Stream;
 
         public AutoSerializationMode Mode { get; }
 
         public readonly bool IsWriting => Mode is AutoSerializationMode.Write;
         public readonly bool IsReading => Mode is AutoSerializationMode.Read;
 
-        public readonly void Select<[NetworkSerializationMarker] TValue>(ref TValue value)
+        public void Select<[NetworkSerializationMarker] TValue>(ref TValue value)
         {
             switch (Mode)
             {
                 case AutoSerializationMode.Write:
-                    NetworkSerializer.WriteValue(in value, Stream);
+                    NetworkSerializer.WriteValue(in value, ref Stream);
                     break;
 
                 case AutoSerializationMode.Read:
-                    NetworkSerializer.ReadValue(ref value, Stream);
+                    NetworkSerializer.ReadValue(ref value, ref Stream);
                     break;
 
                 default: throw new NotImplementedException();
             }
         }
 
-        public AutoSerializationContext(INetworkStream Stream, AutoSerializationMode Mode)
+        public AutoSerializationContext(ref BinarySource Stream, AutoSerializationMode Mode)
         {
             this.Stream = Stream;
             this.Mode = Mode;
@@ -823,11 +825,11 @@ namespace Wsla.Serialization
     public unsafe class BlittableNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : unmanaged
     {
-        public override void Write(in TValue value, INetworkStream stream)
-            => NetworkSerializer.Helper.Blittable.Write(in value, stream);
+        public override void Write(in TValue value, ref BinarySource stream)
+            => NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
 
-        public override void Read(ref TValue value, INetworkStream stream)
-            => NetworkSerializer.Helper.Blittable.Read(ref value, stream);
+        public override void Read(ref TValue value, ref BinarySource stream)
+            => NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
     }
 
     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]

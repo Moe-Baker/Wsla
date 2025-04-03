@@ -149,7 +149,8 @@ namespace Wsla.Server
                     if (client is null)
                         throw new Exception("No Client Assigned to Peer");
 
-                    var id = NetworkTypeSerializationResolver.ReadValue(reader);
+                    var source = BinarySource.From(reader);
+                    var id = NetworkTypeSerializationResolver.ReadValue(ref source);
 
                     var handler = Handlers[id];
                     if (handler is null)
