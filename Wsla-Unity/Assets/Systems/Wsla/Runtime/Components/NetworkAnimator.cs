@@ -117,19 +117,19 @@ namespace Wsla.Unity
                     Apply(Value);
                 }
 
-                internal void WriteState(INetworkStream stream)
+                internal void WriteState(ref BinarySource stream)
                 {
                     if (Quantization.Enabled)
-                        Quantize.Integer.Serialize(stream, Value, Quantization.Value);
+                        Quantize.Integer.Serialize(ref stream, Value, Quantization.Value);
                     else
-                        NetworkSerializer.WriteValue(Value, stream);
+                        NetworkSerializer.WriteValue(Value, ref stream);
                 }
-                internal void ReadState(INetworkStream stream)
+                internal void ReadState(ref BinarySource stream)
                 {
                     if (Quantization.Enabled)
-                        Value = Quantize.Integer.Deserialize(stream, Quantization.Value);
+                        Value = Quantize.Integer.Deserialize(ref stream, Quantization.Value);
                     else
-                        Value = NetworkSerializer.ReadValue<int>(stream);
+                        Value = NetworkSerializer.ReadValue<int>(ref stream);
 
                     Apply(Value);
                 }
@@ -179,19 +179,19 @@ namespace Wsla.Unity
                     Apply(Value);
                 }
 
-                internal void WriteState(INetworkStream stream)
+                internal void WriteState(ref BinarySource stream)
                 {
                     if (Quantization.Enabled)
-                        Quantize.Float.Serialize(stream, Value, Quantization.Value);
+                        Quantize.Float.Serialize(ref stream, Value, Quantization.Value);
                     else
-                        NetworkSerializer.WriteValue(Value, stream);
+                        NetworkSerializer.WriteValue(Value, ref stream);
                 }
-                internal void ReadState(INetworkStream stream)
+                internal void ReadState(ref BinarySource stream)
                 {
                     if (Quantization.Enabled)
-                        Value = Quantize.Float.Deserialize(stream, Quantization.Value);
+                        Value = Quantize.Float.Deserialize(ref stream, Quantization.Value);
                     else
-                        Value = NetworkSerializer.ReadValue<int>(stream);
+                        Value = NetworkSerializer.ReadValue<int>(ref stream);
 
                     Apply(Value);
                 }
@@ -395,39 +395,39 @@ namespace Wsla.Unity
                 Dirty = false;
             }
 
-            internal void WriteState(INetworkStream stream, ref BitStream mask)
+            internal void WriteState(ref BinarySource stream, ref BitStream mask)
             {
                 //Bools
                 {
                     var bytes = BitStream.BitsToBytes(Bools.Length);
-                    var buffer = stream.PopMemory(bytes).Span;
+                    var buffer = stream.AllocateSpan(bytes);
                     var bits = new BitStream(buffer);
 
                     WriteBoolsState(ref bits, ref mask);
                 }
 
                 //Integers
-                WriteIntegersState(stream, ref mask);
+                WriteIntegersState(ref stream, ref mask);
 
                 //Floats
-                WriteFloatsState(stream, ref mask);
+                WriteFloatsState(ref stream, ref mask);
             }
-            internal void ReadState(INetworkStream stream, ref BitStream mask)
+            internal void ReadState(ref BinarySource stream, ref BitStream mask)
             {
                 //Bools
                 {
                     var bytes = BitStream.BitsToBytes(Bools.Length);
-                    var buffer = stream.PopMemory(bytes).Span;
+                    var buffer = stream.ReadSpan(bytes);
                     var bits = new BitStream(buffer);
 
                     ReadBoolsState(ref bits, ref mask);
                 }
 
                 //Integers
-                ReadIntegersState(stream, ref mask);
+                ReadIntegersState(ref stream, ref mask);
 
                 //Floats
-                ReadFloatsState(stream, ref mask);
+                ReadFloatsState(ref stream, ref mask);
 
                 //Triggers
                 ReadTriggersState(ref mask);
@@ -456,7 +456,7 @@ namespace Wsla.Unity
                 }
             }
 
-            void WriteIntegersState(INetworkStream stream, ref BitStream mask)
+            void WriteIntegersState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Integers.Length; i++)
                 {
@@ -464,10 +464,10 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Integers[i].WriteState(stream);
+                    Integers[i].WriteState(ref stream);
                 }
             }
-            void ReadIntegersState(INetworkStream stream, ref BitStream mask)
+            void ReadIntegersState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Integers.Length; i++)
                 {
@@ -475,11 +475,11 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Integers[i].ReadState(stream);
+                    Integers[i].ReadState(ref stream);
                 }
             }
 
-            void WriteFloatsState(INetworkStream stream, ref BitStream mask)
+            void WriteFloatsState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Floats.Length; i++)
                 {
@@ -487,10 +487,10 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Floats[i].WriteState(stream);
+                    Floats[i].WriteState(ref stream);
                 }
             }
-            void ReadFloatsState(INetworkStream stream, ref BitStream mask)
+            void ReadFloatsState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Floats.Length; i++)
                 {
@@ -498,7 +498,7 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Floats[i].ReadState(stream);
+                    Floats[i].ReadState(ref stream);
                 }
             }
 
@@ -567,13 +567,13 @@ namespace Wsla.Unity
                     Apply(Weight);
                 }
 
-                internal void WriteState(INetworkStream stream)
+                internal void WriteState(ref BinarySource stream)
                 {
-                    Quantize.Float.Serialize(stream, Weight, Min, Max, Bits);
+                    Quantize.Float.Serialize(ref stream, Weight, Min, Max, Bits);
                 }
-                internal void ReadState(INetworkStream stream)
+                internal void ReadState(ref BinarySource stream)
                 {
-                    Weight = Quantize.Float.Deserialize(stream, Min, Max, Bits);
+                    Weight = Quantize.Float.Deserialize(ref stream, Min, Max, Bits);
 
                     Apply(Weight);
                 }
@@ -628,7 +628,7 @@ namespace Wsla.Unity
                 Dirty = false;
             }
 
-            internal void WriteState(INetworkStream stream, ref BitStream mask)
+            internal void WriteState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Collection.Length; i++)
                 {
@@ -636,10 +636,10 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Collection[i].WriteState(stream);
+                    Collection[i].WriteState(ref stream);
                 }
             }
-            internal void ReadState(INetworkStream stream, ref BitStream mask)
+            internal void ReadState(ref BinarySource stream, ref BitStream mask)
             {
                 for (int i = 0; i < Collection.Length; i++)
                 {
@@ -647,7 +647,7 @@ namespace Wsla.Unity
                     if (dirty is false)
                         continue;
 
-                    Collection[i].ReadState(stream);
+                    Collection[i].ReadState(ref stream);
                 }
             }
 
@@ -730,12 +730,14 @@ namespace Wsla.Unity
                     .SetIgnoreLocal()
                     .GetPayloadWriter(out var stream);
 
-                var changes = CollectDirtyMask(stream);
+                var source = BinarySource.From(stream);
+
+                var changes = CollectDirtyMask(ref source);
 
                 changes.Reset();
 
-                Parameters.WriteState(stream, ref changes);
-                Layers.WriteState(stream, ref changes);
+                Parameters.WriteState(ref source, ref changes);
+                Layers.WriteState(ref source, ref changes);
 
                 invocation.Broadcast();
             }
@@ -744,15 +746,17 @@ namespace Wsla.Unity
         [RPC]
         void Replicate(INetworkStream stream, RpcInfo info)
         {
-            var changes = AllocateChangesMask(stream);
+            var source = BinarySource.From(stream);
 
-            Parameters.ReadState(stream, ref changes);
-            Layers.ReadState(stream, ref changes);
+            var changes = AllocateChangesMask(ref source);
+
+            Parameters.ReadState(ref source, ref changes);
+            Layers.ReadState(ref source, ref changes);
         }
 
-        BitStream CollectDirtyMask(INetworkStream stream)
+        BitStream CollectDirtyMask(ref BinarySource stream)
         {
-            var mask = AllocateChangesMask(stream);
+            var mask = AllocateChangesMask(ref stream);
 
             Parameters.CollectDirtyMask(ref mask);
             Layers.CollectDirtyMask(ref mask);
@@ -760,11 +764,11 @@ namespace Wsla.Unity
             return mask;
         }
 
-        BitStream AllocateChangesMask(INetworkStream stream)
+        BitStream AllocateChangesMask(ref BinarySource stream)
         {
             var length = BitStream.BitsToBytes(Parameters.Count + Layers.Count);
 
-            var buffer = stream.PopMemory(length).Span;
+            var buffer = stream.AllocateSpan(length);
 
             return new BitStream(buffer);
         }

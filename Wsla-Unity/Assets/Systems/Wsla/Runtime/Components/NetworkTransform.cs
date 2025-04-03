@@ -407,8 +407,10 @@ namespace Wsla.Unity
                     .SetIgnoreLocal()
                     .GetPayloadWriter(out var writer);
 
+                var source = BinarySource.From(writer);
+
                 var tick = info.GetTick();
-                WritePayload(writer, tick, motion);
+                WritePayload(ref source, tick, motion);
 
                 if (motion.Change.Stopped)
                 {
@@ -424,41 +426,41 @@ namespace Wsla.Unity
             }
         }
 
-        void WritePayload(INetworkStream stream, NetworkTickID tick, MotionData motion)
+        void WritePayload(ref BinarySource stream, NetworkTickID tick, MotionData motion)
         {
-            NetworkSerializer.WriteValue(tick, stream);
+            NetworkSerializer.WriteValue(tick, ref stream);
 
             var change = motion.Change.Current;
 
             if (motion.Change.Stopped) //Write Entire Transform When Movement Stops
                 change |= Mask.Value | ChangeFlags.Stop;
 
-            NetworkSerializer.WriteValue(change, stream);
+            NetworkSerializer.WriteValue(change, ref stream);
 
             //Position
             {
                 if (change.HasFlag(ChangeFlags.PositionX))
                 {
                     if (Quantization.Position.X.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Position.x, Quantization.Position.X.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Position.x, Quantization.Position.X.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Position.x, stream);
+                        NetworkSerializer.WriteValue(motion.Position.x, ref stream);
                 }
 
                 if (change.HasFlag(ChangeFlags.PositionY))
                 {
                     if (Quantization.Position.Y.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Position.y, Quantization.Position.Y.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Position.y, Quantization.Position.Y.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Position.y, stream);
+                        NetworkSerializer.WriteValue(motion.Position.y, ref stream);
                 }
 
                 if (change.HasFlag(ChangeFlags.PositionZ))
                 {
                     if (Quantization.Position.Z.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Position.z, Quantization.Position.Z.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Position.z, Quantization.Position.Z.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Position.z, stream);
+                        NetworkSerializer.WriteValue(motion.Position.z, ref stream);
                 }
             }
 
@@ -466,9 +468,9 @@ namespace Wsla.Unity
             if (change.HasFlag(ChangeFlags.Rotation))
             {
                 if (Quantization.Rotation)
-                    Quantize.Rotation.Serialize(stream, motion.Rotation);
+                    Quantize.Rotation.Serialize(ref stream, motion.Rotation);
                 else
-                    NetworkSerializer.WriteValue(motion.Rotation, stream);
+                    NetworkSerializer.WriteValue(motion.Rotation, ref stream);
             }
 
             //Scale
@@ -477,33 +479,33 @@ namespace Wsla.Unity
                 //X
                 {
                     if (Quantization.Scale.X.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Scale.x, Quantization.Scale.X.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Scale.x, Quantization.Scale.X.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Scale.x, stream);
+                        NetworkSerializer.WriteValue(motion.Scale.x, ref stream);
                 }
 
                 //Y
                 {
                     if (Quantization.Scale.Y.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Scale.y, Quantization.Scale.Y.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Scale.y, Quantization.Scale.Y.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Scale.y, stream);
+                        NetworkSerializer.WriteValue(motion.Scale.y, ref stream);
                 }
 
                 //Z
                 {
                     if (Quantization.Scale.Z.Enabled)
-                        Quantize.Float.Serialize(stream, motion.Scale.z, Quantization.Scale.Z.Value);
+                        Quantize.Float.Serialize(ref stream, motion.Scale.z, Quantization.Scale.Z.Value);
                     else
-                        NetworkSerializer.WriteValue(motion.Scale.z, stream);
+                        NetworkSerializer.WriteValue(motion.Scale.z, ref stream);
                 }
             }
         }
-        SnapshotData ReadPayload(INetworkStream stream, CoordinatesData origin)
+        SnapshotData ReadPayload(ref BinarySource stream, CoordinatesData origin)
         {
-            NetworkSerializer.ReadValue(stream, out NetworkTickID tick);
+            NetworkSerializer.ReadValue(ref stream, out NetworkTickID tick);
 
-            NetworkSerializer.ReadValue(stream, out ChangeFlags change);
+            NetworkSerializer.ReadValue(ref stream, out ChangeFlags change);
 
             var position = origin.Position;
             var rotation = origin.Rotation;
@@ -514,25 +516,25 @@ namespace Wsla.Unity
                 if (change.HasFlag(ChangeFlags.PositionX))
                 {
                     if (Quantization.Position.X.Enabled)
-                        position.x = Quantize.Float.Deserialize(stream, Quantization.Position.X.Value);
+                        position.x = Quantize.Float.Deserialize(ref stream, Quantization.Position.X.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out position.x);
+                        NetworkSerializer.ReadValue(ref stream, out position.x);
                 }
 
                 if (change.HasFlag(ChangeFlags.PositionY))
                 {
                     if (Quantization.Position.Y.Enabled)
-                        position.y = Quantize.Float.Deserialize(stream, Quantization.Position.Y.Value);
+                        position.y = Quantize.Float.Deserialize(ref stream, Quantization.Position.Y.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out position.y);
+                        NetworkSerializer.ReadValue(ref stream, out position.y);
                 }
 
                 if (change.HasFlag(ChangeFlags.PositionZ))
                 {
                     if (Quantization.Position.Z.Enabled)
-                        position.z = Quantize.Float.Deserialize(stream, Quantization.Position.Z.Value);
+                        position.z = Quantize.Float.Deserialize(ref stream, Quantization.Position.Z.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out position.z);
+                        NetworkSerializer.ReadValue(ref stream, out position.z);
                 }
             }
 
@@ -540,9 +542,9 @@ namespace Wsla.Unity
             if (change.HasFlag(ChangeFlags.Rotation))
             {
                 if (Quantization.Rotation)
-                    rotation = Quantize.Rotation.Deserialize(stream);
+                    rotation = Quantize.Rotation.Deserialize(ref stream);
                 else
-                    NetworkSerializer.ReadValue(stream, out rotation);
+                    NetworkSerializer.ReadValue(ref stream, out rotation);
             }
 
             //Scale
@@ -551,25 +553,25 @@ namespace Wsla.Unity
                 //X
                 {
                     if (Quantization.Scale.X.Enabled)
-                        scale.x = Quantize.Float.Deserialize(stream, Quantization.Scale.X.Value);
+                        scale.x = Quantize.Float.Deserialize(ref stream, Quantization.Scale.X.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out scale.x);
+                        NetworkSerializer.ReadValue(ref stream, out scale.x);
                 }
 
                 //Y
                 {
                     if (Quantization.Scale.Y.Enabled)
-                        scale.y = Quantize.Float.Deserialize(stream, Quantization.Scale.Y.Value);
+                        scale.y = Quantize.Float.Deserialize(ref stream, Quantization.Scale.Y.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out scale.y);
+                        NetworkSerializer.ReadValue(ref stream, out scale.y);
                 }
 
                 //Z
                 {
                     if (Quantization.Scale.Z.Enabled)
-                        scale.z = Quantize.Float.Deserialize(stream, Quantization.Scale.Z.Value);
+                        scale.z = Quantize.Float.Deserialize(ref stream, Quantization.Scale.Z.Value);
                     else
-                        NetworkSerializer.ReadValue(stream, out scale.z);
+                        NetworkSerializer.ReadValue(ref stream, out scale.z);
                 }
             }
 
@@ -589,7 +591,9 @@ namespace Wsla.Unity
         {
             var origin = SnapshotInterpolation.GetOrigin();
 
-            var snapshot = ReadPayload(stream, origin);
+            var source = BinarySource.From(stream);
+
+            var snapshot = ReadPayload(ref source, origin);
 
             if (info.IsBuffered)
             {

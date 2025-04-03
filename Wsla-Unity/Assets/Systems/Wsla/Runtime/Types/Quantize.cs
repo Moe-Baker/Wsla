@@ -16,25 +16,25 @@ namespace Wsla.Unity
     {
         public static class Float
         {
-            public static void Serialize(INetworkStream writer, float value, FloatQuantizationParameters parameter)
+            public static void Serialize(ref BinarySource writer, float value, FloatQuantizationParameters parameter)
             {
-                Serialize(writer, value, parameter.Min, parameter.Max, parameter.Bits);
+                Serialize(ref writer, value, parameter.Min, parameter.Max, parameter.Bits);
             }
-            public static void Serialize(INetworkStream writer, float value, float min, float max, byte bits)
+            public static void Serialize(ref BinarySource writer, float value, float min, float max, byte bits)
             {
                 var quantization = Compress(value, min, max, bits);
                 var bytes = BitsToBytes(bits);
-                Write(writer, quantization, bytes);
+                Write(ref writer, quantization, bytes);
             }
 
-            public static float Deserialize(INetworkStream reader, FloatQuantizationParameters parameter)
+            public static float Deserialize(ref BinarySource reader, FloatQuantizationParameters parameter)
             {
-                return Deserialize(reader, parameter.Min, parameter.Max, parameter.Bits);
+                return Deserialize(ref reader, parameter.Min, parameter.Max, parameter.Bits);
             }
-            public static float Deserialize(INetworkStream reader, float min, float max, byte bits)
+            public static float Deserialize(ref BinarySource reader, float min, float max, byte bits)
             {
                 var bytes = BitsToBytes(bits);
-                var quantization = Read<ulong>(reader, bytes);
+                var quantization = Read<ulong>(ref reader, bytes);
 
                 return Decompress(quantization, min, max, bits);
             }
@@ -72,36 +72,36 @@ namespace Wsla.Unity
 
         public static class Integer
         {
-            public static void Serialize(INetworkStream writer, int value, IntegerQuantizationParameters parameters)
+            public static void Serialize(ref BinarySource writer, int value, IntegerQuantizationParameters parameters)
             {
-                Serialize(writer, value, parameters.Min, parameters.Max, parameters.Bits);
+                Serialize(ref writer, value, parameters.Min, parameters.Max, parameters.Bits);
             }
-            public static void Serialize(INetworkStream writer, int value, int min, int max)
+            public static void Serialize(ref BinarySource writer, int value, int min, int max)
             {
                 var bits = BitsForRange(min, max);
-                Serialize(writer, value, min, max, bits);
+                Serialize(ref writer, value, min, max, bits);
             }
-            public static void Serialize(INetworkStream writer, int value, int min, int max, byte bits)
+            public static void Serialize(ref BinarySource writer, int value, int min, int max, byte bits)
             {
                 var bytes = BitsToBytes(bits);
 
                 var quantization = Compress(value, min, max);
-                Write(writer, quantization, bytes);
+                Write(ref writer, quantization, bytes);
             }
 
-            public static int Deserialize(INetworkStream reader, IntegerQuantizationParameters parameters)
+            public static int Deserialize(ref BinarySource reader, IntegerQuantizationParameters parameters)
             {
-                return Deserialize(reader, parameters.Min, parameters.Max);
+                return Deserialize(ref reader, parameters.Min, parameters.Max);
             }
-            public static int Deserialize(INetworkStream reader, int min, int max)
+            public static int Deserialize(ref BinarySource reader, int min, int max)
             {
                 var bits = BitsForRange(min, max);
-                return Deserialize(reader, min, max, bits);
+                return Deserialize(ref reader, min, max, bits);
             }
-            public static int Deserialize(INetworkStream reader, int min, int max, byte bits)
+            public static int Deserialize(ref BinarySource reader, int min, int max, byte bits)
             {
                 var bytes = BitsToBytes(bits);
-                var quantization = Read<uint>(reader, bytes);
+                var quantization = Read<uint>(ref reader, bytes);
 
                 return Decompress(quantization, min, max);
             }
@@ -121,15 +121,15 @@ namespace Wsla.Unity
 
         public static class Flag
         {
-            public static void Serialize(INetworkStream writer, ulong value, byte bits)
+            public static void Serialize(ref BinarySource writer, ulong value, byte bits)
             {
                 var bytes = BitsToBytes(bits);
-                Write(writer, value, bytes);
+                Write(ref writer, value, bytes);
             }
-            public static ulong Deserialize(INetworkStream reader, byte bits)
+            public static ulong Deserialize(ref BinarySource reader, byte bits)
             {
                 var bytes = BitsToBytes(bits);
-                return Read<ulong>(reader, bytes);
+                return Read<ulong>(ref reader, bytes);
             }
         }
 
@@ -145,14 +145,14 @@ namespace Wsla.Unity
             public const byte MaxBytes = 4;
             public const byte MaxBits = 4 * 8;
 
-            public static void Serialize(INetworkStream writer, Quaternion target)
+            public static void Serialize(ref BinarySource writer, Quaternion target)
             {
                 var quantization = Compress(target);
-                NetworkSerializer.WriteValue(in quantization, writer);
+                NetworkSerializer.WriteValue(in quantization, ref writer);
             }
-            public static Quaternion Deserialize(INetworkStream reader)
+            public static Quaternion Deserialize(ref BinarySource reader)
             {
-                NetworkSerializer.ReadValue(reader, out uint quantization);
+                NetworkSerializer.ReadValue(ref reader, out uint quantization);
                 return Decompress(quantization);
             }
 
@@ -301,14 +301,14 @@ namespace Wsla.Unity
             public const byte ByteCount = 2;
             public const byte BitCount = ByteCount * 8;
 
-            public static void Serialize(INetworkStream writer, float angle)
+            public static void Serialize(ref BinarySource writer, float angle)
             {
                 var quantization = Compress(angle);
-                NetworkSerializer.WriteValue(in quantization, writer);
+                NetworkSerializer.WriteValue(in quantization, ref writer);
             }
-            public static float Deserialize(INetworkStream reader)
+            public static float Deserialize(ref BinarySource reader)
             {
-                NetworkSerializer.ReadValue(reader, out ushort quantization);
+                NetworkSerializer.ReadValue(ref reader, out ushort quantization);
                 return Decompress(quantization);
             }
 
@@ -342,22 +342,22 @@ namespace Wsla.Unity
 
         public static byte BitsToBytes(byte bits) => (byte)((bits + 7) / 8);
 
-        static void Write<T>(INetworkStream stream, T value, int bytes)
+        static void Write<T>(ref BinarySource stream, T value, int bytes)
             where T : unmanaged
         {
-            var buffer = stream.PopMemory(bytes).Span;
+            var buffer = stream.AllocateSpan(bytes);
 
             fixed (byte* destination = buffer)
             {
                 Buffer.MemoryCopy(&value, destination, bytes, bytes);
             }
         }
-        static T Read<T>(INetworkStream stream, int bytes)
+        static T Read<T>(ref BinarySource stream, int bytes)
             where T : unmanaged
         {
             var value = default(T);
 
-            var buffer = stream.PopMemory(bytes).Span;
+            var buffer = stream.ReadSpan(bytes);
 
             fixed (byte* source = buffer)
             {
