@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
 namespace Wsla
 {
     [NetworkBlittable]
-    [JsonConverter(typeof(WrapperJsonConverter))]
     public struct NetworkSceneID : IEquatable<NetworkSceneID>
     {
         public byte Value { get; }
@@ -38,12 +36,6 @@ namespace Wsla
         public static bool operator !=(NetworkSceneID left, NetworkSceneID right) => !left.Equals(right);
 
         public static NetworkSceneID From(int index) => new NetworkSceneID((byte)index);
-
-        public class WrapperJsonConverter : JsonWrapperConverter<NetworkSceneID, byte>
-        {
-            public override NetworkSceneID CreateWrapper(byte data) => new NetworkSceneID(data);
-            public override byte ReadWrapper(NetworkSceneID wrapper) => wrapper.Value;
-        }
     }
 
     [NetworkBlittable]

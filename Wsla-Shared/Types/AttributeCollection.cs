@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -9,7 +8,6 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    [JsonConverter(typeof(WrapperJsonConverter))]
     public class AttributeCollection : IManualNetworkSerialization
     {
         public Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary;
@@ -98,18 +96,6 @@ namespace Wsla
         static Dictionary<FixedString<FS20>, FixedString<FS40>> CreateDictionary(int capacity)
         {
             return new Dictionary<FixedString<FS20>, FixedString<FS40>>(capacity);
-        }
-
-        public class WrapperJsonConverter : JsonWrapperConverter<AttributeCollection, Dictionary<FixedString<FS20>, FixedString<FS40>>>
-        {
-            public override AttributeCollection CreateWrapper(Dictionary<FixedString<FS20>, FixedString<FS40>> data)
-            {
-                return new AttributeCollection(data);
-            }
-            public override Dictionary<FixedString<FS20>, FixedString<FS40>> ReadWrapper(AttributeCollection wrapper)
-            {
-                return wrapper.Dictionary;
-            }
         }
     }
 }

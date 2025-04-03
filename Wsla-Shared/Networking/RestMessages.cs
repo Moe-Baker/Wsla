@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 
 using Wsla.Serialization;
 
@@ -10,7 +9,6 @@ namespace Wsla
     {
         public FixedString<FS20> Application;
 
-        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters Parameters;
@@ -106,7 +104,6 @@ namespace Wsla
     {
         public FixedString<FS20> Application;
 
-        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
         public ListRoomsRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
@@ -153,7 +150,6 @@ namespace Wsla
     {
         public FixedString<FS20> Application;
 
-        [JsonConverter(typeof(SparseArrayJsonConverter<ServerRegion>))]
         public SparseArray<ServerRegion> Regions;
 
         public CreateRoomParameters? CreateRoom;
