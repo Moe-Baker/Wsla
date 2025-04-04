@@ -5,6 +5,8 @@ using System.Threading;
 
 using TMPro;
 
+using Toolbox;
+
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -14,6 +16,9 @@ using Wsla.Unity;
 
 public partial class Level : NetworkBehaviour
 {
+    [PrefabOnly]
+    public GameObject PlayerPrefab;
+
     public Button DisconnectButton;
 
     public Button CodeButton;
@@ -57,10 +62,21 @@ public partial class Level : NetworkBehaviour
 
     void SpawnCallback()
     {
-        SpawnPlayers().Forget();
+        SpawnPlayer();
 
         if (Network.Room.Clients.Local.IsMaster)
             SwapScene().Forget();
+    }
+
+    public void SpawnPlayer()
+    {
+        var entity = Network.Room.Entities.InstantiatePrefab(PlayerPrefab);
+
+        Network.Room.Entities.Spawn()
+            .SetInstance(entity)
+            .SetAuthority(NetworkEntityAuthorityMode.Explicit)
+            .SetAuthority(NetworkEntityAuthorityMode.Transferable)
+            .Send();
     }
 
     async UniTaskVoid SwapScene()
@@ -87,32 +103,6 @@ public partial class Level : NetworkBehaviour
             scene = 1;
 
         Network.Room.Scene.Change(new NetworkSceneID((byte)scene));
-    }
-
-    public async UniTaskVoid SpawnPlayers()
-    {
-        while (true)
-        {
-            Network.Room.Entities.Spawn()
-                .SetResource(new NetworkEntityResource(0))
-                .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-                .SetAuthority(NetworkEntityAuthorityMode.Transferable)
-                .Send();
-
-            try
-            {
-                await UniTask.Delay(TimeSpan.FromMilliseconds(500), cancellationToken: OnDestroyCancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            if (OnDestroyCancellationToken.IsCancellationRequested)
-                return;
-
-            break;
-        }
     }
 
     void DisconnectAction()

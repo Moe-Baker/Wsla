@@ -54,7 +54,7 @@ public class MainMenu : MonoBehaviour
         var Capacity = (byte)3;
         var Scene = NetworkSceneID.From(1);
         var Password = new FixedString<FS20>();
-        var Privacy = RoomPrivacy.Private;
+        var Privacy = RoomPrivacy.Public;
         var Lock = RoomLockPolicy.AfterFill;
 
         return new CreateRoomParameters(Name, Capacity, Scene, Password, Privacy, Lock);

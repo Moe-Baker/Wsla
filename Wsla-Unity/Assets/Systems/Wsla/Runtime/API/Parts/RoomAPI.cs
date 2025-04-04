@@ -629,31 +629,57 @@ namespace Wsla.Unity
             }
 
             #region Controls
+            public NetworkEntity InstantiatePrefab(GameObject prefab)
+            {
+                if (Room.API.SyncedPrefabs.TryGet(prefab, out var resource) is false)
+                    throw new ArgumentException($"prefab {prefab} not Registered as Sync Prefab");
+
+                return InstantiatePrefab(prefab, resource);
+            }
+            public NetworkEntity InstantiatePrefab(NetworkEntityResource resource)
+            {
+                if (Room.API.SyncedPrefabs.TryGet(resource, out var prefab) is false)
+                    throw new ArgumentOutOfRangeException($"resource {resource} not Registered as Sync Prefab");
+
+                return InstantiatePrefab(prefab, resource);
+            }
+            NetworkEntity InstantiatePrefab(GameObject prefab, NetworkEntityResource resource)
+            {
+                var gameObject = GameObject.Instantiate(prefab).GetComponent<NetworkEntity>();
+
+                if (gameObject.TryGetComponent(out NetworkEntity entity) is false)
+                    throw new ArgumentException($"Synced Prefab ({prefab}) Has no NetworkEntity Component Attached");
+
+                entity.SetResource(resource);
+                entity.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+                return entity;
+            }
+
             public SpawnOptions Spawn() => new SpawnOptions(Room);
             public ref struct SpawnOptions
             {
                 readonly RoomAPI Room;
 
                 internal NetworkEntityID Token;
-                internal NetworkEntityResource Resource;
+                internal NetworkEntity Instance;
                 internal NetworkEntityAuthorityMode Authority;
 
-                public SpawnOptions SetResource(NetworkEntityResource value)
+                public SpawnOptions SetResource(NetworkEntityResource resource)
                 {
-                    ResourceAssigned = true;
-                    Resource = value;
+                    var instance = Room.Entities.InstantiatePrefab(resource);
+                    SetInstance(instance);
                     return this;
                 }
                 public SpawnOptions SetPrefab(GameObject prefab)
                 {
-                    if (Room.API.SyncedPrefabs.TryGet(prefab, out var value) is false)
-                    {
-                        NetworkLog.Error($"prefab {prefab} not Registerd as Sync Prefab");
-                        return this;
-                    }
-
-                    ResourceAssigned = true;
-                    Resource = value;
+                    var instance = Room.Entities.InstantiatePrefab(prefab);
+                    SetInstance(instance);
+                    return this;
+                }
+                public SpawnOptions SetInstance(NetworkEntity value)
+                {
+                    Instance = value;
                     return this;
                 }
 
@@ -669,7 +695,6 @@ namespace Wsla.Unity
                     return this;
                 }
 
-                bool ResourceAssigned;
                 bool Validate()
                 {
                     if (Room.Clients.Local.SpawnAllowance is 0)
@@ -678,9 +703,9 @@ namespace Wsla.Unity
                         return false;
                     }
 
-                    if (ResourceAssigned is false)
+                    if (Instance == null)
                     {
-                        NetworkLog.Error($"No Resource/Prefab Specified");
+                        NetworkLog.Error($"No Entity (Resource/Prefab/Instance) Specified");
                         return false;
                     }
 
@@ -698,7 +723,7 @@ namespace Wsla.Unity
 
                         Token = Room.Clients.Local.RemoveSpawnToken();
 
-                        var request = new SpawnPrefabEntityRequest(Token, Resource, Authority, Room.Scene.Version);
+                        var request = new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
                         NetworkSerializer.WriteHeader(in request, writer);
 
                         Room.Transport.SendWriter(in writer);
@@ -713,10 +738,8 @@ namespace Wsla.Unity
                     this.Room = Room;
 
                     Token = default;
-                    Resource = default;
+                    Instance = default;
                     Authority = NetworkEntityAuthorityMode.Explicit;
-
-                    ResourceAssigned = false;
                 }
             }
 
@@ -833,13 +856,16 @@ namespace Wsla.Unity
 
             NetworkEntity SpawnLocal(SpawnOptions options)
             {
-                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, options.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
+                var entity = options.Instance;
 
-                var instance = Assimilate(definition);
+                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, entity.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
 
-                instance.Spawn();
+                entity.Assign(Room, definition);
+                Register(entity);
 
-                return instance;
+                entity.Spawn();
+
+                return entity;
             }
 
             NetworkEntity RetrieveInstance(NetworkEntityDefinition definition)
@@ -860,22 +886,6 @@ namespace Wsla.Unity
             {
                 if (Room.Scene.Component.TryGetLocal(resource, out var entity) is false)
                     throw new ArgumentException($"No Resource {resource} found in Scene {Room.Scene.Component}");
-
-                return entity;
-            }
-            NetworkEntity InstantiatePrefab(NetworkEntityResource resource)
-            {
-                if (Room.API.SyncedPrefabs.TryGet(resource, out var prefab) is false)
-                    throw new ArgumentException($"No Synced Prefab found With ID {prefab}");
-
-                return InstantiatePrefab(prefab);
-            }
-            NetworkEntity InstantiatePrefab(GameObject prefab)
-            {
-                var gameObject = GameObject.Instantiate(prefab);
-
-                if (gameObject.TryGetComponent<NetworkEntity>(out var entity) is false)
-                    throw new ArgumentException($"Synced Prefab {prefab} Has no NetworkEntity Component");
 
                 return entity;
             }

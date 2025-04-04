@@ -5,8 +5,6 @@ using Toolbox;
 
 using UnityEngine;
 
-using Wsla.Serialization;
-
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -17,7 +15,12 @@ namespace Wsla.Unity
     {
         public NetworkEntityID ID { get; private set; }
         public NetworkEntityOrigin Origin { get; private set; }
+
         public NetworkEntityResource Resource { get; private set; }
+        internal void SetResource(NetworkEntityResource value)
+        {
+            Resource = Resource;
+        }
 
         public NetworkClient Owner { get; private set; }
         internal int OwnerRegistration;
