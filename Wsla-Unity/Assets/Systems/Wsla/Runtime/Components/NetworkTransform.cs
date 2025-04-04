@@ -582,8 +582,13 @@ namespace Wsla.Unity
 
         void Update()
         {
-            if (Network.Entity.IsRemote)
-                SnapshotInterpolation.Step();
+            if (Network.Entity.IsSpawned is false)
+                return;
+
+            if (Network.Entity.IsRemote is false)
+                return;
+
+            SnapshotInterpolation.Step();
         }
 
         [RPC]

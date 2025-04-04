@@ -63,71 +63,8 @@ namespace Wsla.Unity
             Authority = NetworkEntityAuthorityMode.Transferable;
         }
 
-        public RoomAPI Room { get; private set; }
-        internal void Assign(RoomAPI Room, NetworkEntityDefinition definition)
-        {
-            this.Room = Room;
-
-            Behaviours.Create();
-
-            ID = definition.ID;
-            Origin = definition.Origin;
-            Resource = definition.Resource;
-            Authority = definition.Authority;
-
-            TransferToken = definition.TransferToken;
-
-            //Assign Owner
-            if (definition.Authority is NetworkEntityAuthorityMode.Authoritative)
-            {
-                AssignOwner(Room.Clients.Master);
-            }
-            else
-            {
-                if (Room.Clients.TryGet(definition.Owner, out var reference) is false)
-                    throw new InvalidOperationException($"No Network Client {definition.Owner} Found");
-
-                AssignOwner(reference);
-            }
-        }
-
-        #region Spawn
-        public bool IsSpawned { get; private set; }
-
-        internal void Spawn()
-        {
-            NetworkLog.Info($"Spawning Entity {ID}");
-
-            IsSpawned = true;
-
-            OnSpawn?.Invoke();
-        }
-        public event Action OnSpawn;
-
-        internal void Despawn()
-        {
-            NetworkLog.Info($"Despawning Entity {ID}");
-
-            IsSpawned = false;
-
-            OnDespawn?.Invoke();
-        }
-        public event Action OnDespawn;
-
-        internal void Destroy()
-        {
-            Destroy(gameObject);
-        }
-        #endregion
-
-        public bool IsReplicated { get; private set; }
-        internal void Replicate()
-        {
-            IsReplicated = true;
-
-            OnReplicated?.Invoke();
-        }
-        public event Action OnReplicated;
+        public NetworkAPI API => NetworkAPI.Instance;
+        public RoomAPI Room => API.Room;
 
         [field: SerializeField]
         public BehavioursProperty Behaviours { get; private set; }
@@ -186,8 +123,8 @@ namespace Wsla.Unity
             public MonoBehaviour Script { get; }
             public INetworkBehaviour Contract { get; }
 
-            public RoomAPI Room => Entity.Room;
             public NetworkAPI API => NetworkAPI.Instance;
+            public RoomAPI Room => API.Room;
 
             public NetworkClient Owner => Entity.Owner;
             public NetworkEntityAuthorityMode Authority => Entity.Authority;
@@ -253,7 +190,7 @@ namespace Wsla.Unity
 
                     return Invoke(bind);
                 }
-                public RpcInvocationBuilder Invoke(BaseRpcBind bind) => new RpcInvocationBuilder(bind, Behaviour.Entity.Room);
+                public RpcInvocationBuilder Invoke(BaseRpcBind bind) => new RpcInvocationBuilder(bind);
 
                 void Register(BaseRpcBind bind)
                 {
@@ -325,7 +262,7 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                public VariableInvocationBuilder Set(NetworkVariable variable) => new VariableInvocationBuilder(variable, Behaviour.Entity.Room);
+                public VariableInvocationBuilder Set(NetworkVariable variable) => new VariableInvocationBuilder(variable);
 
                 NetworkVariableID Index;
                 void Register(NetworkVariable variable)
@@ -391,12 +328,72 @@ namespace Wsla.Unity
 #if UNITY_EDITOR
             PreCache();
 #endif
+
+            Behaviours.Create();
         }
 
-        public void PreCache()
+        public void PreCache() => Behaviours.PreCache();
+
+        internal void Assign(NetworkEntityDefinition definition)
         {
-            Behaviours.PreCache();
+            ID = definition.ID;
+            Origin = definition.Origin;
+            Resource = definition.Resource;
+            Authority = definition.Authority;
+
+            TransferToken = definition.TransferToken;
+
+            //Assign Owner
+            if (definition.Authority is NetworkEntityAuthorityMode.Authoritative)
+            {
+                AssignOwner(Room.Clients.Master);
+            }
+            else
+            {
+                if (Room.Clients.TryGet(definition.Owner, out var reference) is false)
+                    throw new InvalidOperationException($"No Network Client {definition.Owner} Found");
+
+                AssignOwner(reference);
+            }
         }
+
+        #region Spawn
+        public bool IsSpawned { get; private set; }
+
+        internal void Spawn()
+        {
+            NetworkLog.Info($"Spawning Entity {ID}");
+
+            IsSpawned = true;
+
+            OnSpawn?.Invoke();
+        }
+        public event Action OnSpawn;
+
+        public bool IsReplicated { get; private set; }
+        internal void Replicate()
+        {
+            IsReplicated = true;
+
+            OnReplicated?.Invoke();
+        }
+        public event Action OnReplicated;
+
+        internal void Despawn()
+        {
+            NetworkLog.Info($"Despawning Entity {ID}");
+
+            IsSpawned = false;
+
+            OnDespawn?.Invoke();
+        }
+        public event Action OnDespawn;
+
+        internal void Destroy()
+        {
+            Destroy(gameObject);
+        }
+        #endregion
 
         public NetworkEntity()
         {

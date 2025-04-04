@@ -35,6 +35,12 @@ namespace Wsla.Unity
 
         public VariableInvocationBuilder Change(T value) => Behaviour.Variables.Set(this).SetValue(value);
 
+        public void Initialize(T value)
+        {
+            Value_Internal = value;
+            throw new NotImplementedException();
+        }
+
         public event SetDelegate OnSet;
         public delegate void SetDelegate(ChangePairData<T> value, NetworkVariableInfo info);
         internal override void Set(INetworkStream reader, NetworkVariableInfo info)
@@ -60,13 +66,14 @@ namespace Wsla.Unity
 
     public struct NetworkVariableInfo : ISyncMemberInfo
     {
-        public RoomAPI Room { get; }
-
         NetworkClientID SenderID;
 
         public DeliveryMethod Delivery { get; }
         public byte Channel { get; }
         public bool IsBuffered { get; }
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
 
         /// <summary>
         /// Get the sender of the Variable, only valid if this Variable's Sender is still in the Room, consider using <see cref="TryGetSender(out NetworkClient)"/> for a safer alternative
@@ -101,37 +108,38 @@ namespace Wsla.Unity
             return true;
         }
 
-        public NetworkVariableInfo(RoomAPI Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        public NetworkVariableInfo(NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
         {
-            this.Room = Room;
             this.SenderID = SenderID;
             this.Channel = Channel;
             this.Delivery = Delivery;
             this.IsBuffered = IsBuffered;
         }
 
-        public static NetworkVariableInfo FromRemote(RoomAPI room, ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
+        public static NetworkVariableInfo FromRemote(ref NetworkVariableCommand command, byte channel, DeliveryMethod delivery)
         {
-            return new NetworkVariableInfo(room, command.Sender, channel, delivery, false);
+            return new NetworkVariableInfo(command.Sender, channel, delivery, false);
         }
 
         public static NetworkVariableInfo FromLocal(ref VariableInvocationBuilder builder)
         {
-            var senderID = builder.Room.Clients.Local.ID;
+            var senderID = Room.Clients.Local.ID;
 
-            return new NetworkVariableInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
+            return new NetworkVariableInfo(senderID, builder.Channel, builder.Delivery, false);
         }
 
-        public static NetworkVariableInfo FromBuffer(RoomAPI room, NetworkClientID senderID) => new NetworkVariableInfo(room, senderID, 0, DeliveryMethod.ReliableOrdered, true);
+        public static NetworkVariableInfo FromBuffer(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public struct VariableInvocationBuilder
     {
         internal readonly NetworkVariable Variable;
-        internal readonly RoomAPI Room;
 
         internal NetDataWriter ValueWriter;
         internal NetDataWriter PacketWriter;
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
 
         internal byte Channel;
         public VariableInvocationBuilder SetChannel(byte value)
@@ -184,7 +192,7 @@ namespace Wsla.Unity
         }
 
         /// <summary>
-        /// Broadcasted to all clients and bufferd for late joining clients
+        /// Broadcasted to all clients and buffered for late joining clients
         /// </summary>
         public void Broadcast()
         {
@@ -207,7 +215,7 @@ namespace Wsla.Unity
         }
 
         /// <summary>
-        /// bufferd for all late joining clients, but not broadcasted to currently joining clients
+        /// buffered for all late joining clients, but not broadcasted to currently joining clients
         /// </summary>
         public void Buffer()
         {
@@ -236,10 +244,9 @@ namespace Wsla.Unity
             ValueWriter.SetPosition(marker);
         }
 
-        public VariableInvocationBuilder(NetworkVariable Variable, RoomAPI Room)
+        public VariableInvocationBuilder(NetworkVariable Variable)
         {
             this.Variable = Variable;
-            this.Room = Room;
 
             ValueWriter = ValueWriterPool.Take();
             PacketWriter = Room.Pools.SinglePackerWriter.Take();

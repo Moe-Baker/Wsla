@@ -473,9 +473,9 @@ namespace Wsla.Unity
                     NetworkClient client;
 
                     if (id == message.LocalID)
-                        client = Local = new LocalNetworkClient(Room, id, message.SpawnTokens);
+                        client = Local = new LocalNetworkClient(id, message.SpawnTokens);
                     else
-                        client = new RemoteNetworkClient(Room, id);
+                        client = new RemoteNetworkClient(id);
 
                     if (id == message.MasterID)
                         Master = client;
@@ -485,18 +485,18 @@ namespace Wsla.Unity
                     Register(client);
                 }
 
-                //Check if we didn't recieve our local client
+                //Check if we didn't receive our local client
                 if (Local is null)
                     throw new InvalidOperationException("No Local Client Received in Response");
 
-                //Check if we didn't recieve the master client
+                //Check if we didn't receive the master client
                 if (Master is null)
                     throw new InvalidOperationException("No Master Client Received in Response");
             }
 
             void ConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var client = RemoteNetworkClient.ReadInstance(Room, ref reader);
+                var client = RemoteNetworkClient.ReadInstance(ref reader);
 
                 Register(client);
             }
@@ -848,7 +848,7 @@ namespace Wsla.Unity
             {
                 var instance = RetrieveInstance(definition);
 
-                instance.Assign(Room, definition);
+                instance.Assign(definition);
                 Register(instance);
 
                 return instance;
@@ -860,7 +860,7 @@ namespace Wsla.Unity
 
                 var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, entity.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
 
-                entity.Assign(Room, definition);
+                entity.Assign(definition);
                 Register(entity);
 
                 entity.Spawn();
@@ -985,7 +985,7 @@ namespace Wsla.Unity
                     return;
                 }
 
-                var info = RpcInfo.FromRemote(Room, ref message, channel, delivery);
+                var info = RpcInfo.FromRemote(ref message, channel, delivery);
 
                 bind.Invoke(reader, info);
             }
@@ -1042,7 +1042,7 @@ namespace Wsla.Unity
 
                         if (Get(entity, behaviourID, rpcID, out var bind))
                         {
-                            var info = RpcInfo.FromBuffer(Room, senderID);
+                            var info = RpcInfo.FromBuffer(senderID);
                             bind.Invoke(reader, info);
                         }
                     }
@@ -1071,7 +1071,7 @@ namespace Wsla.Unity
                     return;
                 }
 
-                var info = NetworkVariableInfo.FromRemote(Room, ref message, channel, delivery);
+                var info = NetworkVariableInfo.FromRemote(ref message, channel, delivery);
 
                 bind.Set(reader, info);
             }
@@ -1128,7 +1128,7 @@ namespace Wsla.Unity
 
                         if (Get(entity, behaviourID, variableID, out var variable))
                         {
-                            var info = NetworkVariableInfo.FromBuffer(Room, senderID);
+                            var info = NetworkVariableInfo.FromBuffer(senderID);
                             variable.Set(reader, info);
                         }
                     }
@@ -1261,7 +1261,7 @@ namespace Wsla.Unity
 
                     var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID, transferToken);
 
-                    entity.Assign(Room, definition);
+                    entity.Assign(definition);
                     Room.Entities.Register(entity);
 
                     entity.Spawn();

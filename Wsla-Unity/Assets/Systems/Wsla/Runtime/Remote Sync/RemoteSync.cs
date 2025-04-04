@@ -41,8 +41,6 @@ namespace Wsla.Unity
 
     public interface ISyncMemberInfo
     {
-        RoomAPI Room { get; }
-
         DeliveryMethod Delivery { get; }
 
         byte Channel { get; }

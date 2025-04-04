@@ -5,6 +5,9 @@ using Wsla.Unity;
 
 public partial class Player : NetworkBehaviour
 {
+    public NetworkVariable<Vector3> Position;
+    public NetworkVariable<Quaternion> Rotation;
+
     [SerializeField]
     float MovementSpeed = 5f;
     [SerializeField]
@@ -13,11 +16,9 @@ public partial class Player : NetworkBehaviour
     [SerializeField]
     float RotationSpeed = 420f;
 
-    [SerializeField]
-    Rigidbody Rigidbody;
-
-    [SerializeField]
-    NetworkAnimator Animator;
+    public Rigidbody Rigidbody { get; private set; }
+    public NetworkAnimator NetworkAnimator { get; private set; }
+    public NetworkTransform NetworkTransform { get; private set; }
 
     NetworkAnimatorMemberIndex MoveIndex;
 
@@ -31,7 +32,11 @@ public partial class Player : NetworkBehaviour
     {
         base.Set(reference);
 
-        MoveIndex = Animator.IndexFloat("Move");
+        Rigidbody = GetComponent<Rigidbody>();
+        NetworkAnimator = GetComponentInChildren<NetworkAnimator>();
+        NetworkTransform = GetComponent<NetworkTransform>();
+
+        MoveIndex = NetworkAnimator.IndexFloat("Move");
 
         Network.Entity.OnSpawn += SpawnCallback;
     }
@@ -74,7 +79,7 @@ public partial class Player : NetworkBehaviour
         velocity.y = 0f;
 
         var value = velocity.magnitude / MovementSpeed;
-        Animator.SetFloat(MoveIndex, value);
+        NetworkAnimator.SetFloat(MoveIndex, value);
     }
 
     Vector2 GetInput()

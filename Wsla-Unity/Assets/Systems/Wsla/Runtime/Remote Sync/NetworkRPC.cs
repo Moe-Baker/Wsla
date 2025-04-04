@@ -203,13 +203,14 @@ namespace Wsla.Unity
 
     public struct RpcInfo : ISyncMemberInfo
     {
-        public RoomAPI Room { get; }
-
         NetworkClientID SenderID;
 
         public DeliveryMethod Delivery { get; }
         public byte Channel { get; }
         public bool IsBuffered { get; }
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
 
         public NetworkClient GetSender()
         {
@@ -232,26 +233,25 @@ namespace Wsla.Unity
             return true;
         }
 
-        public RpcInfo(RoomAPI Room, NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
+        public RpcInfo(NetworkClientID SenderID, byte Channel, DeliveryMethod Delivery, bool IsBuffered)
         {
-            this.Room = Room;
             this.SenderID = SenderID;
             this.Channel = Channel;
             this.Delivery = Delivery;
             this.IsBuffered = IsBuffered;
         }
 
-        public static RpcInfo FromRemote(RoomAPI room, ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
+        public static RpcInfo FromRemote(ref NetworkRpcCommand command, byte channel, DeliveryMethod delivery)
         {
-            return new RpcInfo(room, command.Sender, channel, delivery, false);
+            return new RpcInfo(command.Sender, channel, delivery, false);
         }
         public static RpcInfo FromLocal(ref RpcInvocationBuilder builder)
         {
-            var senderID = builder.Room.Clients.Local.ID;
+            var senderID = Room.Clients.Local.ID;
 
-            return new RpcInfo(builder.Room, senderID, builder.Channel, builder.Delivery, false);
+            return new RpcInfo(senderID, builder.Channel, builder.Delivery, false);
         }
-        public static RpcInfo FromBuffer(RoomAPI room, NetworkClientID senderID) => new RpcInfo(room, senderID, 0, DeliveryMethod.ReliableOrdered, true);
+        public static RpcInfo FromBuffer(NetworkClientID senderID) => new RpcInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public interface IRegisterCustomRPCs
@@ -262,10 +262,12 @@ namespace Wsla.Unity
     public struct RpcInvocationBuilder
     {
         internal readonly BaseRpcBind Bind;
-        internal readonly RoomAPI Room;
 
         internal NetDataWriter ArgumentsWriter;
         internal NetDataWriter PacketWriter;
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
 
         internal byte Channel;
         public RpcInvocationBuilder SetChannel(byte value)
@@ -498,10 +500,9 @@ namespace Wsla.Unity
             Bind.Invoke(ArgumentsWriter, info);
         }
 
-        public RpcInvocationBuilder(BaseRpcBind Bind, RoomAPI Room)
+        public RpcInvocationBuilder(BaseRpcBind Bind)
         {
             this.Bind = Bind;
-            this.Room = Room;
 
             ArgumentsWriter = ArgumentWriterPool.Take();
             PacketWriter = Room.Pools.SinglePackerWriter.Take();

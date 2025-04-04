@@ -37,7 +37,8 @@ namespace Wsla.Unity
         }
         #endregion
 
-        public RoomAPI Room { get; }
+        public NetworkAPI API => NetworkAPI.Instance;
+        public RoomAPI Room => API.Room;
 
         public static NetworkClientID ReadID(NetPacketReader reader)
         {
@@ -72,9 +73,8 @@ namespace Wsla.Unity
             return builder.ToString();
         }
 
-        public NetworkClient(RoomAPI Room, NetworkClientID ID)
+        public NetworkClient(NetworkClientID ID)
         {
-            this.Room = Room;
             this.ID = ID;
 
             Entities = new(0);
@@ -83,18 +83,18 @@ namespace Wsla.Unity
 
     public class RemoteNetworkClient : NetworkClient
     {
-        public static RemoteNetworkClient ReadInstance(RoomAPI room, ref NetPacketReader reader)
+        public static RemoteNetworkClient ReadInstance(ref NetPacketReader reader)
         {
             var id = ReadID(reader);
 
-            var client = new RemoteNetworkClient(room, id);
+            var client = new RemoteNetworkClient(id);
 
             client.ReadState(reader);
 
             return client;
         }
 
-        public RemoteNetworkClient(RoomAPI Room, NetworkClientID ID) : base(Room, ID) { }
+        public RemoteNetworkClient(NetworkClientID ID) : base(ID) { }
     }
     public class LocalNetworkClient : NetworkClient
     {
@@ -121,7 +121,7 @@ namespace Wsla.Unity
         }
         #endregion
 
-        public LocalNetworkClient(RoomAPI Room, NetworkClientID ID, int SpawnTokenCapacity) : base(Room, ID)
+        public LocalNetworkClient(NetworkClientID ID, int SpawnTokenCapacity) : base(ID)
         {
             SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
         }

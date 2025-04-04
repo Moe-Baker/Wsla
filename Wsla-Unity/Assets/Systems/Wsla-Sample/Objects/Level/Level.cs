@@ -72,11 +72,15 @@ public partial class Level : NetworkBehaviour
     {
         var entity = Network.Room.Entities.InstantiatePrefab(PlayerPrefab);
 
+        var player = entity.GetComponent<Player>();
+        player.Position.Initialize(new Vector3(1, 2, 3));
+
         Network.Room.Entities.Spawn()
             .SetInstance(entity)
             .SetAuthority(NetworkEntityAuthorityMode.Explicit)
             .SetAuthority(NetworkEntityAuthorityMode.Transferable)
-            .Send();
+            //.Send();
+            ;
     }
 
     async UniTaskVoid SwapScene()
