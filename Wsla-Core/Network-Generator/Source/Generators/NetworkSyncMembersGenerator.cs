@@ -267,12 +267,27 @@ namespace Wsla.Generator
                         if (property.Type.InheritsFrom(compilation.BaseNetworkVariable) is false)
                             continue;
 
+                        if (property.IsReadOnly || property.IsWriteOnly)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.InAccessibleNetworkVariable.Create(property));
+                            continue;
+                        }
+
                         variables.Add(property);
                     }
                     else if (member is IFieldSymbol field)
                     {
+                        if (field.IsImplicitlyDeclared)
+                            continue;
+
                         if (field.Type.InheritsFrom(compilation.BaseNetworkVariable) is false)
                             continue;
+
+                        if (field.IsReadOnly)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.InAccessibleNetworkVariable.Create(field));
+                            continue;
+                        }
 
                         variables.Add(field);
                     }

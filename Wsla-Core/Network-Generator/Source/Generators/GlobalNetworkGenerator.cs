@@ -61,6 +61,14 @@ namespace Wsla.Generator
                     "Usage",
                     DiagnosticSeverity.Error,
                     true);
+
+            public static readonly DiagnosticDescriptor InAccessibleNetworkVariable
+                = new DiagnosticDescriptor("WSLA8",
+                    "Network Variable In Accessible",
+                    "Network Variables Must be Write/Read Enabled",
+                    "Usage",
+                    DiagnosticSeverity.Error,
+                    true);
         }
 
         public class Constants
