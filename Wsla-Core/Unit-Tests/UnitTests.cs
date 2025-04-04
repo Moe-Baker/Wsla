@@ -566,7 +566,7 @@ namespace NetworkSerializationTests
             {
                 source.SetValue(key, original);
 
-                if (source.TryParseValue(key, out T clone) is false)
+                if (source.TryGetValue(key, out T clone) is false)
                     throw new NotImplementedException();
 
                 Assert.Equal(original, clone);

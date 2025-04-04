@@ -161,6 +161,11 @@ namespace Wsla.Serialization
             Register(new FixedStringNetworkSerializationResolver<FixedString<FS60>>());
             Register(new FixedStringNetworkSerializationResolver<FixedString<FS80>>());
 
+            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB20>>());
+            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB40>>());
+            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB80>>());
+            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB160>>());
+
             Registration.LoadAll();
         }
     }

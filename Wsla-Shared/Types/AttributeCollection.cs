@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Wsla.Serialization;
@@ -10,45 +9,29 @@ namespace Wsla
 {
     public class AttributeCollection : IManualNetworkSerialization
     {
-        public Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary;
+        public Dictionary<FixedString<FS20>, FixedBinary<FB40>> Dictionary;
 
-        public bool TryGetValue(FixedString<FS20> key, out FixedString<FS40> value) => Dictionary.TryGetValue(key, out value);
-
-        public bool TryParseValue<T>(FixedString<FS20> key, out T value)
+        public bool TryGetValue<T>(FixedString<FS20> key, out T value)
         {
-            if (Dictionary.TryGetValue(key, out var text) is false)
+            if (Dictionary.TryGetValue(key, out var binary) is false)
             {
                 value = default;
                 return false;
             }
 
-            return TextValueConverter.TryParse(text, out value);
-        }
-
-        public void SetValue(FixedString<FS20> key, FixedString<FS40> value)
-        {
-            Dictionary[key] = value;
-        }
-        public void SetValue(FixedString<FS20> key, string value)
-        {
-            Dictionary[key] = new FixedString<FS20>(value);
-        }
-        public void SetValue(FixedString<FS20> key, ReadOnlySpan<char> value)
-        {
-            Dictionary[key] = new FixedString<FS20>(value);
+            var source = BinarySource.From(ref binary);
+            NetworkSerializer.ReadValue(ref source, out value);
+            return true;
         }
         public void SetValue<T>(FixedString<FS20> key, T value)
         {
-            var text = new FixedString<FS40>();
+            var binary = new FixedBinary<FB40>();
+            var source = BinarySource.From(ref binary);
 
-            var span = text.GetTotalSpan();
+            NetworkSerializer.WriteValue(in value, ref source);
+            binary.SetLength(source.Position);
 
-            if (TextValueConverter.TryFormat(value, span, out var written) is false)
-                throw new ArgumentOutOfRangeException($"Argument ({value}) Can't Fit into {text.Max} Characters");
-
-            text.SetLength(written);
-
-            Dictionary[key] = text;
+            Dictionary[key] = binary;
         }
 
         public void Write(ref BinarySource stream)
@@ -78,24 +61,24 @@ namespace Wsla
             for (int i = 0; i < length; i++)
             {
                 var key = NetworkSerializer.ReadValue<FixedString<FS20>>(ref stream);
-                var value = NetworkSerializer.ReadValue<FixedString<FS40>>(ref stream);
+                var value = NetworkSerializer.ReadValue<FixedBinary<FB40>>(ref stream);
 
                 Dictionary.Add(key, value);
             }
         }
 
-        public Dictionary<FixedString<FS20>, FixedString<FS40>>.Enumerator GetEnumerator() => Dictionary.GetEnumerator();
+        public Dictionary<FixedString<FS20>, FixedBinary<FB40>>.Enumerator GetEnumerator() => Dictionary.GetEnumerator();
 
         public AttributeCollection() : this(0) { }
         public AttributeCollection(int capacity) : this(CreateDictionary(capacity)) { }
-        public AttributeCollection(Dictionary<FixedString<FS20>, FixedString<FS40>> Dictionary)
+        public AttributeCollection(Dictionary<FixedString<FS20>, FixedBinary<FB40>> Dictionary)
         {
             this.Dictionary = Dictionary;
         }
 
-        static Dictionary<FixedString<FS20>, FixedString<FS40>> CreateDictionary(int capacity)
+        static Dictionary<FixedString<FS20>, FixedBinary<FB40>> CreateDictionary(int capacity)
         {
-            return new Dictionary<FixedString<FS20>, FixedString<FS40>>(capacity);
+            return new Dictionary<FixedString<FS20>, FixedBinary<FB40>>(capacity);
         }
     }
 }

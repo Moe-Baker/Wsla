@@ -237,5 +237,11 @@ namespace Wsla.Serialization
 
         public static BinarySource From(INetworkStream stream) => new(stream);
         public static BinarySource From(Span<byte> span) => new(span);
+        public static BinarySource From<TBinary>(ref TBinary binary)
+            where TBinary : IFixedBinary
+        {
+            var span = binary.GetTotalSpan();
+            return new(span);
+        }
     }
 }
