@@ -74,18 +74,18 @@ namespace Wsla.Unity
             [field: SerializeField]
             public MonoBehaviour[] Components { get; private set; }
 
-            public Behaviour[] Behaviours { get; private set; }
+            public Behaviour[] List { get; private set; }
             public bool TryGet(NetworkBehaviourID id, out Behaviour behaviour)
             {
                 var index = id.Value;
 
-                if (Behaviours.IsValidIndex(index) is false)
+                if (List.IsValidIndex(index) is false)
                 {
                     behaviour = default;
                     return false;
                 }
 
-                behaviour = Behaviours[index];
+                behaviour = List[index];
                 return true;
             }
 
@@ -97,13 +97,13 @@ namespace Wsla.Unity
 
             internal void Create()
             {
-                Behaviours = new Behaviour[Components.Length];
+                List = new Behaviour[Components.Length];
 
                 for (byte i = 0; i < Components.Length; i++)
                 {
                     var id = new NetworkBehaviourID(i);
 
-                    Behaviours[i] = new Behaviour(Entity, id, Components[i]);
+                    List[i] = new Behaviour(Entity, id, Components[i]);
                 }
             }
 
@@ -247,7 +247,7 @@ namespace Wsla.Unity
             {
                 readonly Behaviour Behaviour;
 
-                List<NetworkVariable> List;
+                internal List<NetworkVariable> List;
                 public bool TryGet(NetworkVariableID id, out NetworkVariable variable)
                 {
                     var index = id.Value;
@@ -261,8 +261,6 @@ namespace Wsla.Unity
                     variable = List[index];
                     return true;
                 }
-
-                public VariableInvocationBuilder Set(NetworkVariable variable) => new VariableInvocationBuilder(variable);
 
                 NetworkVariableID Index;
                 void Register(NetworkVariable variable)
@@ -386,6 +384,9 @@ namespace Wsla.Unity
             IsSpawned = false;
 
             OnDespawn?.Invoke();
+
+            if (Origin is NetworkEntityOrigin.Prefab)
+                Destroy();
         }
         public event Action OnDespawn;
 

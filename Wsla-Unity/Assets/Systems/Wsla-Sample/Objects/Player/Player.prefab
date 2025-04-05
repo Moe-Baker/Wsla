@@ -147,8 +147,6 @@ MonoBehaviour:
   MovementSpeed: 6
   MovementAcceleration: 20
   RotationSpeed: 420
-  Rigidbody: {fileID: 4092782496546022036}
-  Animator: {fileID: 8440376151993100325}
 --- !u!54 &4092782496546022036
 Rigidbody:
   m_ObjectHideFlags: 0

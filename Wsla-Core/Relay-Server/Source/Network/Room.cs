@@ -650,6 +650,18 @@ namespace Wsla.Server
 
                 Register(entity);
 
+                Memory<byte> PolicyData;
+
+                //Read Network Variables
+                {
+                    PolicyData = reader.PeekAvailableMemory();
+
+                    var variables = new EntitySpawnVariableInitializationReader(reader);
+
+                    foreach (var entry in variables)
+                        entity.VariableBuffer.Register(sender, entry.Behaviour, entry.Variable, entry.Binary.Span);
+                }
+
                 //Respond to Sender
                 {
                     var response = new SpawnPrefabEntityResponse(entity.ID, replacement);
@@ -662,6 +674,12 @@ namespace Wsla.Server
 
                     var command = new SpawnPrefabEntityCommand(entity.ID, entity.Resource, entity.Authority, entity.Owner.ID);
                     NetworkSerializer.WriteHeader(in command, writer);
+
+                    //Append Policy
+                    {
+                        var destination = writer.PopMemory(PolicyData.Length);
+                        PolicyData.CopyTo(destination);
+                    }
 
                     Transport.BroadcastWriter(writer, except: sender);
                 }

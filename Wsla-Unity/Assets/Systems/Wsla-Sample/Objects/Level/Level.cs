@@ -14,6 +14,8 @@ using UnityEngine.UI;
 using Wsla;
 using Wsla.Unity;
 
+using Random = UnityEngine.Random;
+
 public partial class Level : NetworkBehaviour
 {
     [PrefabOnly]
@@ -72,15 +74,26 @@ public partial class Level : NetworkBehaviour
     {
         var entity = Network.Room.Entities.InstantiatePrefab(PlayerPrefab);
 
-        var player = entity.GetComponent<Player>();
-        player.Position.Initialize(new Vector3(1, 2, 3));
+        //Set Position
+        {
+            var player = entity.GetComponent<Player>();
+
+            var position = new Vector3()
+            {
+                x = Random.Range(-5, +5),
+                y = 0,
+                z = Random.Range(-5, +5),
+            };
+
+            var rotation = Quaternion.Euler(Vector3.up * Random.Range(0, 360f));
+
+            player.NetworkTransform.Initialize(position: position, rotation: rotation);
+        }
 
         Network.Room.Entities.Spawn()
             .SetInstance(entity)
             .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-            .SetAuthority(NetworkEntityAuthorityMode.Transferable)
-            //.Send();
-            ;
+            .Send();
     }
 
     async UniTaskVoid SwapScene()

@@ -13,13 +13,13 @@ namespace Wsla.Server
     public struct RemoteSyncBufferCollection<TMember> : IDisposable
         where TMember : unmanaged, IEquatable<TMember>, IRemoteSyncMemberID
     {
-        Dictionary<Key, Payload>? Collection;
+        Dictionary<Key, Payload> Collection;
         public readonly struct Key : IEquatable<Key>
         {
             public NetworkBehaviourID Behaviour { get; }
             public TMember Member { get; }
 
-            public override bool Equals([NotNullWhen(true)] object? obj)
+            public override bool Equals(object obj)
             {
                 if (obj is Key other)
                     return Equals(other);
@@ -31,15 +31,15 @@ namespace Wsla.Server
                 return Behaviour == other.Behaviour && Member.Equals(other.Member);
             }
 
-            readonly int Hashcode;
-            public override int GetHashCode() => Hashcode;
+            readonly int HashCode;
+            public override int GetHashCode() => HashCode;
 
             public Key(NetworkBehaviourID Behaviour, TMember Member)
             {
                 this.Behaviour = Behaviour;
                 this.Member = Member;
 
-                Hashcode = (Behaviour.Value << 4) | (Member.Value);
+                HashCode = (Behaviour.Value << 4) | (Member.Value);
             }
         }
         public struct Payload
@@ -47,7 +47,7 @@ namespace Wsla.Server
             public NetworkClientID SenderID;
             public NetworkClientVersion SenderVersion;
 
-            public readonly NetDataWriter? Stream;
+            public readonly NetDataWriter Stream;
 
             public void SetSender(NetworkClient sender)
             {
@@ -55,7 +55,7 @@ namespace Wsla.Server
                 SenderVersion = sender.Version;
             }
 
-            public Payload(NetDataWriter? Stream)
+            public Payload(NetDataWriter Stream)
             {
                 Unsafe.SkipInit(out this);
 
@@ -65,18 +65,23 @@ namespace Wsla.Server
 
         public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
 
-        public void Register(NetworkClient sender, NetworkBehaviourID Behaviour, TMember Member, NetDataReader Input)
+        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, TMember member, NetDataReader Input)
+        {
+            var binary = Input.PeekAvailableMemory();
+            Register(sender, behaviour, member, binary.Span);
+        }
+        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, TMember member, ReadOnlySpan<byte> binary)
         {
             if (Collection is null)
                 Collection = new(1);
 
-            var key = new Key(Behaviour, Member);
+            var key = new Key(behaviour, member);
 
             ref var payload = ref CollectionsMarshal.GetValueRefOrAddDefault(Collection, key, out var exists);
 
             if (exists is false)
             {
-                if (Input.AvailableBytes is 0)
+                if (binary.Length is 0)
                 {
                     payload = new Payload(default);
                 }
@@ -90,14 +95,20 @@ namespace Wsla.Server
             payload.SetSender(sender);
 
             //Copy Buffer
-            if (Input.AvailableBytes > 0 && payload.Stream is not null)
+            if (binary.Length > 0)
             {
-                var source = Input.PeekAvailableMemory();
+                if (payload.Stream is null)
+                {
+                    //MOBO: Disconnect Client?
+                    //Can only happen if an RPC was buffered without any binary data, then buffered with
+                    NetworkLog.Error($"No Payload Stream Defined for Buffer Member [Behaviour: {behaviour} | Member: {member}]");
+                    return;
+                }
 
                 payload.Stream.SetPosition(0);
-                var destination = payload.Stream.PopMemory(source.Length);
+                var destination = payload.Stream.PopMemory(binary.Length);
 
-                source.CopyTo(destination);
+                binary.CopyTo(destination.Span);
             }
         }
 

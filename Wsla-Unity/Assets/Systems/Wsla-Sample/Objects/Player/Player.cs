@@ -5,9 +5,6 @@ using Wsla.Unity;
 
 public partial class Player : NetworkBehaviour
 {
-    public NetworkVariable<Vector3> Position;
-    public NetworkVariable<Quaternion> Rotation;
-
     [SerializeField]
     float MovementSpeed = 5f;
     [SerializeField]

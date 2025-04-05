@@ -18,13 +18,16 @@ namespace Wsla.Unity
 
         public NetworkVariableID ID { get; private set; }
 
+        internal bool WasInitialized;
+
         internal void Set(NetworkVariableID ID, NetworkEntity.Behaviour Behaviour)
         {
             this.ID = ID;
             this.Behaviour = Behaviour;
         }
 
-        internal abstract void Set(INetworkStream reader, NetworkVariableInfo info);
+        internal abstract void Read(ref BinarySource source, NetworkVariableInfo info);
+        internal abstract void Write(ref BinarySource source);
     }
 
     [Serializable]
@@ -33,29 +36,45 @@ namespace Wsla.Unity
         T Value_Internal;
         public T Value => Value_Internal;
 
-        public VariableInvocationBuilder Change(T value) => Behaviour.Variables.Set(this).SetValue(value);
-
-        public void Initialize(T value)
+        public void Initialize(T target)
         {
-            Value_Internal = value;
-            throw new NotImplementedException();
+            if (Entity.IsSpawned)
+            {
+                NetworkLog.Error($"Entity Already Spawned, Can Only Initialize Variable Before Entity Spawn");
+                return;
+            }
+
+            WasInitialized = true;
+
+            var info = NetworkVariableInfo.FromInitialization();
+
+            Set(target, info);
+        }
+
+        public VariableInvocationBuilder<T> Change(T value) => new VariableInvocationBuilder<T>(this, value);
+
+        internal override void Read(ref BinarySource reader, NetworkVariableInfo info)
+        {
+            NetworkSerializer.ReadValue(ref Value_Internal, ref reader);
+            Set(Value_Internal, info);
+        }
+        internal override void Write(ref BinarySource writer)
+        {
+            NetworkSerializer.WriteValue(in Value_Internal, ref writer);
         }
 
         public event SetDelegate OnSet;
         public delegate void SetDelegate(ChangePairData<T> value, NetworkVariableInfo info);
-        internal override void Set(INetworkStream reader, NetworkVariableInfo info)
+        internal void Set(T target, NetworkVariableInfo info)
         {
-            var previous = Value_Internal;
-            NetworkSerializer.ReadValue(ref Value_Internal, reader);
-            var current = Value_Internal;
-
-            OnSet?.Invoke(new(previous, current), info);
+            var change = new ChangePairData<T>(Value_Internal, target);
+            Value_Internal = target;
+            OnSet?.Invoke(change, info);
         }
 
-        public NetworkVariable() : this(default) { }
-        public NetworkVariable(T initial)
+        public NetworkVariable()
         {
-            Value_Internal = initial;
+
         }
     }
 
@@ -121,7 +140,7 @@ namespace Wsla.Unity
             return new NetworkVariableInfo(command.Sender, channel, delivery, false);
         }
 
-        public static NetworkVariableInfo FromLocal(ref VariableInvocationBuilder builder)
+        public static NetworkVariableInfo FromLocal<T>(ref VariableInvocationBuilder<T> builder)
         {
             var senderID = Room.Clients.Local.ID;
 
@@ -129,49 +148,34 @@ namespace Wsla.Unity
         }
 
         public static NetworkVariableInfo FromBuffer(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
+
+        public static NetworkVariableInfo FromInitialization() => FromInitialization(Room.Clients.Local.ID);
+        public static NetworkVariableInfo FromInitialization(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, false);
     }
 
-    public struct VariableInvocationBuilder
+    public struct VariableInvocationBuilder<T>
     {
-        internal readonly NetworkVariable Variable;
-
-        internal NetDataWriter ValueWriter;
-        internal NetDataWriter PacketWriter;
+        internal readonly NetworkVariable<T> Variable;
+        internal readonly T Value;
 
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;
 
         internal byte Channel;
-        public VariableInvocationBuilder SetChannel(byte value)
+        public VariableInvocationBuilder<T> SetChannel(byte value)
         {
             Channel = value;
             return this;
         }
 
         internal DeliveryMethod Delivery;
-        public VariableInvocationBuilder SetDelivery(RemoteSyncDelivery value)
+        public VariableInvocationBuilder<T> SetDelivery(RemoteSyncDelivery value)
         {
             Delivery = (DeliveryMethod)value;
             return this;
         }
 
-        public VariableInvocationBuilder SetValue<T>(T value)
-        {
-            NetworkSerializer.WriteValue(in value, ValueWriter);
-
-            return this;
-        }
-
         NetworkVariableParameters GetParameters() => new NetworkVariableParameters(Variable.Entity.ID, Variable.Behaviour.ID, Variable.ID);
-        void WriteValue(NetDataWriter output)
-        {
-            if (ValueWriter.Length > 0)
-            {
-                var source = ValueWriter.PeekAllocatedMemory().Span;
-                var destination = output.PopMemory(source.Length).Span;
-                source.CopyTo(destination);
-            }
-        }
 
         void ValidateReplicationSettings()
         {
@@ -198,20 +202,25 @@ namespace Wsla.Unity
         {
             ValidateReplicationSettings();
 
+            //Local
+            {
+                var info = NetworkVariableInfo.FromLocal(ref this);
+                Variable.Set(Value, info);
+            }
+
             //Remote
             {
+                var writer = Room.Pools.SinglePackerWriter.Take();
+                var source = BinarySource.From(writer);
+
                 var parameters = GetParameters();
                 var request = new BroadcastNetworkVariableRequest(parameters);
 
-                NetworkSerializer.WriteHeader(in request, PacketWriter);
+                NetworkSerializer.WriteHeader(in request, ref source);
+                Variable.Write(ref source);
 
-                WriteValue(PacketWriter);
-
-                Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
+                Room.Transport.SendWriter(in writer, channel: Channel, delivery: Delivery);
             }
-
-            //Local
-            SetLocal();
         }
 
         /// <summary>
@@ -221,40 +230,34 @@ namespace Wsla.Unity
         {
             ValidateReplicationSettings();
 
-            var parameters = GetParameters();
-            var request = new BufferNetworkVariableRequest(parameters);
-
-            NetworkSerializer.WriteHeader(in request, PacketWriter);
-
-            WriteValue(PacketWriter);
-
-            Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
-        }
-
-        void SetLocal()
-        {
-            var info = NetworkVariableInfo.FromLocal(ref this);
-
-            //Reset arguments writer to be read from
-            var marker = ValueWriter.Length;
-            ValueWriter.SetPosition(0);
+            //Local
             {
-                Variable.Set(ValueWriter, info);
+                var info = NetworkVariableInfo.FromLocal(ref this);
+                Variable.Set(Value, info);
             }
-            ValueWriter.SetPosition(marker);
+
+            //Remote
+            {
+                var writer = Room.Pools.SinglePackerWriter.Take();
+                var source = BinarySource.From(writer);
+
+                var parameters = GetParameters();
+                var request = new BufferNetworkVariableRequest(parameters);
+
+                NetworkSerializer.WriteHeader(in request, ref source);
+                Variable.Write(ref source);
+
+                Room.Transport.SendWriter(in writer, channel: Channel, delivery: Delivery);
+            }
         }
 
-        public VariableInvocationBuilder(NetworkVariable Variable)
+        public VariableInvocationBuilder(NetworkVariable<T> Variable, T Value)
         {
             this.Variable = Variable;
-
-            ValueWriter = ValueWriterPool.Take();
-            PacketWriter = Room.Pools.SinglePackerWriter.Take();
+            this.Value = Value;
 
             Channel = 0;
             Delivery = DeliveryMethod.ReliableOrdered;
         }
-
-        static SinglePacketWriter ValueWriterPool = SinglePacketWriter.Create(512);
     }
 }

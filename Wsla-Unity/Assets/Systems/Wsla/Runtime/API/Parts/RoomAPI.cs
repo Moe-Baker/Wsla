@@ -720,11 +720,45 @@ namespace Wsla.Unity
                     //Send to Server
                     {
                         var writer = Room.Pools.SinglePackerWriter.Take();
+                        var source = BinarySource.From(writer);
 
                         Token = Room.Clients.Local.RemoveSpawnToken();
 
                         var request = new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
-                        NetworkSerializer.WriteHeader(in request, writer);
+                        NetworkSerializer.WriteHeader(in request, ref source);
+
+                        //Serialize Assigned Network Variables
+                        {
+                            foreach (var behaviour in Instance.Behaviours.List)
+                            {
+                                foreach (var variable in behaviour.Variables.List)
+                                {
+                                    if (variable.WasInitialized is false)
+                                        continue;
+
+                                    NetworkSerializer.WriteValue(behaviour.ID, ref source);
+                                    NetworkSerializer.WriteValue(variable.ID, ref source);
+
+                                    BinarySource LengthHeader;
+                                    //Allocate Length
+                                    {
+                                        var span = source.AllocateSpan(sizeof(ushort));
+                                        LengthHeader = BinarySource.From(span);
+                                    }
+
+                                    var cursor = source.Position;
+                                    variable.Write(ref source);
+
+                                    //Write Length
+                                    {
+                                        var length = (ushort)(source.Position - cursor);
+                                        NetworkSerializer.WriteValue(in length, ref LengthHeader);
+                                    }
+                                }
+                            }
+
+                            NetworkSerializer.WriteValue(NetworkBehaviourID.None, ref source);
+                        }
 
                         Room.Transport.SendWriter(in writer);
                     }
@@ -808,6 +842,25 @@ namespace Wsla.Unity
                 var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner, NetworkEntityTransferToken.Zero);
 
                 var instance = Assimilate(definition);
+
+                //Read Network Variables
+                {
+                    var variables = new EntitySpawnVariableInitializationReader(reader);
+
+                    foreach (var entry in variables)
+                    {
+                        if (instance.Behaviours.TryGet(entry.Behaviour, out var behaviour) is false)
+                            throw new Exception($"No Behaviour {entry.Behaviour} Found on {instance}");
+
+                        if (behaviour.Variables.TryGet(entry.Variable, out var variable) is false)
+                            throw new Exception($"No Variable {entry.Variable} Found on {behaviour}");
+
+                        var source = BinarySource.From(entry.Binary.Span);
+                        var info = NetworkVariableInfo.FromInitialization(message.Owner);
+
+                        variable.Read(ref source, info);
+                    }
+                }
 
                 instance.Spawn();
                 instance.Replicate();
@@ -1072,8 +1125,9 @@ namespace Wsla.Unity
                 }
 
                 var info = NetworkVariableInfo.FromRemote(ref message, channel, delivery);
+                var source = BinarySource.From(reader);
 
-                bind.Set(reader, info);
+                bind.Read(ref source, info);
             }
 
             bool Get(ref NetworkVariableParameters parameters, out NetworkVariable variable)
@@ -1129,7 +1183,9 @@ namespace Wsla.Unity
                         if (Get(entity, behaviourID, variableID, out var variable))
                         {
                             var info = NetworkVariableInfo.FromBuffer(senderID);
-                            variable.Set(reader, info);
+                            var source = BinarySource.From(reader);
+
+                            variable.Read(ref source, info);
                         }
                     }
                 }
