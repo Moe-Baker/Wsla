@@ -79,10 +79,7 @@ namespace Wsla.Unity
             return true;
         }
 
-        public void Disconnect()
-        {
-            Disconnect(DisconnectReason.DisconnectPeerCalled);
-        }
+        public void Disconnect() => Disconnect(DisconnectReason.DisconnectPeerCalled);
         public void Disconnect(DisconnectReason reason)
         {
             var info = new DisconnectInfo()
@@ -145,6 +142,9 @@ namespace Wsla.Unity
                 ActionDelegate[] Handlers;
                 public delegate void ActionDelegate(NetPacketReader reader, byte channel, DeliveryMethod delivery);
 
+                NetworkAPI API => NetworkAPI.Instance;
+                RoomAPI Room => API.Room;
+
                 void ReceiveCallback(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod delivery)
                 {
                     var source = BinarySource.From(reader);
@@ -177,6 +177,7 @@ namespace Wsla.Unity
                         catch (Exception ex)
                         {
                             NetworkLog.Error(ex);
+                            Room.Disconnect(DisconnectReason.InvalidProtocol);
                         }
                         finally
                         {
@@ -202,6 +203,7 @@ namespace Wsla.Unity
                         catch (Exception ex)
                         {
                             NetworkLog.Error(ex);
+                            Room.Disconnect(DisconnectReason.InvalidProtocol);
                         }
                         finally
                         {
@@ -506,11 +508,7 @@ namespace Wsla.Unity
                 if (message.IsMasterClientChange(out var MasterID))
                 {
                     if (TryGet(MasterID, out var current) is false)
-                    {
-                        NetworkLog.Error($"No Client with ID {MasterID} Found");
-                        Room.Disconnect(DisconnectReason.InvalidProtocol);
-                        return;
-                    }
+                        throw new InvalidOperationException($"No Client with ID {MasterID} Found to Assign as Master");
 
                     Master = current;
 
@@ -519,11 +517,7 @@ namespace Wsla.Unity
 
                 //Get Disconnected Client
                 if (TryGet(message.ClientID, out var client) is false)
-                {
-                    NetworkLog.Error($"No NetworkClient Found with ID {message.ClientID}");
-                    Room.Disconnect(DisconnectReason.InvalidProtocol);
-                    return;
-                }
+                    throw new InvalidOperationException($"No Client Found with ID {message.ClientID}");
 
                 //Handle Local Entities
                 foreach (var entity in client.Entities)
@@ -548,11 +542,7 @@ namespace Wsla.Unity
                     var behaviour = NetworkSerializer.ReadValue<EntityDisconnectBehaviour>(reader);
 
                     if (Room.Entities.TryGet(id, out var entity) is false)
-                    {
-                        NetworkLog.Error($"No Entity with ID {entity} Found");
-                        Room.Disconnect(DisconnectReason.InvalidProtocol);
-                        return;
-                    }
+                        throw new InvalidOperationException($"No Entity with ID {entity} Found");
 
                     switch (behaviour)
                     {
@@ -583,7 +573,7 @@ namespace Wsla.Unity
 
             void Register(NetworkClient client)
             {
-                Debug.Log($"Registerd Client {client}");
+                Debug.Log($"Registered Client {client}");
 
                 Collection.Add(client.ID.Value, client);
             }
@@ -591,7 +581,7 @@ namespace Wsla.Unity
             {
                 Collection.Remove(id.Value, out var client);
 
-                Debug.Log($"Unregisterd Client {client}");
+                Debug.Log($"Unregistered Client {client}");
             }
 
             readonly RoomAPI Room;
