@@ -72,11 +72,14 @@ public partial class Level : NetworkBehaviour
 
     public void SpawnPlayer()
     {
-        var entity = Network.Room.Entities.InstantiatePrefab(PlayerPrefab);
+        var ticket = Network.Room.Entities.Spawn()
+            .SetPrefab(PlayerPrefab)
+            .SetAuthority(NetworkEntityAuthorityMode.Explicit)
+            .Ticket();
 
         //Set Position
         {
-            var player = entity.GetComponent<Player>();
+            var player = ticket.Entity.Behaviours.Get<Player>();
 
             var position = new Vector3()
             {
@@ -84,16 +87,12 @@ public partial class Level : NetworkBehaviour
                 y = 0,
                 z = Random.Range(-5, +5),
             };
-
             var rotation = Quaternion.Euler(Vector3.up * Random.Range(0, 360f));
 
-            player.NetworkTransform.Initialize(position: position, rotation: rotation);
+            player.NetworkTransform.Initialize(ticket, position: position, rotation: rotation);
         }
 
-        Network.Room.Entities.Spawn()
-            .SetInstance(entity)
-            .SetAuthority(NetworkEntityAuthorityMode.Explicit)
-            .Send();
+        ticket.Send();
     }
 
     async UniTaskVoid SwapScene()

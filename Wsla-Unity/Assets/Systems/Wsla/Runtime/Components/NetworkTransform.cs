@@ -9,47 +9,12 @@ using Wsla.Serialization;
 
 namespace Wsla.Unity
 {
-    public partial class NetworkTransform : NetworkBehaviour, IRegisterCustomVariables
+    public partial class NetworkTransform : NetworkBehaviour
     {
         [field: SerializeField]
         public TickSliceRate TickSlice { get; private set; } = new(1);
 
         NetworkTickTimer TickTimer;
-
-        InitialsProperty Initials;
-        public struct InitialsProperty
-        {
-            internal NetworkVariable<Vector3> Position;
-            internal NetworkVariable<Quaternion> Rotation;
-            internal NetworkVariable<Vector3> Scale;
-
-            void PositionSetCallback(ChangePairData<Vector3> value, NetworkVariableInfo info)
-            {
-                Transform.Coordinates.Position = value.Current;
-            }
-            void RotationSetCallback(ChangePairData<Quaternion> value, NetworkVariableInfo info)
-            {
-                Transform.Coordinates.Rotation = value.Current;
-            }
-            void ScaleSetCallback(ChangePairData<Vector3> value, NetworkVariableInfo info)
-            {
-                Transform.Coordinates.Scale = value.Current;
-            }
-
-            NetworkTransform Transform;
-            public InitialsProperty(NetworkTransform Transform)
-            {
-                this.Transform = Transform;
-
-                Position = new();
-                Rotation = new();
-                Scale = new();
-
-                Position.OnSet += PositionSetCallback;
-                Rotation.OnSet += RotationSetCallback;
-                Scale.OnSet += ScaleSetCallback;
-            }
-        }
 
         /// <summary>
         /// Set the coordinates where this network entity will be spawned at
@@ -57,16 +22,50 @@ namespace Wsla.Unity
         /// <param name="position"></param>
         /// <param name="rotation"></param>
         /// <param name="scale"></param>
-        public void Initialize(Vector3? position = null, Quaternion? rotation = null, Vector3? scale = null)
+        public void Initialize(EntitySpawnTicket ticket, Vector3? position = null, Quaternion? rotation = null, Vector3? scale = null)
         {
-            if (position.HasValue)
-                Initials.Position.Initialize(position.Value);
+            var changes = ChangeFlags.None;
 
-            if (rotation.HasValue)
-                Initials.Rotation.Initialize(rotation.Value);
+            //Apply Input Coordinates
+            {
+                if (position.HasValue)
+                {
+                    Coordinates.Position = position.Value;
+                    changes |= ChangeFlags.Position;
+                }
 
-            if (scale.HasValue)
-                Initials.Scale.Initialize(scale.Value);
+                if (rotation.HasValue)
+                {
+                    Coordinates.Rotation = rotation.Value;
+                    changes |= ChangeFlags.Rotation;
+                }
+
+                if (scale.HasValue)
+                {
+                    Coordinates.Scale = scale.Value;
+                    changes |= ChangeFlags.Scale;
+                }
+            }
+
+            //Ignore Masked Changes
+            changes &= Mask.Value;
+
+            if (changes is ChangeFlags.None)
+            {
+                NetworkLog.Warning($"[{this}] Initialization Ignored, Check Mask & Supplied Parameters");
+                return;
+            }
+
+            var motion = new MotionData(changes, Coordinates.Read());
+
+            var writer = RPCs.Replicate.GetSourceStream();
+            var source = BinarySource.From(writer);
+
+            WritePayload(ref source, NetworkTickID.Min, motion);
+
+            var binary = writer.PeekAllocatedMemory();
+
+            RPCs.Replicate.Initialize(binary, ticket, local: false);
         }
 
         [SerializeField]
@@ -415,13 +414,6 @@ namespace Wsla.Unity
             }
         }
 
-        public void RegisterCustomVariables(List<NetworkVariable> list)
-        {
-            list.Add(Initials.Position);
-            list.Add(Initials.Rotation);
-            list.Add(Initials.Scale);
-        }
-
         public override void Set(NetworkEntity.Behaviour reference)
         {
             base.Set(reference);
@@ -566,6 +558,7 @@ namespace Wsla.Unity
                 }
             }
         }
+
         SnapshotData ReadPayload(ref BinarySource stream, CoordinatesData origin)
         {
             NetworkSerializer.ReadValue(ref stream, out NetworkTickID tick);
@@ -675,7 +668,6 @@ namespace Wsla.Unity
 
         public NetworkTransform()
         {
-            Initials = new InitialsProperty(this);
             Mask = new MaskProperty(true);
             Coordinates = new CoordinatesProperty(this);
             MotionDetector = new MotionDetectorProperty(this);

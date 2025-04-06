@@ -16,11 +16,9 @@ namespace Wsla.Unity
         public NetworkEntity.Behaviour Behaviour { get; private set; }
         public NetworkEntity Entity => Behaviour.Entity;
 
-        public NetworkVariableID ID { get; private set; }
+        public NetworkSyncMemberID ID { get; private set; }
 
-        internal bool WasInitialized;
-
-        internal void Set(NetworkVariableID ID, NetworkEntity.Behaviour Behaviour)
+        internal void Set(NetworkSyncMemberID ID, NetworkEntity.Behaviour Behaviour)
         {
             this.ID = ID;
             this.Behaviour = Behaviour;
@@ -36,19 +34,9 @@ namespace Wsla.Unity
         T Value_Internal;
         public T Value => Value_Internal;
 
-        public void Initialize(T target)
+        public void Initialize(in T value, EntitySpawnTicket ticket)
         {
-            if (Entity.IsSpawned)
-            {
-                NetworkLog.Error($"Entity Already Spawned, Can Only Initialize Variable Before Entity Spawn");
-                return;
-            }
-
-            WasInitialized = true;
-
-            var info = NetworkVariableInfo.FromInitialization();
-
-            Set(target, info);
+            ticket.WriteVariable(this, in value);
         }
 
         public VariableInvocationBuilder<T> Change(T value) => new VariableInvocationBuilder<T>(this, value);
@@ -60,7 +48,12 @@ namespace Wsla.Unity
         }
         internal override void Write(ref BinarySource writer)
         {
-            NetworkSerializer.WriteValue(in Value_Internal, ref writer);
+            Write(in Value_Internal, ref writer);
+        }
+
+        internal void Write(in T value, ref BinarySource source)
+        {
+            NetworkSerializer.WriteValue(in value, ref source);
         }
 
         public event SetDelegate OnSet;
@@ -72,10 +65,7 @@ namespace Wsla.Unity
             OnSet?.Invoke(change, info);
         }
 
-        public NetworkVariable()
-        {
-
-        }
+        public NetworkVariable() { }
     }
 
     public interface IRegisterCustomVariables
@@ -150,7 +140,7 @@ namespace Wsla.Unity
         public static NetworkVariableInfo FromBuffer(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
 
         public static NetworkVariableInfo FromInitialization() => FromInitialization(Room.Clients.Local.ID);
-        public static NetworkVariableInfo FromInitialization(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, false);
+        public static NetworkVariableInfo FromInitialization(NetworkClientID senderID) => new NetworkVariableInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public struct VariableInvocationBuilder<T>
@@ -175,7 +165,7 @@ namespace Wsla.Unity
             return this;
         }
 
-        NetworkVariableParameters GetParameters() => new NetworkVariableParameters(Variable.Entity.ID, Variable.Behaviour.ID, Variable.ID);
+        NetworkSyncMemberParameters GetParameters() => new NetworkSyncMemberParameters(Variable.Entity.ID, Variable.Behaviour.ID, Variable.ID);
 
         void ValidateReplicationSettings()
         {

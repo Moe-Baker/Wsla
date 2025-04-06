@@ -68,7 +68,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   <TickSlice>k__BackingField:
-    <Value>k__BackingField: 3
+    <Value>k__BackingField: 2
   Mask:
     <Position>k__BackingField:
       <X>k__BackingField: 1
@@ -283,7 +283,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   <TickSlice>k__BackingField:
-    <Value>k__BackingField: 3
+    <Value>k__BackingField: 2
   Parameters:
     Bools: []
     Integers: []

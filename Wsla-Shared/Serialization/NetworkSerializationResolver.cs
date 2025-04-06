@@ -153,8 +153,7 @@ namespace Wsla.Serialization
 
             Register<Type, NetworkTypeSerializationResolver>();
 
-            Register<NetworkVariableID, BlittableNetworkSerializationResolver<NetworkVariableID>>();
-            Register<NetworkRpcID, BlittableNetworkSerializationResolver<NetworkRpcID>>();
+            Register<NetworkSyncMemberID, BlittableNetworkSerializationResolver<NetworkSyncMemberID>>();
 
             Register(new FixedStringNetworkSerializationResolver<FixedString<FS20>>());
             Register(new FixedStringNetworkSerializationResolver<FixedString<FS40>>());

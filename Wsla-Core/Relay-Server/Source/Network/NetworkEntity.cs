@@ -32,8 +32,8 @@ namespace Wsla.Server
         public NetworkEntityTransferToken TransferToken { get; internal set; }
 
         #region Remote Buffer
-        internal RemoteSyncBufferCollection<NetworkRpcID> RpcBuffer;
-        internal RemoteSyncBufferCollection<NetworkVariableID> VariableBuffer;
+        internal RemoteSyncBufferCollection RpcBuffer;
+        internal RemoteSyncBufferCollection VariableBuffer;
         #endregion
 
         public void WriteDefinition(NetDataWriter writer)

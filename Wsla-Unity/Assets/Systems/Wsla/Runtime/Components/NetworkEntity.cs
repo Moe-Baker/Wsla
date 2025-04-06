@@ -89,6 +89,31 @@ namespace Wsla.Unity
                 return true;
             }
 
+            public bool TryGet<T>(out T target)
+                where T : INetworkBehaviour
+            {
+                foreach (var behaviour in Entity.Behaviours.List)
+                {
+                    if (behaviour.Contract is T)
+                    {
+                        target = (T)behaviour.Contract;
+                        return true;
+                    }
+                }
+
+                target = default;
+                return false;
+            }
+            public T Get<T>()
+                where T : INetworkBehaviour
+            {
+                foreach (var behaviour in Entity.Behaviours.List)
+                    if (behaviour.Contract is T target)
+                        return target;
+
+                return default;
+            }
+
             internal void PreCache()
             {
                 var collection = Entity.GetComponentsInChildren<INetworkBehaviour>(true);
@@ -165,7 +190,7 @@ namespace Wsla.Unity
                 readonly Behaviour Behaviour;
 
                 List<BaseRpcBind> List;
-                public bool TryGet(NetworkRpcID id, out BaseRpcBind bind)
+                public bool TryGet(NetworkSyncMemberID id, out BaseRpcBind bind)
                 {
                     var index = id.Value;
 
@@ -179,12 +204,12 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                NetworkRpcID Index;
+                NetworkSyncMemberID Index;
 
                 void Register(BaseRpcBind bind)
                 {
-                    if (NetworkRpcID.Increment(ref Index, out var id) is false)
-                        throw new InvalidOperationException($"Network RPCs Count Exceeded on {Behaviour.Script}, Max Count is {NetworkRpcID.MaxValue}");
+                    if (NetworkSyncMemberID.Increment(ref Index, out var id) is false)
+                        throw new InvalidOperationException($"Network RPCs Count Exceeded on {Behaviour.Script}, Max Count is {NetworkSyncMemberID.MaxValue}");
 
                     bind.Set(id, Behaviour);
 
@@ -231,7 +256,7 @@ namespace Wsla.Unity
                 readonly Behaviour Behaviour;
 
                 internal List<NetworkVariable> List;
-                public bool TryGet(NetworkVariableID id, out NetworkVariable variable)
+                public bool TryGet(NetworkSyncMemberID id, out NetworkVariable variable)
                 {
                     var index = id.Value;
 
@@ -245,11 +270,11 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                NetworkVariableID Index;
+                NetworkSyncMemberID Index;
                 void Register(NetworkVariable variable)
                 {
-                    if (NetworkVariableID.Increment(ref Index, out var id) is false)
-                        throw new InvalidOperationException($"Network Variables Count Exceeded on {Behaviour.Script}, Max Count is {NetworkVariableID.MaxValue}");
+                    if (NetworkSyncMemberID.Increment(ref Index, out var id) is false)
+                        throw new InvalidOperationException($"Network Variables Count Exceeded on {Behaviour.Script}, Max Count is {NetworkSyncMemberID.MaxValue}");
 
                     variable.Set(id, Behaviour);
 

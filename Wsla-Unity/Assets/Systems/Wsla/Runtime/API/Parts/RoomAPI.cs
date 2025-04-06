@@ -646,126 +646,7 @@ namespace Wsla.Unity
                 return entity;
             }
 
-            public SpawnOptions Spawn() => new SpawnOptions(Room);
-            public ref struct SpawnOptions
-            {
-                readonly RoomAPI Room;
-
-                internal NetworkEntityID Token;
-                internal NetworkEntity Instance;
-                internal NetworkEntityAuthorityMode Authority;
-
-                public SpawnOptions SetResource(NetworkEntityResource resource)
-                {
-                    var instance = Room.Entities.InstantiatePrefab(resource);
-                    SetInstance(instance);
-                    return this;
-                }
-                public SpawnOptions SetPrefab(GameObject prefab)
-                {
-                    var instance = Room.Entities.InstantiatePrefab(prefab);
-                    SetInstance(instance);
-                    return this;
-                }
-                public SpawnOptions SetInstance(NetworkEntity value)
-                {
-                    Instance = value;
-                    return this;
-                }
-
-                public SpawnOptions SetAuthority(NetworkEntityAuthorityMode mode)
-                {
-                    if (mode is NetworkEntityAuthorityMode.Authoritative && Room.Clients.Local.IsMaster is false)
-                    {
-                        NetworkLog.Error($"Can Only Spawn Items with {NetworkEntityAuthorityMode.Authoritative} Authority if Master Client");
-                        return this;
-                    }
-
-                    Authority = mode;
-                    return this;
-                }
-
-                bool Validate()
-                {
-                    if (Room.Clients.Local.SpawnAllowance is 0)
-                    {
-                        NetworkLog.Error($"Client's Spawn Allowance Exceeded, Need to Wait for More");
-                        return false;
-                    }
-
-                    if (Instance == null)
-                    {
-                        NetworkLog.Error($"No Entity (Resource/Prefab/Instance) Specified");
-                        return false;
-                    }
-
-                    return true;
-                }
-
-                public NetworkEntity Send()
-                {
-                    if (Validate() is false)
-                        return default;
-
-                    //Send to Server
-                    {
-                        var writer = Room.Pools.SinglePackerWriter.Take();
-                        var source = BinarySource.From(writer);
-
-                        Token = Room.Clients.Local.RemoveSpawnToken();
-
-                        var request = new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
-                        NetworkSerializer.WriteHeader(in request, ref source);
-
-                        //Serialize Assigned Network Variables
-                        {
-                            foreach (var behaviour in Instance.Behaviours.List)
-                            {
-                                foreach (var variable in behaviour.Variables.List)
-                                {
-                                    if (variable.WasInitialized is false)
-                                        continue;
-
-                                    NetworkSerializer.WriteValue(behaviour.ID, ref source);
-                                    NetworkSerializer.WriteValue(variable.ID, ref source);
-
-                                    BinarySource LengthHeader;
-                                    //Allocate Length
-                                    {
-                                        var span = source.AllocateSpan(sizeof(ushort));
-                                        LengthHeader = BinarySource.From(span);
-                                    }
-
-                                    var cursor = source.Position;
-                                    variable.Write(ref source);
-
-                                    //Write Length
-                                    {
-                                        var length = (ushort)(source.Position - cursor);
-                                        NetworkSerializer.WriteValue(in length, ref LengthHeader);
-                                    }
-                                }
-                            }
-
-                            NetworkSerializer.WriteValue(NetworkBehaviourID.None, ref source);
-                        }
-
-                        Room.Transport.SendWriter(in writer);
-                    }
-
-                    //Spawn Local
-                    return Room.Entities.SpawnLocal(this);
-                }
-
-                public SpawnOptions(RoomAPI Room)
-                {
-                    this.Room = Room;
-
-                    Token = default;
-                    Instance = default;
-                    Authority = NetworkEntityAuthorityMode.Explicit;
-                }
-            }
+            public SpawnOptions Spawn() => SpawnOptions.CreateDefault();
 
             public void Despawn(NetworkEntity entity)
             {
@@ -835,20 +716,41 @@ namespace Wsla.Unity
 
                 //Read Network Variables
                 {
-                    var variables = new EntitySpawnVariableInitializationReader(reader);
+                    var initialization = new EntitySpawnRequestInitializationDataReader(reader);
 
-                    foreach (var entry in variables)
+                    foreach (var entry in initialization)
                     {
                         if (instance.Behaviours.TryGet(entry.Behaviour, out var behaviour) is false)
                             throw new Exception($"No Behaviour {entry.Behaviour} Found on {instance}");
 
-                        if (behaviour.Variables.TryGet(entry.Variable, out var variable) is false)
-                            throw new Exception($"No Variable {entry.Variable} Found on {behaviour}");
+                        switch (entry.Type)
+                        {
+                            case SyncMemberType.RPC:
+                            {
+                                if (behaviour.RPC.TryGet(entry.Member, out var bind) is false)
+                                    throw new Exception($"No RPC {entry.Member} Found on {behaviour}");
 
-                        var source = BinarySource.From(entry.Binary.Span);
-                        var info = NetworkVariableInfo.FromInitialization(message.Owner);
+                                var source = BinarySource.From(entry.Binary.Span);
+                                var info = RpcInfo.FromInitialization(message.Owner);
 
-                        variable.Read(ref source, info);
+                                bind.Invoke(ref source, info);
+                            }
+                            break;
+
+                            case SyncMemberType.Variable:
+                            {
+                                if (behaviour.Variables.TryGet(entry.Member, out var variable) is false)
+                                    throw new Exception($"No Variable {entry.Member} Found on {behaviour}");
+
+                                var source = BinarySource.From(entry.Binary.Span);
+                                var info = NetworkVariableInfo.FromInitialization(message.Owner);
+
+                                variable.Read(ref source, info);
+                            }
+                            break;
+
+                            default: throw new NotImplementedException();
+                        }
                     }
                 }
 
@@ -897,7 +799,7 @@ namespace Wsla.Unity
                 return instance;
             }
 
-            NetworkEntity SpawnLocal(SpawnOptions options)
+            internal NetworkEntity SpawnLocal(ref SpawnOptions options)
             {
                 var entity = options.Instance;
 
@@ -1033,7 +935,7 @@ namespace Wsla.Unity
                 bind.Invoke(reader, info);
             }
 
-            bool Get(ref NetworkRpcParameters parameters, out BaseRpcBind bind)
+            bool Get(ref NetworkSyncMemberParameters parameters, out BaseRpcBind bind)
             {
                 if (Room.Entities.TryGet(parameters.Entity, out var entity) is false)
                 {
@@ -1042,9 +944,9 @@ namespace Wsla.Unity
                     return false;
                 }
 
-                return Get(entity, parameters.Behaviour, parameters.RPC, out bind);
+                return Get(entity, parameters.Behaviour, parameters.Member, out bind);
             }
-            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkRpcID rpcID, out BaseRpcBind bind)
+            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkSyncMemberID rpcID, out BaseRpcBind bind)
             {
                 if (entity.Behaviours.TryGet(behaviourID, out var behaviour) is false)
                 {
@@ -1079,7 +981,7 @@ namespace Wsla.Unity
                     for (int y = 0; y < count; y++)
                     {
                         var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
-                        var rpcID = NetworkSerializer.ReadValue<NetworkRpcID>(reader);
+                        var rpcID = NetworkSerializer.ReadValue<NetworkSyncMemberID>(reader);
 
                         var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
 
@@ -1120,7 +1022,7 @@ namespace Wsla.Unity
                 bind.Read(ref source, info);
             }
 
-            bool Get(ref NetworkVariableParameters parameters, out NetworkVariable variable)
+            bool Get(ref NetworkSyncMemberParameters parameters, out NetworkVariable variable)
             {
                 if (Room.Entities.TryGet(parameters.Entity, out var entity) is false)
                 {
@@ -1129,9 +1031,9 @@ namespace Wsla.Unity
                     return false;
                 }
 
-                return Get(entity, parameters.Behaviour, parameters.Variable, out variable);
+                return Get(entity, parameters.Behaviour, parameters.Member, out variable);
             }
-            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkVariableID variableID, out NetworkVariable variable)
+            bool Get(NetworkEntity entity, NetworkBehaviourID behaviourID, NetworkSyncMemberID variableID, out NetworkVariable variable)
             {
                 if (entity.Behaviours.TryGet(behaviourID, out var behaviour) is false)
                 {
@@ -1166,7 +1068,7 @@ namespace Wsla.Unity
                     for (int y = 0; y < count; y++)
                     {
                         var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
-                        var variableID = NetworkSerializer.ReadValue<NetworkVariableID>(reader);
+                        var variableID = NetworkSerializer.ReadValue<NetworkSyncMemberID>(reader);
 
                         var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
 
@@ -1362,6 +1264,193 @@ namespace Wsla.Unity
                 Scene.ApplyState();
             }
             Transport.Listener.Resume();
+        }
+    }
+
+    public ref struct SpawnOptions
+    {
+        internal NetworkEntityID Token;
+        internal NetworkEntity Instance;
+        internal NetworkEntityAuthorityMode Authority;
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
+
+        public SpawnOptions SetResource(NetworkEntityResource resource)
+        {
+            var instance = Room.Entities.InstantiatePrefab(resource);
+            SetInstance(instance);
+            return this;
+        }
+        public SpawnOptions SetPrefab(GameObject prefab)
+        {
+            var instance = Room.Entities.InstantiatePrefab(prefab);
+            SetInstance(instance);
+            return this;
+        }
+        public SpawnOptions SetInstance(NetworkEntity value)
+        {
+            Instance = value;
+            return this;
+        }
+
+        public SpawnOptions SetAuthority(NetworkEntityAuthorityMode mode)
+        {
+            if (mode is NetworkEntityAuthorityMode.Authoritative && Room.Clients.Local.IsMaster is false)
+            {
+                NetworkLog.Error($"Can Only Spawn Items with {NetworkEntityAuthorityMode.Authoritative} Authority if Master Client");
+                return this;
+            }
+
+            Authority = mode;
+            return this;
+        }
+
+        bool Validate()
+        {
+            if (Room.Clients.Local.SpawnAllowance is 0)
+            {
+                NetworkLog.Error($"Client's Spawn Allowance Exceeded, Need to Wait for More");
+                return false;
+            }
+
+            if (Instance == null)
+            {
+                NetworkLog.Error($"No Entity (Resource/Prefab/Instance) Specified");
+                return false;
+            }
+
+            return true;
+        }
+
+        public EntitySpawnTicket Ticket()
+        {
+            if (Validate() is false)
+                throw new InvalidOperationException($"Invalid Spawn Options");
+
+            Token = Room.Clients.Local.RemoveSpawnToken();
+
+            return new EntitySpawnTicket(ref this);
+        }
+
+        public NetworkEntity Send() => Ticket().Send();
+
+        internal SpawnPrefabEntityRequest CreateSpawnRequest() => new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
+
+        public static SpawnOptions CreateDefault() => new SpawnOptions()
+        {
+            Authority = NetworkEntityAuthorityMode.Explicit,
+        };
+    }
+    public ref struct EntitySpawnTicket
+    {
+        SpawnOptions Options;
+        NetDataWriter Writer;
+
+        public NetworkEntity Entity => Options.Instance;
+
+        static NetworkAPI API => NetworkAPI.Instance;
+        static RoomAPI Room => API.Room;
+
+        public NetworkEntity Send()
+        {
+            Room.Transport.SendWriter(in Writer);
+
+            //Spawn Local
+            return Room.Entities.SpawnLocal(ref Options);
+        }
+
+        internal void WriteRPC<TBind, TParameters>(TBind bind, TParameters parameters, bool local)
+            where TBind : BaseRpcBind, IBaseRpcBind<TParameters>
+            where TParameters : IRpcParameters
+        {
+            if (bind.Entity != Entity)
+                throw new ArgumentException($"Invalid Entity, Initializing Variable for {bind.Entity} on Ticket for {Entity}");
+
+            if (Entity.IsSpawned)
+            {
+                NetworkLog.Error($"Entity Already Spawned, Can Only Initialize Variable Before Entity Spawn");
+                return;
+            }
+
+            var source = BinarySource.From(Writer);
+
+            NetworkSerializer.WriteValue(bind.Behaviour.ID, ref source);
+            NetworkSerializer.WriteValue(SyncMemberType.RPC, ref source);
+            NetworkSerializer.WriteValue(bind.ID, ref source);
+
+            BinarySource LengthHeader;
+            //Allocate Length
+            {
+                var span = source.AllocateSpan(sizeof(ushort));
+                LengthHeader = BinarySource.From(span);
+            }
+
+            //Invoke Local Method
+            if (local)
+            {
+                var info = RpcInfo.FromInitialization();
+                bind.Invoke(parameters, info);
+            }
+
+            var cursor = source.Position;
+            parameters.WriteTo(Writer);
+
+            //Write Length
+            {
+                var length = (ushort)(source.Position - cursor);
+                NetworkSerializer.WriteValue(in length, ref LengthHeader);
+            }
+        }
+        internal void WriteVariable<T>(NetworkVariable<T> variable, in T value)
+        {
+            if (variable.Entity != Entity)
+                throw new ArgumentException($"Invalid Entity, Initializing Variable for {variable.Entity} on Ticket for {Entity}");
+
+            if (Entity.IsSpawned)
+            {
+                NetworkLog.Error($"Entity Already Spawned, Can Only Initialize Variable Before Entity Spawn");
+                return;
+            }
+
+            var source = BinarySource.From(Writer);
+
+            NetworkSerializer.WriteValue(variable.Behaviour.ID, ref source);
+            NetworkSerializer.WriteValue(SyncMemberType.Variable, ref source);
+            NetworkSerializer.WriteValue(variable.ID, ref source);
+
+            BinarySource LengthHeader;
+            //Allocate Length
+            {
+                var span = source.AllocateSpan(sizeof(ushort));
+                LengthHeader = BinarySource.From(span);
+            }
+
+            //Set Local Variable
+            {
+                var info = NetworkVariableInfo.FromInitialization();
+                variable.Set(value, info);
+            }
+
+            var cursor = source.Position;
+            variable.Write(ref source);
+
+            //Write Length
+            {
+                var length = (ushort)(source.Position - cursor);
+                NetworkSerializer.WriteValue(in length, ref LengthHeader);
+            }
+        }
+
+        public EntitySpawnTicket(ref SpawnOptions Options)
+        {
+            this.Options = Options;
+
+            Writer = Room.Pools.SinglePackerWriter.Take();
+
+            var request = Options.CreateSpawnRequest();
+
+            NetworkSerializer.WriteHeader(in request, Writer);
         }
     }
 }

@@ -16,9 +16,9 @@ namespace Wsla.Unity
         public NetworkEntity.Behaviour Behaviour { get; private set; }
         public NetworkEntity Entity => Behaviour.Entity;
 
-        public NetworkRpcID ID { get; private set; }
+        public NetworkSyncMemberID ID { get; private set; }
 
-        internal void Set(NetworkRpcID ID, NetworkEntity.Behaviour Behaviour)
+        internal void Set(NetworkSyncMemberID ID, NetworkEntity.Behaviour Behaviour)
         {
             this.ID = ID;
             this.Behaviour = Behaviour;
@@ -26,7 +26,12 @@ namespace Wsla.Unity
 
         internal abstract string GetName();
 
-        internal abstract void Invoke(INetworkStream reader, RpcInfo info);
+        internal void Invoke(INetworkStream stream, RpcInfo info)
+        {
+            var source = BinarySource.From(stream);
+            Invoke(ref source, info);
+        }
+        internal abstract void Invoke(ref BinarySource reader, RpcInfo info);
     }
 
     public interface IBaseRpcBind<TParameters>
@@ -57,7 +62,7 @@ namespace Wsla.Unity
 
     public class RpcBind : BaseRpcBind<RpcDelegate, RpcParameters>
     {
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
             Method(info);
         }
@@ -71,6 +76,13 @@ namespace Wsla.Unity
             var parameters = new RpcParameters();
 
             return new RpcInvocationBuilder<RpcBind, RpcParameters>(this, parameters);
+        }
+
+        public void Initialize(EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters();
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate Method) : base(Method) { }
@@ -95,11 +107,9 @@ namespace Wsla.Unity
 
         static SinglePacketWriter SourceWriterPool = SinglePacketWriter.Create(512);
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            var source = BinarySource.From(reader);
-
-            Method.Invoke(ref source, info);
+            Method.Invoke(ref reader, info);
         }
         internal override void Invoke(BinaryRpcParameters parameters, RpcInfo info)
         {
@@ -120,6 +130,16 @@ namespace Wsla.Unity
             return new RpcInvocationBuilder<BinaryRpcBind, BinaryRpcParameters>(this, parameters);
         }
 
+        public void Initialize(Memory<byte> payload, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new BinaryRpcParameters()
+            {
+                Payload = payload,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
+        }
+
         public BinaryRpcBind(BinaryRpcDelegate Method) : base(Method) { }
     }
     public delegate void BinaryRpcDelegate(ref BinarySource binary, RpcInfo info);
@@ -138,9 +158,9 @@ namespace Wsla.Unity
     {
         T1 arg1;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
 
             Method(arg1, info);
         }
@@ -157,6 +177,16 @@ namespace Wsla.Unity
             };
 
             return new RpcInvocationBuilder<RpcBind<T1>, RpcParameters<T1>>(this, parameters);
+        }
+
+        public void Initialize(T1 arg1, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1>()
+            {
+                Arg1 = arg1,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate<T1> Method) : base(Method) { }
@@ -177,10 +207,10 @@ namespace Wsla.Unity
         T1 arg1;
         T2 arg2;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
-            NetworkSerializer.ReadValue(ref arg2, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
+            NetworkSerializer.ReadValue(ref arg2, ref reader);
 
             Method(arg1, arg2, info);
         }
@@ -198,6 +228,17 @@ namespace Wsla.Unity
             };
 
             return new RpcInvocationBuilder<RpcBind<T1, T2>, RpcParameters<T1, T2>>(this, parameters);
+        }
+
+        public void Initialize(T1 arg1, T2 arg2, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1, T2>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate<T1, T2> Method) : base(Method) { }
@@ -221,11 +262,11 @@ namespace Wsla.Unity
         T2 arg2;
         T3 arg3;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
-            NetworkSerializer.ReadValue(ref arg2, reader);
-            NetworkSerializer.ReadValue(ref arg3, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
+            NetworkSerializer.ReadValue(ref arg2, ref reader);
+            NetworkSerializer.ReadValue(ref arg3, ref reader);
 
             Method(arg1, arg2, arg3, info);
         }
@@ -244,6 +285,18 @@ namespace Wsla.Unity
             };
 
             return new RpcInvocationBuilder<RpcBind<T1, T2, T3>, RpcParameters<T1, T2, T3>>(this, parameters);
+        }
+
+        public void Initialize(T1 arg1, T2 arg2, T3 arg3, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1, T2, T3>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate<T1, T2, T3> Method) : base(Method) { }
@@ -270,12 +323,12 @@ namespace Wsla.Unity
         T3 arg3;
         T4 arg4;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
-            NetworkSerializer.ReadValue(ref arg2, reader);
-            NetworkSerializer.ReadValue(ref arg3, reader);
-            NetworkSerializer.ReadValue(ref arg4, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
+            NetworkSerializer.ReadValue(ref arg2, ref reader);
+            NetworkSerializer.ReadValue(ref arg3, ref reader);
+            NetworkSerializer.ReadValue(ref arg4, ref reader);
 
             Method(arg1, arg2, arg3, arg4, info);
         }
@@ -295,6 +348,19 @@ namespace Wsla.Unity
             };
 
             return new RpcInvocationBuilder<RpcBind<T1, T2, T3, T4>, RpcParameters<T1, T2, T3, T4>>(this, parameters);
+        }
+
+        public void Initialize(T1 arg1, T2 arg2, T3 arg3, T4 arg4, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate<T1, T2, T3, T4> Method) : base(Method) { }
@@ -324,19 +390,33 @@ namespace Wsla.Unity
         T4 arg4;
         T5 arg5;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
-            NetworkSerializer.ReadValue(ref arg2, reader);
-            NetworkSerializer.ReadValue(ref arg3, reader);
-            NetworkSerializer.ReadValue(ref arg4, reader);
-            NetworkSerializer.ReadValue(ref arg5, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
+            NetworkSerializer.ReadValue(ref arg2, ref reader);
+            NetworkSerializer.ReadValue(ref arg3, ref reader);
+            NetworkSerializer.ReadValue(ref arg4, ref reader);
+            NetworkSerializer.ReadValue(ref arg5, ref reader);
 
             Method(arg1, arg2, arg3, arg4, arg5, info);
         }
         internal override void Invoke(RpcParameters<T1, T2, T3, T4, T5> parameters, RpcInfo info)
         {
             Method(parameters.Arg1, parameters.Arg2, parameters.Arg3, parameters.Arg4, parameters.Arg5, info);
+        }
+
+        public void Initialize(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4, T5>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+                Arg5 = arg5,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5>, RpcParameters<T1, T2, T3, T4, T5>> Invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
@@ -383,14 +463,14 @@ namespace Wsla.Unity
         T5 arg5;
         T6 arg6;
 
-        internal override void Invoke(INetworkStream reader, RpcInfo info)
+        internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {
-            NetworkSerializer.ReadValue(ref arg1, reader);
-            NetworkSerializer.ReadValue(ref arg2, reader);
-            NetworkSerializer.ReadValue(ref arg3, reader);
-            NetworkSerializer.ReadValue(ref arg4, reader);
-            NetworkSerializer.ReadValue(ref arg5, reader);
-            NetworkSerializer.ReadValue(ref arg6, reader);
+            NetworkSerializer.ReadValue(ref arg1, ref reader);
+            NetworkSerializer.ReadValue(ref arg2, ref reader);
+            NetworkSerializer.ReadValue(ref arg3, ref reader);
+            NetworkSerializer.ReadValue(ref arg4, ref reader);
+            NetworkSerializer.ReadValue(ref arg5, ref reader);
+            NetworkSerializer.ReadValue(ref arg6, ref reader);
 
             Method(arg1, arg2, arg3, arg4, arg5, arg6, info);
         }
@@ -412,6 +492,21 @@ namespace Wsla.Unity
             };
 
             return new RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5, T6>, RpcParameters<T1, T2, T3, T4, T5, T6>>(this, parameters);
+        }
+
+        public void Initialize(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, EntitySpawnTicket ticket, bool local = true)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4, T5, T6>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+                Arg5 = arg5,
+                Arg6 = arg6,
+            };
+
+            ticket.WriteRPC(this, parameters, local);
         }
 
         public RpcBind(RpcDelegate<T1, T2, T3, T4, T5, T6> Method) : base(Method) { }
@@ -490,6 +585,9 @@ namespace Wsla.Unity
             return new RpcInfo(senderID, builder.Channel, builder.Delivery, false);
         }
         public static RpcInfo FromBuffer(NetworkClientID senderID) => new RpcInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
+
+        public static RpcInfo FromInitialization() => FromInitialization(Room.Clients.Local.ID);
+        public static RpcInfo FromInitialization(NetworkClientID senderID) => new RpcInfo(senderID, 0, DeliveryMethod.ReliableOrdered, true);
     }
 
     public interface IRegisterCustomRPCs
@@ -538,7 +636,7 @@ namespace Wsla.Unity
             return this;
         }
 
-        NetworkRpcParameters GetParameters() => new NetworkRpcParameters(Bind.Entity.ID, Bind.Behaviour.ID, Bind.ID);
+        NetworkSyncMemberParameters GetParameters() => new NetworkSyncMemberParameters(Bind.Entity.ID, Bind.Behaviour.ID, Bind.ID);
 
         void ValidateFinalConfiguration()
         {

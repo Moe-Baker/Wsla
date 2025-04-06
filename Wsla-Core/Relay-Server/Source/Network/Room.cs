@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -650,16 +651,29 @@ namespace Wsla.Server
 
                 Register(entity);
 
-                Memory<byte> PolicyData;
+                Memory<byte> InitializationData;
 
-                //Read Network Variables
+                //Read Initialization Data (RPCs & Variables)
                 {
-                    PolicyData = reader.PeekAvailableMemory();
+                    InitializationData = reader.PeekAvailableMemory();
 
-                    var variables = new EntitySpawnVariableInitializationReader(reader);
+                    var initialization = new EntitySpawnRequestInitializationDataReader(reader);
 
-                    foreach (var entry in variables)
-                        entity.VariableBuffer.Register(sender, entry.Behaviour, entry.Variable, entry.Binary.Span);
+                    foreach (var entry in initialization)
+                    {
+                        switch (entry.Type)
+                        {
+                            case SyncMemberType.RPC:
+                                entity.RpcBuffer.Register(sender, entry.Behaviour, entry.Member, entry.Binary.Span);
+                                break;
+
+                            case SyncMemberType.Variable:
+                                entity.VariableBuffer.Register(sender, entry.Behaviour, entry.Member, entry.Binary.Span);
+                                break;
+
+                            default: throw new NotImplementedException();
+                        }
+                    }
                 }
 
                 //Respond to Sender
@@ -677,8 +691,8 @@ namespace Wsla.Server
 
                     //Append Policy
                     {
-                        var destination = writer.AllocateMemory(PolicyData.Length);
-                        PolicyData.CopyTo(destination);
+                        var destination = writer.AllocateMemory(InitializationData.Length);
+                        InitializationData.CopyTo(destination);
                     }
 
                     Transport.BroadcastWriter(writer, except: sender);
@@ -833,7 +847,7 @@ namespace Wsla.Server
                 }
 
                 if (message.Buffer is RemoteBufferMode.Buffer)
-                    entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.RPC, reader);
+                    entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
 
                 //Send to Others
                 {
@@ -851,7 +865,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.RPC, reader);
+                entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
             }
 
             void TargetRequestHandler(NetworkClient sender, ref TargetNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -876,7 +890,7 @@ namespace Wsla.Server
                 }
             }
 
-            void WriteCommand(NetworkClient sender, ref NetworkRpcParameters parameters, NetPacketReader input, NetDataWriter output)
+            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, NetPacketReader input, NetDataWriter output)
             {
                 var command = new NetworkRpcCommand(sender.ID, parameters);
 
@@ -923,7 +937,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Variable, reader);
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
 
                 //Send to Others
                 {
@@ -941,10 +955,10 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Variable, reader);
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
             }
 
-            void WriteCommand(NetworkClient sender, ref NetworkVariableParameters parameters, NetPacketReader input, NetDataWriter output)
+            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, NetPacketReader input, NetDataWriter output)
             {
                 var command = new NetworkVariableCommand(sender.ID, parameters);
 

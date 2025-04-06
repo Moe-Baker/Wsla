@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,14 +9,13 @@ using Wsla.Serialization;
 
 namespace Wsla.Server
 {
-    public struct RemoteSyncBufferCollection<TMember> : IDisposable
-        where TMember : unmanaged, IEquatable<TMember>, IRemoteSyncMemberID
+    public struct RemoteSyncBufferCollection : IDisposable
     {
         Dictionary<Key, Payload> Collection;
         public readonly struct Key : IEquatable<Key>
         {
             public NetworkBehaviourID Behaviour { get; }
-            public TMember Member { get; }
+            public NetworkSyncMemberID Member { get; }
 
             public override bool Equals(object obj)
             {
@@ -34,7 +32,7 @@ namespace Wsla.Server
             readonly int HashCode;
             public override int GetHashCode() => HashCode;
 
-            public Key(NetworkBehaviourID Behaviour, TMember Member)
+            public Key(NetworkBehaviourID Behaviour, NetworkSyncMemberID Member)
             {
                 this.Behaviour = Behaviour;
                 this.Member = Member;
@@ -65,12 +63,12 @@ namespace Wsla.Server
 
         public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
 
-        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, TMember member, NetDataReader Input)
+        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, NetworkSyncMemberID member, NetDataReader Input)
         {
             var binary = Input.PeekAvailableMemory();
             Register(sender, behaviour, member, binary.Span);
         }
-        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, TMember member, ReadOnlySpan<byte> binary)
+        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, NetworkSyncMemberID member, ReadOnlySpan<byte> binary)
         {
             if (Collection is null)
                 Collection = new(1);
