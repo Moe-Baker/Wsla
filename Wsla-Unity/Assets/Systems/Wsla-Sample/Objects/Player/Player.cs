@@ -42,10 +42,7 @@ public partial class Player : NetworkBehaviour
     {
         if (Network.IsMine)
         {
-            var color = UnityEngine.Random.ColorHSV();
-
-            Network.RPC.Invoke(nameof(Colorize))
-                .Arguments(color)
+            RPCs.Colorize.Invoke(UnityEngine.Random.ColorHSV())
                 .SetBufferMode()
                 .Broadcast();
         }

@@ -415,7 +415,7 @@ namespace Wsla.Unity
             }
         }
 
-        public void RegisterVariables(List<NetworkVariable> list)
+        public void RegisterCustomVariables(List<NetworkVariable> list)
         {
             list.Add(Initials.Position);
             list.Add(Initials.Rotation);
@@ -464,23 +464,27 @@ namespace Wsla.Unity
 
             //Replicate
             {
-                var invocation = Network.RPC.Invoke(nameof(Replicate))
-                    .SetIgnoreLocal()
-                    .GetPayloadWriter(out var writer);
-
-                var source = BinarySource.From(writer);
+                var stream = RPCs.Replicate.GetSourceStream();
+                var source = BinarySource.From(stream);
 
                 var tick = info.GetTick();
                 WritePayload(ref source, tick, motion);
 
+                var binary = stream.PeekAllocatedMemory();
+
+                var invocation = RPCs.Replicate.Invoke(binary)
+                    .SetIgnoreLocal();
+
                 if (motion.Change.Stopped)
                 {
-                    invocation.SetBufferMode();
-                    invocation.SetDelivery(RemoteSyncDelivery.ReliableUnordered);
+                    invocation = invocation
+                        .SetBufferMode()
+                        .SetDelivery(RemoteSyncDelivery.ReliableUnordered);
                 }
                 else
                 {
-                    invocation.SetDelivery(RemoteSyncDelivery.Unreliable);
+                    invocation = invocation
+                        .SetDelivery(RemoteSyncDelivery.Unreliable);
                 }
 
                 invocation.Broadcast();
@@ -653,11 +657,9 @@ namespace Wsla.Unity
         }
 
         [RPC]
-        void Replicate(INetworkStream stream, RpcInfo info)
+        void Replicate(ref BinarySource source, RpcInfo info)
         {
             var origin = SnapshotInterpolation.GetOrigin();
-
-            var source = BinarySource.From(stream);
 
             var snapshot = ReadPayload(ref source, origin);
 

@@ -284,7 +284,7 @@ namespace Wsla.Generator
 
             public static readonly string NullableNetworkSerializationResolver = $"{Namespace}.{nameof(NullableNetworkSerializationResolver)}";
 
-            public static readonly string INetworkStream = $"{Namespace}.{nameof(INetworkStream)}";
+            public static readonly string BinarySource = $"{Namespace}.{nameof(BinarySource)}";
         }
 
         public class DiagnosticCodes : GlobalNetworkGenerator.DiagnosticCodes { }

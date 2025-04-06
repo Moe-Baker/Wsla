@@ -179,18 +179,7 @@ namespace Wsla.Unity
                     return true;
                 }
 
-                readonly Dictionary<string, BaseRpcBind> Names;
-
                 NetworkRpcID Index;
-
-                public RpcInvocationBuilder Invoke(string name)
-                {
-                    if (Names.TryGetValue(name, out var bind) is false)
-                        throw new ArgumentException($"No RPC Bind Names {name} Found on {Behaviour}");
-
-                    return Invoke(bind);
-                }
-                public RpcInvocationBuilder Invoke(BaseRpcBind bind) => new RpcInvocationBuilder(bind);
 
                 void Register(BaseRpcBind bind)
                 {
@@ -210,24 +199,18 @@ namespace Wsla.Unity
 
                     //Attributed Registration
                     if (Behaviour.Contract is IRemoteSyncMembers members)
-                    {
                         members.RegisterRPCs(Collector);
-
-                        Names = new Dictionary<string, BaseRpcBind>(Collector.Count);
-
-                        foreach (var bind in Collector)
-                        {
-                            var name = bind.GetName();
-
-                            if (Names.TryAdd(name, bind) is false)
-                                throw new InvalidOperationException($"Duplicate RPCs by the Name of {name} Found on {Behaviour}, RPC Overloading is not Supported");
-                        }
-                    }
 
                     //Custom Registration
                     if (Behaviour.Script is IRegisterCustomRPCs custom)
                     {
-                        custom.RegisterRPCs(Collector);
+                        custom.RegisterCustomRPCs(Collector);
+
+#if UNITY_EDITOR
+                        var removed = Collector.RemoveAll(x => x is null);
+                        if (removed is not 0)
+                            throw new InvalidOperationException($"Removed {removed} Null Custom RPC Binds, Please Ensure Your Custom RPCs are Set inside the Registration Method");
+#endif
                     }
 
                     //Register All
@@ -288,7 +271,13 @@ namespace Wsla.Unity
                     //Custom Registration
                     if (Behaviour.Script is IRegisterCustomVariables custom)
                     {
-                        custom.RegisterVariables(Collector);
+                        custom.RegisterCustomVariables(Collector);
+
+#if UNITY_EDITOR
+                        var removed = Collector.RemoveAll(x => x is null);
+                        if (removed is not 0)
+                            throw new Exception($"Detected {removed} Null Custom Network Variables, Please Ensure Your Custom Variables are Set inside the Registration Method");
+#endif
                     }
 
                     //Register All

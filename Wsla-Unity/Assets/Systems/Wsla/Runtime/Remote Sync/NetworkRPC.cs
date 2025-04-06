@@ -16,8 +16,6 @@ namespace Wsla.Unity
         public NetworkEntity.Behaviour Behaviour { get; private set; }
         public NetworkEntity Entity => Behaviour.Entity;
 
-        public abstract int ParameterCount { get; }
-
         public NetworkRpcID ID { get; private set; }
 
         internal void Set(NetworkRpcID ID, NetworkEntity.Behaviour Behaviour)
@@ -31,12 +29,20 @@ namespace Wsla.Unity
         internal abstract void Invoke(INetworkStream reader, RpcInfo info);
     }
 
-    public abstract class BaseRpcBind<TMethod> : BaseRpcBind
+    public interface IBaseRpcBind<TParameters>
+    {
+        void Invoke(TParameters parameters, RpcInfo info);
+    }
+    public abstract class BaseRpcBind<TMethod, TParameters> : BaseRpcBind, IBaseRpcBind<TParameters>
         where TMethod : Delegate
+        where TParameters : IRpcParameters
     {
         public TMethod Method { get; }
 
         internal override string GetName() => Method.Method.Name;
+
+        void IBaseRpcBind<TParameters>.Invoke(TParameters parameters, RpcInfo info) => Invoke(parameters, info);
+        internal abstract void Invoke(TParameters parameters, RpcInfo info);
 
         public BaseRpcBind(TMethod Method) : base()
         {
@@ -44,36 +50,93 @@ namespace Wsla.Unity
         }
     }
 
-    public class RpcBind : BaseRpcBind<RpcDelegate>
+    public interface IRpcParameters
     {
-        public override int ParameterCount => 0;
+        void WriteTo(INetworkStream stream);
+    }
 
+    public class RpcBind : BaseRpcBind<RpcDelegate, RpcParameters>
+    {
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
             Method(info);
+        }
+        internal override void Invoke(RpcParameters parameters, RpcInfo info)
+        {
+            Method(info);
+        }
+
+        public RpcInvocationBuilder<RpcBind, RpcParameters> Invoke()
+        {
+            var parameters = new RpcParameters();
+
+            return new RpcInvocationBuilder<RpcBind, RpcParameters>(this, parameters);
         }
 
         public RpcBind(RpcDelegate Method) : base(Method) { }
     }
     public delegate void RpcDelegate(RpcInfo info);
-
-    public class StreamRpcBind : BaseRpcBind<RpcDelegate<INetworkStream>>
+    public struct RpcParameters : IRpcParameters
     {
-        public override int ParameterCount => 1;
+        public void WriteTo(INetworkStream stream)
+        {
+
+        }
+    }
+
+    public class BinaryRpcBind : BaseRpcBind<BinaryRpcDelegate, BinaryRpcParameters>
+    {
+        public INetworkStream GetSourceStream() => SourceWriterPool.Take();
+        public BinarySource GetBinarySource()
+        {
+            var stream = SourceWriterPool.Take();
+            return BinarySource.From(stream);
+        }
+
+        static SinglePacketWriter SourceWriterPool = SinglePacketWriter.Create(512);
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
-            Method.Invoke(reader, info);
+            var source = BinarySource.From(reader);
+
+            Method.Invoke(ref source, info);
+        }
+        internal override void Invoke(BinaryRpcParameters parameters, RpcInfo info)
+        {
+            var payload = parameters.Payload;
+
+            var source = BinarySource.From(payload);
+
+            Method(ref source, info);
         }
 
-        public StreamRpcBind(RpcDelegate<INetworkStream> Method) : base(Method) { }
+        public RpcInvocationBuilder<BinaryRpcBind, BinaryRpcParameters> Invoke(Memory<byte> payload)
+        {
+            var parameters = new BinaryRpcParameters()
+            {
+                Payload = payload,
+            };
+
+            return new RpcInvocationBuilder<BinaryRpcBind, BinaryRpcParameters>(this, parameters);
+        }
+
+        public BinaryRpcBind(BinaryRpcDelegate Method) : base(Method) { }
+    }
+    public delegate void BinaryRpcDelegate(ref BinarySource binary, RpcInfo info);
+    public struct BinaryRpcParameters : IRpcParameters
+    {
+        public Memory<byte> Payload;
+
+        public void WriteTo(INetworkStream stream)
+        {
+            var destination = stream.AllocateMemory(Payload.Length);
+            Payload.CopyTo(destination);
+        }
     }
 
-    public class RpcBind<T1> : BaseRpcBind<RpcDelegate<T1>>
+    public class RpcBind<T1> : BaseRpcBind<RpcDelegate<T1>, RpcParameters<T1>>
     {
         T1 arg1;
-
-        public override int ParameterCount => 1;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -81,17 +144,38 @@ namespace Wsla.Unity
 
             Method(arg1, info);
         }
+        internal override void Invoke(RpcParameters<T1> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1>, RpcParameters<T1>> Invoke(T1 arg1)
+        {
+            var parameters = new RpcParameters<T1>()
+            {
+                Arg1 = arg1,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1>, RpcParameters<T1>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1>(T1 arg1, RpcInfo info);
+    public struct RpcParameters<T1> : IRpcParameters
+    {
+        public T1 Arg1;
 
-    public class RpcBind<T1, T2> : BaseRpcBind<RpcDelegate<T1, T2>>
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+        }
+    }
+
+    public class RpcBind<T1, T2> : BaseRpcBind<RpcDelegate<T1, T2>, RpcParameters<T1, T2>>
     {
         T1 arg1;
         T2 arg2;
-
-        public override int ParameterCount => 2;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -100,18 +184,42 @@ namespace Wsla.Unity
 
             Method(arg1, arg2, info);
         }
+        internal override void Invoke(RpcParameters<T1, T2> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, parameters.Arg2, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1, T2>, RpcParameters<T1, T2>> Invoke(T1 arg1, T2 arg2)
+        {
+            var parameters = new RpcParameters<T1, T2>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1, T2>, RpcParameters<T1, T2>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1, T2> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1, T2>(T1 arg1, T2 arg2, RpcInfo info);
+    public struct RpcParameters<T1, T2> : IRpcParameters
+    {
+        public T1 Arg1;
+        public T2 Arg2;
 
-    public class RpcBind<T1, T2, T3> : BaseRpcBind<RpcDelegate<T1, T2, T3>>
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+            NetworkSerializer.WriteValue(in Arg2, stream);
+        }
+    }
+
+    public class RpcBind<T1, T2, T3> : BaseRpcBind<RpcDelegate<T1, T2, T3>, RpcParameters<T1, T2, T3>>
     {
         T1 arg1;
         T2 arg2;
         T3 arg3;
-
-        public override int ParameterCount => 3;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -121,19 +229,46 @@ namespace Wsla.Unity
 
             Method(arg1, arg2, arg3, info);
         }
+        internal override void Invoke(RpcParameters<T1, T2, T3> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, parameters.Arg2, parameters.Arg3, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1, T2, T3>, RpcParameters<T1, T2, T3>> Invoke(T1 arg1, T2 arg2, T3 arg3)
+        {
+            var parameters = new RpcParameters<T1, T2, T3>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1, T2, T3>, RpcParameters<T1, T2, T3>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1, T2, T3> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3, RpcInfo info);
+    public struct RpcParameters<T1, T2, T3> : IRpcParameters
+    {
+        public T1 Arg1;
+        public T2 Arg2;
+        public T3 Arg3;
 
-    public class RpcBind<T1, T2, T3, T4> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4>>
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+            NetworkSerializer.WriteValue(in Arg2, stream);
+            NetworkSerializer.WriteValue(in Arg3, stream);
+        }
+    }
+
+    public class RpcBind<T1, T2, T3, T4> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4>, RpcParameters<T1, T2, T3, T4>>
     {
         T1 arg1;
         T2 arg2;
         T3 arg3;
         T4 arg4;
-
-        public override int ParameterCount => 4;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -144,20 +279,50 @@ namespace Wsla.Unity
 
             Method(arg1, arg2, arg3, arg4, info);
         }
+        internal override void Invoke(RpcParameters<T1, T2, T3, T4> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, parameters.Arg2, parameters.Arg3, parameters.Arg4, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1, T2, T3, T4>, RpcParameters<T1, T2, T3, T4>> Invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1, T2, T3, T4>, RpcParameters<T1, T2, T3, T4>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1, T2, T3, T4> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, RpcInfo info);
+    public struct RpcParameters<T1, T2, T3, T4> : IRpcParameters
+    {
+        public T1 Arg1;
+        public T2 Arg2;
+        public T3 Arg3;
+        public T4 Arg4;
 
-    public class RpcBind<T1, T2, T3, T4, T5> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5>>
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+            NetworkSerializer.WriteValue(in Arg2, stream);
+            NetworkSerializer.WriteValue(in Arg3, stream);
+            NetworkSerializer.WriteValue(in Arg4, stream);
+        }
+    }
+
+    public class RpcBind<T1, T2, T3, T4, T5> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5>, RpcParameters<T1, T2, T3, T4, T5>>
     {
         T1 arg1;
         T2 arg2;
         T3 arg3;
         T4 arg4;
         T5 arg5;
-
-        public override int ParameterCount => 5;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -169,12 +334,47 @@ namespace Wsla.Unity
 
             Method(arg1, arg2, arg3, arg4, arg5, info);
         }
+        internal override void Invoke(RpcParameters<T1, T2, T3, T4, T5> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, parameters.Arg2, parameters.Arg3, parameters.Arg4, parameters.Arg5, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5>, RpcParameters<T1, T2, T3, T4, T5>> Invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4, T5>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+                Arg5 = arg5,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5>, RpcParameters<T1, T2, T3, T4, T5>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1, T2, T3, T4, T5> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, RpcInfo info);
+    public struct RpcParameters<T1, T2, T3, T4, T5> : IRpcParameters
+    {
+        public T1 Arg1;
+        public T2 Arg2;
+        public T3 Arg3;
+        public T4 Arg4;
+        public T5 Arg5;
 
-    public class RpcBind<T1, T2, T3, T4, T5, T6> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5, T6>>
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+            NetworkSerializer.WriteValue(in Arg2, stream);
+            NetworkSerializer.WriteValue(in Arg3, stream);
+            NetworkSerializer.WriteValue(in Arg4, stream);
+            NetworkSerializer.WriteValue(in Arg5, stream);
+        }
+    }
+
+    public class RpcBind<T1, T2, T3, T4, T5, T6> : BaseRpcBind<RpcDelegate<T1, T2, T3, T4, T5, T6>, RpcParameters<T1, T2, T3, T4, T5, T6>>
     {
         T1 arg1;
         T2 arg2;
@@ -182,8 +382,6 @@ namespace Wsla.Unity
         T4 arg4;
         T5 arg5;
         T6 arg6;
-
-        public override int ParameterCount => 6;
 
         internal override void Invoke(INetworkStream reader, RpcInfo info)
         {
@@ -196,10 +394,48 @@ namespace Wsla.Unity
 
             Method(arg1, arg2, arg3, arg4, arg5, arg6, info);
         }
+        internal override void Invoke(RpcParameters<T1, T2, T3, T4, T5, T6> parameters, RpcInfo info)
+        {
+            Method(parameters.Arg1, parameters.Arg2, parameters.Arg3, parameters.Arg4, parameters.Arg5, parameters.Arg6, info);
+        }
+
+        public RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5, T6>, RpcParameters<T1, T2, T3, T4, T5, T6>> Invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
+        {
+            var parameters = new RpcParameters<T1, T2, T3, T4, T5, T6>()
+            {
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Arg4 = arg4,
+                Arg5 = arg5,
+                Arg6 = arg6,
+            };
+
+            return new RpcInvocationBuilder<RpcBind<T1, T2, T3, T4, T5, T6>, RpcParameters<T1, T2, T3, T4, T5, T6>>(this, parameters);
+        }
 
         public RpcBind(RpcDelegate<T1, T2, T3, T4, T5, T6> Method) : base(Method) { }
     }
     public delegate void RpcDelegate<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, RpcInfo info);
+    public struct RpcParameters<T1, T2, T3, T4, T5, T6> : IRpcParameters
+    {
+        public T1 Arg1;
+        public T2 Arg2;
+        public T3 Arg3;
+        public T4 Arg4;
+        public T5 Arg5;
+        public T6 Arg6;
+
+        public void WriteTo(INetworkStream stream)
+        {
+            NetworkSerializer.WriteValue(in Arg1, stream);
+            NetworkSerializer.WriteValue(in Arg2, stream);
+            NetworkSerializer.WriteValue(in Arg3, stream);
+            NetworkSerializer.WriteValue(in Arg4, stream);
+            NetworkSerializer.WriteValue(in Arg5, stream);
+            NetworkSerializer.WriteValue(in Arg6, stream);
+        }
+    }
 
     public struct RpcInfo : ISyncMemberInfo
     {
@@ -245,7 +481,9 @@ namespace Wsla.Unity
         {
             return new RpcInfo(command.Sender, channel, delivery, false);
         }
-        public static RpcInfo FromLocal(ref RpcInvocationBuilder builder)
+        public static RpcInfo FromLocal<TBind, TParameters>(ref RpcInvocationBuilder<TBind, TParameters> builder)
+            where TBind : BaseRpcBind, IBaseRpcBind<TParameters>
+            where TParameters : IRpcParameters
         {
             var senderID = Room.Clients.Local.ID;
 
@@ -256,143 +494,51 @@ namespace Wsla.Unity
 
     public interface IRegisterCustomRPCs
     {
-        void RegisterRPCs(List<BaseRpcBind> list);
+        void RegisterCustomRPCs(List<BaseRpcBind> list);
     }
 
-    public struct RpcInvocationBuilder
+    public struct RpcInvocationBuilder<TBind, TParameters>
+        where TBind : BaseRpcBind, IBaseRpcBind<TParameters>
+        where TParameters : IRpcParameters
     {
-        internal readonly BaseRpcBind Bind;
+        internal readonly TBind Bind;
+        internal readonly TParameters Parameters;
 
-        internal NetDataWriter ArgumentsWriter;
         internal NetDataWriter PacketWriter;
 
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;
 
         internal byte Channel;
-        public RpcInvocationBuilder SetChannel(byte value)
+        public RpcInvocationBuilder<TBind, TParameters> SetChannel(byte value)
         {
             Channel = value;
             return this;
         }
 
         internal DeliveryMethod Delivery;
-        public RpcInvocationBuilder SetDelivery(RemoteSyncDelivery value)
+        public RpcInvocationBuilder<TBind, TParameters> SetDelivery(RemoteSyncDelivery value)
         {
             Delivery = (DeliveryMethod)value;
             return this;
         }
 
         internal RemoteBufferMode BufferMode;
-        public RpcInvocationBuilder SetBufferMode() => SetBufferMode(RemoteBufferMode.Buffer);
-        public RpcInvocationBuilder SetBufferMode(RemoteBufferMode value)
+        public RpcInvocationBuilder<TBind, TParameters> SetBufferMode() => SetBufferMode(RemoteBufferMode.Buffer);
+        public RpcInvocationBuilder<TBind, TParameters> SetBufferMode(RemoteBufferMode value)
         {
             BufferMode = value;
             return this;
         }
 
         internal bool IgnoreLocal;
-        public RpcInvocationBuilder SetIgnoreLocal()
+        public RpcInvocationBuilder<TBind, TParameters> SetIgnoreLocal()
         {
             IgnoreLocal = true;
             return this;
         }
 
-        void ValidateParameterCount(int count)
-        {
-            if (Bind.ParameterCount == count)
-                return;
-
-            throw new ArgumentException($"Parameter Count Mismatch, Expected {Bind.ParameterCount}; Got {count}");
-        }
-
-        public RpcInvocationBuilder Arguments<T1>(T1 arg1)
-        {
-            ValidateParameterCount(1);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-
-            return this;
-        }
-        public RpcInvocationBuilder Arguments<T1, T2>(T1 arg1, T2 arg2)
-        {
-            ValidateParameterCount(2);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
-
-            return this;
-        }
-        public RpcInvocationBuilder Arguments<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
-        {
-            ValidateParameterCount(3);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
-
-            return this;
-        }
-        public RpcInvocationBuilder Arguments<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
-        {
-            ValidateParameterCount(4);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
-
-            return this;
-        }
-        public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
-        {
-            ValidateParameterCount(5);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg5, ArgumentsWriter);
-
-            return this;
-        }
-        public RpcInvocationBuilder Arguments<T1, T2, T3, T4, T5, T6>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
-        {
-            ValidateParameterCount(6);
-
-            NetworkSerializer.WriteValue(in arg1, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg2, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg3, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg4, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg5, ArgumentsWriter);
-            NetworkSerializer.WriteValue(in arg6, ArgumentsWriter);
-
-            return this;
-        }
-
-        public RpcInvocationBuilder WriteValue<T>(T value) => Arguments(value);
-        public RpcInvocationBuilder WritePayload(Action<INetworkStream> action)
-        {
-            action(ArgumentsWriter);
-            return this;
-        }
-
-        public RpcInvocationBuilder GetPayloadWriter(out INetworkStream writer)
-        {
-            writer = ArgumentsWriter;
-            return this;
-        }
-
         NetworkRpcParameters GetParameters() => new NetworkRpcParameters(Bind.Entity.ID, Bind.Behaviour.ID, Bind.ID);
-        void CopyArgumentsTo(NetDataWriter output)
-        {
-            if (ArgumentsWriter.Length > 0)
-            {
-                var source = ArgumentsWriter.PeekAllocatedMemory().Span;
-                var destination = output.AllocateMemory(source.Length).Span;
-                source.CopyTo(destination);
-            }
-        }
 
         void ValidateFinalConfiguration()
         {
@@ -410,9 +556,6 @@ namespace Wsla.Unity
                     NetworkLog.Warning($"Can only Send on channel {Channel} via {Bind.Entity} while it's not Replicated");
                 }
             }
-
-            if (ArgumentsWriter.Length is 0 && Bind.ParameterCount is not 0)
-                throw new InvalidOperationException($"No Arguments Provided for RPC Expecting {Bind.ParameterCount} Parameters");
         }
 
         /// <summary>
@@ -429,7 +572,7 @@ namespace Wsla.Unity
 
                 NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-                CopyArgumentsTo(PacketWriter);
+                Parameters.WriteTo(PacketWriter);
 
                 Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
             }
@@ -439,20 +582,23 @@ namespace Wsla.Unity
         }
 
         /// <summary>
-        /// bufferd for all late joining clients, but not broadcasted to currently joining clients
+        /// buffered for all late joining clients, but not broadcasted to currently joining clients
         /// </summary>
         public void Buffer()
         {
             ValidateFinalConfiguration();
 
-            var parameters = GetParameters();
-            var request = new BufferNetworkRpcRequest(BufferMode, parameters);
+            //Remote
+            {
+                var parameters = GetParameters();
+                var request = new BufferNetworkRpcRequest(BufferMode, parameters);
 
-            NetworkSerializer.WriteHeader(in request, PacketWriter);
+                NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-            CopyArgumentsTo(PacketWriter);
+                Parameters.WriteTo(PacketWriter);
 
-            Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
+                Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
+            }
         }
 
         /// <summary>
@@ -471,20 +617,24 @@ namespace Wsla.Unity
             if (BufferMode is not RemoteBufferMode.None)
                 NetworkLog.Warning($"Target RPCs Cannot be Buffered, Assigned Buffering Mode will be Ignored");
 
+            //Local if self
             if (Target == Room.Clients.Local.ID)
             {
                 InvokeLocal();
                 return;
             }
 
-            var parameters = GetParameters();
-            var request = new TargetNetworkRpcRequest(Target, parameters);
+            //Remote if Not
+            {
+                var parameters = GetParameters();
+                var request = new TargetNetworkRpcRequest(Target, parameters);
 
-            NetworkSerializer.WriteHeader(in request, PacketWriter);
+                NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-            CopyArgumentsTo(PacketWriter);
+                Parameters.WriteTo(PacketWriter);
 
-            Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
+                Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
+            }
         }
 
         void InvokeLocal()
@@ -493,18 +643,14 @@ namespace Wsla.Unity
                 return;
 
             var info = RpcInfo.FromLocal(ref this);
-
-            //Reset arguments writer to be read from
-            ArgumentsWriter.SetPosition(0);
-
-            Bind.Invoke(ArgumentsWriter, info);
+            Bind.Invoke(Parameters, info);
         }
 
-        public RpcInvocationBuilder(BaseRpcBind Bind)
+        public RpcInvocationBuilder(TBind Bind, TParameters Parameters)
         {
             this.Bind = Bind;
+            this.Parameters = Parameters;
 
-            ArgumentsWriter = ArgumentWriterPool.Take();
             PacketWriter = Room.Pools.SinglePackerWriter.Take();
 
             Channel = 0;
@@ -512,7 +658,5 @@ namespace Wsla.Unity
             BufferMode = RemoteBufferMode.None;
             IgnoreLocal = false;
         }
-
-        static SinglePacketWriter ArgumentWriterPool = SinglePacketWriter.Create(512);
     }
 }

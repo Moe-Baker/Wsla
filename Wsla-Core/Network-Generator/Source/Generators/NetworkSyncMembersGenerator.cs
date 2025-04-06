@@ -37,9 +37,9 @@ namespace Wsla.Generator
             public INamedTypeSymbol GenericNetworkVariable;
 
             public INamedTypeSymbol[] GeneralRpcBinds;
-            public INamedTypeSymbol StreamRpcBind;
+            public INamedTypeSymbol BinaryRpcBind;
 
-            public INamedTypeSymbol INetworkStream;
+            public INamedTypeSymbol BinarySource;
 
             (string, INamespaceSymbol) GetComparableFields() => (AssemblyName, GlobalNamespace);
 
@@ -83,9 +83,9 @@ namespace Wsla.Generator
                         compilation.GetGenericTypeByMetadataName(Constants.RpcBind, 6),
                     },
 
-                    StreamRpcBind = compilation.GetTypeByMetadataName(Constants.StreamRpcBind),
+                    BinaryRpcBind = compilation.GetTypeByMetadataName(Constants.BinaryRpcBind),
 
-                    INetworkStream = compilation.GetTypeByMetadataName(NetworkSerializationUsagesGenerator.Constants.INetworkStream),
+                    BinarySource = compilation.GetTypeByMetadataName(NetworkSerializationUsagesGenerator.Constants.BinarySource),
                 };
 
                 return data;
@@ -260,6 +260,15 @@ namespace Wsla.Generator
                             continue;
                         }
 
+                        if (EnsureInfoParameter(method) is false)
+                            continue;
+
+                        if (method.IsGenericMethod)
+                        {
+                            context.ReportDiagnostic(DiagnosticCodes.GenericRpcs.Create(method));
+                            continue;
+                        }
+
                         methods.Add(method);
                     }
                     else if (member is IPropertySymbol property)
@@ -291,6 +300,17 @@ namespace Wsla.Generator
 
                         variables.Add(field);
                     }
+                }
+
+                bool EnsureInfoParameter(IMethodSymbol method)
+                {
+                    var parameters = method.Parameters;
+
+                    if (parameters.Length > 0 && CodeUtility.CompareSymbols(parameters[parameters.Length - 1].Type, compilation.RpcInfo))
+                        return true;
+
+                    context.ReportDiagnostic(DiagnosticCodes.RpcInfoLastField.Create(method));
+                    return false;
                 }
             }
 
@@ -348,38 +368,54 @@ namespace Wsla.Generator
                     {
                         foreach (var method in methods)
                         {
-                            if (EnsureInfoParameter(method) is false)
-                                continue;
+                            builder.Write("list.Add");
 
-                            if (method.IsGenericMethod)
+                            using (builder.Parameters())
                             {
-                                context.ReportDiagnostic(DiagnosticCodes.GenericRpcs.Create(method));
-                                continue;
+                                builder.Write("RPCs.");
+
+                                builder.Write(method.Name);
+
+                                builder.Write(" ??= new");
+
+                                using (builder.Parameters())
+                                {
+                                    builder.Write(method.Name);
+                                }
                             }
-
-                            builder.Write("list.Add(new ");
-
-                            var bind = GenerateType(method);
-                            builder.Write(bind);
-
-                            builder.Write("(");
-                            builder.Write(method.Name);
-                            builder.Write("))");
 
                             builder.EndLine();
                         }
                     }
-                }
 
-                bool EnsureInfoParameter(IMethodSymbol method)
-                {
-                    var parameters = method.Parameters;
+                    builder.Newline();
 
-                    if (parameters.Length > 0 && CodeUtility.CompareSymbols(parameters[parameters.Length - 1].Type, compilation.RpcInfo))
-                        return true;
+                    //Registration Struct
+                    {
+                        builder.Write("public RPCsProperty RPCs");
+                        builder.EndLine();
 
-                    context.ReportDiagnostic(DiagnosticCodes.RpcInfoLastField.Create(method));
-                    return false;
+                        builder.Write("public struct RPCsProperty");
+
+                        using (builder.CodeBlock())
+                        {
+                            foreach (var method in methods)
+                            {
+                                builder.Write("public ");
+
+                                var bind = GenerateType(method);
+                                builder.Write(bind);
+                                builder.Space();
+
+                                builder.Write(method.Name);
+                                builder.Space();
+
+                                builder.Write("{ get; internal set; }");
+
+                                builder.Newline();
+                            }
+                        }
+                    }
                 }
 
                 INamedTypeSymbol GenerateType(IMethodSymbol method)
@@ -392,9 +428,9 @@ namespace Wsla.Generator
                     {
                         return compilation.GeneralRpcBinds[0];
                     }
-                    else if (members is 1 && CodeUtility.CompareSymbols(parameters[0].Type, compilation.INetworkStream))
+                    else if (members is 1 && parameters[0].RefKind == RefKind.Ref && CodeUtility.CompareSymbols(parameters[0].Type, compilation.BinarySource))
                     {
-                        return compilation.StreamRpcBind;
+                        return compilation.BinaryRpcBind;
                     }
                     else
                     {
@@ -503,7 +539,7 @@ namespace Wsla.Generator
 
             public static readonly string BaseRpcBind = $"{Namespace}.{nameof(BaseRpcBind)}";
             public static readonly string RpcBind = $"{Namespace}.{nameof(RpcBind)}";
-            public static readonly string StreamRpcBind = $"{Namespace}.{nameof(StreamRpcBind)}";
+            public static readonly string BinaryRpcBind = $"{Namespace}.{nameof(BinaryRpcBind)}";
 
             public static readonly string IRemoteSyncMembers = $"{Namespace}.{nameof(IRemoteSyncMembers)}";
 

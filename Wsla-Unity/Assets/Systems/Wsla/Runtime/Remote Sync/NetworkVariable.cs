@@ -80,7 +80,7 @@ namespace Wsla.Unity
 
     public interface IRegisterCustomVariables
     {
-        void RegisterVariables(List<NetworkVariable> list);
+        void RegisterCustomVariables(List<NetworkVariable> list);
     }
 
     public struct NetworkVariableInfo : ISyncMemberInfo

@@ -726,10 +726,7 @@ namespace Wsla.Unity
 
             //Replicate
             {
-                var invocation = Network.RPC.Invoke(nameof(Replicate))
-                    .SetIgnoreLocal()
-                    .GetPayloadWriter(out var stream);
-
+                var stream = RPCs.Replicate.GetSourceStream();
                 var source = BinarySource.From(stream);
 
                 var changes = CollectDirtyMask(ref source);
@@ -739,15 +736,17 @@ namespace Wsla.Unity
                 Parameters.WriteState(ref source, ref changes);
                 Layers.WriteState(ref source, ref changes);
 
-                invocation.Broadcast();
+                var binary = stream.PeekAllocatedMemory();
+
+                RPCs.Replicate.Invoke(binary)
+                    .SetIgnoreLocal()
+                    .Broadcast();
             }
         }
 
         [RPC]
-        void Replicate(INetworkStream stream, RpcInfo info)
+        void Replicate(ref BinarySource source, RpcInfo info)
         {
-            var source = BinarySource.From(stream);
-
             var changes = AllocateChangesMask(ref source);
 
             Parameters.ReadState(ref source, ref changes);
