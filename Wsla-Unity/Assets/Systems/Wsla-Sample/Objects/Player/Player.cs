@@ -40,6 +40,16 @@ public partial class Player : NetworkBehaviour
 
     void SpawnCallback()
     {
+        if (Network.IsMine)
+        {
+            var color = UnityEngine.Random.ColorHSV();
+
+            Network.RPC.Invoke(nameof(Colorize))
+                .Arguments(color)
+                .SetBufferMode()
+                .Broadcast();
+        }
+
         NetworkLog.Info($"Player {Network.Entity.ID} Spawned");
     }
 
@@ -77,6 +87,15 @@ public partial class Player : NetworkBehaviour
 
         var value = velocity.magnitude / MovementSpeed;
         NetworkAnimator.SetFloat(MoveIndex, value);
+    }
+
+    [RPC]
+    void Colorize(Color color, RpcInfo info)
+    {
+        foreach (var renderer in GetComponentsInChildren<Renderer>(true))
+        {
+            renderer.material.color = color;
+        }
     }
 
     Vector2 GetInput()

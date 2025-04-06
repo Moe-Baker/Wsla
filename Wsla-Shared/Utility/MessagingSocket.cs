@@ -59,7 +59,7 @@ namespace Wsla
 
                 //Allocate Length
                 {
-                    LengthBuffer = SendBuffer.PopMemory(LengthHeaderSize);
+                    LengthBuffer = SendBuffer.AllocateMemory(LengthHeaderSize);
                 }
 
                 NetworkSerializer.WriteHeader(in data, SendBuffer);
@@ -208,7 +208,7 @@ namespace Wsla
             //Read Length
             {
                 available -= LengthHeaderSize;
-                var buffer = ReceiveBuffer.PopMemory(LengthHeaderSize);
+                var buffer = ReceiveBuffer.ReadMemory(LengthHeaderSize);
                 length = BitConverter.ToUInt16(buffer.Span);
             }
 

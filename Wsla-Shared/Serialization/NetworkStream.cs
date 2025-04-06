@@ -15,43 +15,79 @@ namespace Wsla.Serialization
 
     public static class NetworkStreamExtensions
     {
-        public static Memory<byte> PeekAvailableMemory<TStream>(this TStream stream)
-            where TStream : INetworkStream
-        {
-            return stream.GetMemory(stream.Position, stream.Available);
-        }
-        public static Memory<byte> PopAvailableMemory<TStream>(this TStream stream)
-            where TStream : INetworkStream
-        {
-            var span = PeekAvailableMemory(stream);
-            stream.Position += span.Length;
-            return span;
-        }
-
+        /// <summary>
+        /// Returns the complete read span, no read position adjustment
+        /// </summary>
+        /// <returns></returns>
         public static Memory<byte> PeekAllocatedMemory<TStream>(this TStream stream)
             where TStream : INetworkStream
         {
             return stream.GetMemory(0, stream.Position);
         }
 
-        public static Memory<byte> PopMemory<TStream>(this TStream stream, int length)
+        /// <summary>
+        /// Returns the complete unread span, no read position adjustment
+        /// </summary>
+        /// <returns></returns>
+        public static Memory<byte> PeekAvailableMemory<TStream>(this TStream stream)
+            where TStream : INetworkStream
+        {
+            return stream.GetMemory(stream.Position, stream.Available);
+        }
+
+        /// <summary>
+        /// Returns the total span (read + unread), no read position adjusted
+        /// </summary>
+        /// <returns></returns>
+        public static Memory<byte> PeekTotalMemory<TStream>(this TStream stream)
+            where TStream : INetworkStream
+        {
+            return stream.GetMemory(0, stream.Capacity);
+        }
+
+        /// <summary>
+        /// Reads the specified length span and advances position
+        /// </summary>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        public static Memory<byte> ReadMemory<TStream>(this TStream stream, int length)
+            where TStream : INetworkStream
+        {
+            var span = stream.GetMemory(stream.Position, length);
+
+            stream.Position += length;
+
+            return span;
+        }
+
+        /// <summary>
+        /// Returns a span of length and advances the position, ensures length fit
+        /// </summary>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        public static Memory<byte> AllocateMemory<TStream>(this TStream stream, int length)
             where TStream : INetworkStream
         {
             stream.EnsureFit(length);
 
-            var buffer = stream.GetMemory(stream.Position, length);
-            stream.Position += length;
-            return buffer;
+            return stream.ReadMemory(length);
         }
 
-        public static ref byte PopByte<TStream>(this TStream stream)
+        public static void WriteByte<TStream>(this TStream stream, byte value)
             where TStream : INetworkStream
         {
             stream.EnsureFit(1);
 
-            var buffer = stream.GetMemory(stream.Position, 1);
-            stream.Position += 1;
-            return ref buffer.Span[0];
+            var span = stream.ReadMemory(1).Span;
+
+            span[0] = value;
+        }
+        public static byte ReadByte<TStream>(this TStream stream)
+            where TStream : INetworkStream
+        {
+            var span = stream.ReadMemory(1).Span;
+
+            return span[0];
         }
     }
 
@@ -172,10 +208,16 @@ namespace Wsla.Serialization
         }
 
         /// <summary>
+        /// Returns the complete read span, no read position adjustment
+        /// </summary>
+        /// <returns></returns>
+        public Span<byte> PeekAllocatedSpan() => GetSpan(0, Position);
+
+        /// <summary>
         /// Returns the complete unread span, no read position adjustment
         /// </summary>
         /// <returns></returns>
-        public Span<byte> PeekAllocatedSpan() => GetSpan(Position, Available);
+        public Span<byte> PeekAvailableSpan() => GetSpan(Position, Available);
 
         /// <summary>
         /// Returns the total span (read + unread), no read position adjusted

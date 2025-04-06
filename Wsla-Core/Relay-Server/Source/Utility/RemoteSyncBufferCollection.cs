@@ -106,8 +106,7 @@ namespace Wsla.Server
                 }
 
                 payload.Stream.SetPosition(0);
-                var destination = payload.Stream.PopMemory(binary.Length);
-
+                var destination = payload.Stream.AllocateMemory(binary.Length);
                 binary.CopyTo(destination.Span);
             }
         }
@@ -141,7 +140,7 @@ namespace Wsla.Server
                 if (payload.Stream is not null)
                 {
                     var source = payload.Stream.PeekAllocatedMemory();
-                    var destination = output.PopMemory(source.Length);
+                    var destination = output.AllocateMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }

@@ -677,7 +677,7 @@ namespace Wsla.Server
 
                     //Append Policy
                     {
-                        var destination = writer.PopMemory(PolicyData.Length);
+                        var destination = writer.AllocateMemory(PolicyData.Length);
                         PolicyData.CopyTo(destination);
                     }
 
@@ -885,7 +885,7 @@ namespace Wsla.Server
                 //Write Arguments
                 {
                     var source = input.PeekAvailableMemory();
-                    var destination = output.PopMemory(source.Length);
+                    var destination = output.AllocateMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }
@@ -953,7 +953,7 @@ namespace Wsla.Server
                 //Write Value
                 {
                     var source = input.PeekAvailableMemory();
-                    var destination = output.PopMemory(source.Length);
+                    var destination = output.AllocateMemory(source.Length);
                     source.CopyTo(destination);
                 }
             }

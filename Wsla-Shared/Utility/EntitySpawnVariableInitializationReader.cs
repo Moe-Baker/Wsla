@@ -22,7 +22,7 @@ namespace Wsla
 
             var length = NetworkSerializer.ReadValue<ushort>(Stream);
 
-            var binary = Stream.PopMemory(length);
+            var binary = Stream.ReadMemory(length);
 
             Current = new Entry(behaviour, variable, binary);
             return true;

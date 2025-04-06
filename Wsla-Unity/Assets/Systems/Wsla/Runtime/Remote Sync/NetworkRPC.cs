@@ -384,12 +384,12 @@ namespace Wsla.Unity
         }
 
         NetworkRpcParameters GetParameters() => new NetworkRpcParameters(Bind.Entity.ID, Bind.Behaviour.ID, Bind.ID);
-        void WriteArguments(NetDataWriter output)
+        void CopyArgumentsTo(NetDataWriter output)
         {
             if (ArgumentsWriter.Length > 0)
             {
                 var source = ArgumentsWriter.PeekAllocatedMemory().Span;
-                var destination = output.PopMemory(source.Length).Span;
+                var destination = output.AllocateMemory(source.Length).Span;
                 source.CopyTo(destination);
             }
         }
@@ -429,7 +429,7 @@ namespace Wsla.Unity
 
                 NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-                WriteArguments(PacketWriter);
+                CopyArgumentsTo(PacketWriter);
 
                 Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
             }
@@ -450,7 +450,7 @@ namespace Wsla.Unity
 
             NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-            WriteArguments(PacketWriter);
+            CopyArgumentsTo(PacketWriter);
 
             Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
         }
@@ -482,7 +482,7 @@ namespace Wsla.Unity
 
             NetworkSerializer.WriteHeader(in request, PacketWriter);
 
-            WriteArguments(PacketWriter);
+            CopyArgumentsTo(PacketWriter);
 
             Room.Transport.SendWriter(in PacketWriter, channel: Channel, delivery: Delivery);
         }
