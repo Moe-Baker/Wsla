@@ -112,7 +112,7 @@ namespace Toolbox
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError(ex);
+                        Debug.LogException(ex);
                     }
                 }
             }
@@ -137,9 +137,6 @@ namespace Toolbox
 
         protected override void Init()
         {
-            if (Instance != null)
-                throw new Exception($"Duplicate Instances of Scriptable Manager ({typeof(T)}) Found, Both ({Instance}) & ({this})");
-
             Instance = (T)this;
         }
 
@@ -149,7 +146,6 @@ namespace Toolbox
             OnDispose?.Invoke();
 
             OnDispose = default;
-            Instance = default;
         }
     }
 }
