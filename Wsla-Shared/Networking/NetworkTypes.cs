@@ -103,6 +103,9 @@ namespace Wsla
             Add<StartMatchMakingRequest>(ref counter);
             Add<MatchmakingFailResponse>(ref counter);
             Add<MatchmakingSuccessResponse>(ref counter);
+
+            Add<RoomTimeRequest>(ref counter);
+            Add<RoomTimeResponse>(ref counter);
         }
     }
 

@@ -33,6 +33,7 @@ public class MainMenu : MonoBehaviour
     async UniTaskVoid Initialize()
     {
         Application.runInBackground = true;
+        Application.targetFrameRate = 60;
 
         CanvasGroup = gameObject.AddComponent<CanvasGroup>();
 

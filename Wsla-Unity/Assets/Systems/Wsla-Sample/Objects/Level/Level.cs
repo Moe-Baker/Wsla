@@ -26,6 +26,8 @@ public partial class Level : NetworkBehaviour
     public Button CodeButton;
     public TMP_Text CodeLabel;
 
+    public TMP_Text RoomTimeLabel;
+
     public static Level Instance { get; private set; }
 
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
@@ -60,6 +62,14 @@ public partial class Level : NetworkBehaviour
         base.Set(reference);
 
         Network.Entity.OnSpawn += SpawnCallback;
+    }
+
+    void Update()
+    {
+        if (NetworkAPI.Room.IsConnected)
+            RoomTimeLabel.text = $"Time: {NetworkAPI.Room.Time.CalculateElapsed().TotalMilliseconds.ToString("N1")}";
+        else
+            RoomTimeLabel.text = "Disconnected";
     }
 
     void SpawnCallback()

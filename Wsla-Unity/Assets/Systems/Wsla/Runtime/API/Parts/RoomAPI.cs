@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -56,6 +57,7 @@ namespace Wsla.Unity
             //Assign Properties
             {
                 Transport = new TransportProperty(this);
+                Time = new TimeProperty(this);
                 Clients = new ClientsProperty(this);
                 Entities = new EntitiesProperty(this);
                 Scene = new SceneProperty(this);
@@ -102,6 +104,7 @@ namespace Wsla.Unity
             //Stop
             {
                 Transport?.Stop();
+                Time?.Stop();
                 Entities?.Stop();
 
                 Transport = default;
@@ -110,6 +113,7 @@ namespace Wsla.Unity
                 Scene = default;
                 RPCs = default;
                 Variables = default;
+                Time = default;
 
                 IsConnected = false;
             }
@@ -377,11 +381,14 @@ namespace Wsla.Unity
 
                 //Request
                 {
+                    var endpoint = new IPEndPoint(address, port);
+
                     var packet = Room.Pools.SinglePackerWriter.Take();
 
-                    NetworkSerializer.WriteValue(in request, packet);
+                    Room.Time.Start();
+                    request.TimeRequest = Room.Time.CreateRequest();
 
-                    var endpoint = new IPEndPoint(address, port);
+                    NetworkSerializer.WriteValue(in request, packet);
 
                     Peer = Manager.Connect(endpoint, packet);
                 }
@@ -449,6 +456,90 @@ namespace Wsla.Unity
             }
         }
 
+        public TimeProperty Time { get; private set; }
+        public class TimeProperty
+        {
+            /// <summary>
+            /// An estimate value of the round trip time between the client and server
+            /// including packet processing time of client + server
+            /// </summary>
+            public TimeSpan RTT { get; private set; }
+
+            Stopwatch Timer;
+
+            TimeSpan Offset;
+
+            /// <summary>
+            /// Calculate the time since this room was created
+            /// </summary>
+            /// <returns></returns>
+            public TimeSpan CalculateElapsed()
+            {
+                return Timer.Elapsed + Offset;
+            }
+
+            /// <summary>
+            /// Calculates the time in seconds since this room was created
+            /// </summary>
+            /// <returns></returns>
+            public double CalculateSeconds() => CalculateElapsed().TotalSeconds;
+
+            internal void Start()
+            {
+                Timer = Stopwatch.StartNew();
+
+                //Poll().Forget();
+                async UniTask Poll()
+                {
+                    while (true)
+                    {
+                        await UniTask.Delay(TimeSpan.FromSeconds(1));
+
+                        UpdateData();
+                    }
+                }
+            }
+            internal void Stop()
+            {
+                Timer.Stop();
+            }
+
+            internal RoomTimeRequest CreateRequest() => new RoomTimeRequest()
+            {
+                ClientTime = Timer.Elapsed
+            };
+            internal void ConsumeResponse(in RoomTimeResponse response)
+            {
+                RTT = (Timer.Elapsed - response.ClientRequest.ClientTime);
+
+                var time = (Room: response.RoomTime, Local: response.ClientRequest.ClientTime + RTT);
+
+                Offset = (time.Room - time.Local);
+
+                NetworkLog.Info($"Room RTT: {RTT.TotalMilliseconds.ToString("N1")}ms");
+            }
+
+            internal void UpdateData()
+            {
+                var request = CreateRequest();
+
+                Room.Transport.SendData(in request, delivery: DeliveryMethod.ReliableUnordered);
+            }
+
+            void ResponseHandler(ref RoomTimeResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                ConsumeResponse(message);
+            }
+
+            readonly RoomAPI Room;
+            public TimeProperty(RoomAPI Room)
+            {
+                this.Room = Room;
+
+                Room.Transport.Dispatcher.Register<RoomTimeResponse>(ResponseHandler);
+            }
+        }
+
         public ClientsProperty Clients { get; private set; }
         public class ClientsProperty
         {
@@ -463,6 +554,8 @@ namespace Wsla.Unity
 
             UniTask ConnectionResponseHandler(ClientConnectionResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
+                Room.Time.ConsumeResponse(message.TimeResponse);
+
                 return Room.ReadState(message, reader);
             }
 
@@ -573,7 +666,7 @@ namespace Wsla.Unity
 
             void Register(NetworkClient client)
             {
-                Debug.Log($"Registered Client {client}");
+                NetworkLog.Info($"Registered Client {client}");
 
                 Collection.Add(client.ID.Value, client);
             }
@@ -581,7 +674,7 @@ namespace Wsla.Unity
             {
                 Collection.Remove(id.Value, out var client);
 
-                Debug.Log($"Unregistered Client {client}");
+                NetworkLog.Info($"Unregistered Client {client}");
             }
 
             readonly RoomAPI Room;

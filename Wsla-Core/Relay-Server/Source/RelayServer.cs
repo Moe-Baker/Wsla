@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -21,6 +22,7 @@ namespace Wsla.Server
 
             await LoadConfig();
 
+            Time.Init();
             Realtime.Init();
             Matchmaking.Init();
 
@@ -247,6 +249,18 @@ namespace Wsla.Server
 
             public static void Send<[NetworkSerializationMarker] T>(T message) => Client.SendMessage(message);
             public static Task SendAsync<[NetworkSerializationMarker] T>(T message) => Client.SendMessageAsync(message);
+        }
+
+        public static class Time
+        {
+            static Stopwatch Timer;
+
+            public static void Init()
+            {
+                Timer = Stopwatch.StartNew();
+            }
+
+            public static TimeSpan GetElapsed() => Timer.Elapsed;
         }
 
         public static class Matchmaking

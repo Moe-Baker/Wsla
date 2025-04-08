@@ -773,9 +773,6 @@ namespace Wsla.Server
                 .Content(new WslaContent(response))
                 .Type(ContentType.ApplicationOctetStream);
 
-            Console.WriteLine(response.GetType());
-
-
             return new ValueTask<IResponseBuilder>(result);
         }
         public async ValueTask<object> DeserializeAsync(Stream stream, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)

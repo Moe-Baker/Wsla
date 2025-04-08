@@ -265,6 +265,39 @@ namespace Wsla.Server
             }
         }
 
+        public TimeProperty Time { get; }
+        public class TimeProperty
+        {
+            readonly TimeSpan Offset;
+
+            public TimeSpan GetElapsed()
+            {
+                return RelayServer.Time.GetElapsed() - Offset;
+            }
+
+            void RequestHandler(NetworkClient sender, ref RoomTimeRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                var response = Respond(ref message);
+
+                Room.Transport.SendData(sender, in response, delivery: DeliveryMethod.ReliableUnordered);
+            }
+
+            public RoomTimeResponse Respond(ref RoomTimeRequest request)
+            {
+                return new RoomTimeResponse(request, GetElapsed());
+            }
+
+            readonly Room Room;
+            public TimeProperty(Room Room)
+            {
+                this.Room = Room;
+
+                Offset = RelayServer.Time.GetElapsed();
+
+                Room.Transport.Dispatcher.Register<RoomTimeRequest>(RequestHandler);
+            }
+        }
+
         public ClientsProperty Clients { get; private set; }
         public class ClientsProperty : IDisposable
         {
@@ -357,7 +390,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                //Reserve Entitiy Spawn Tokens
+                //Reserve Entity Spawn Tokens
                 if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[Room.Entities.ClientSpawnTokenAllowance], out var spawnTokens) is false)
                 {
                     NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded, Connection Request Rejected");
@@ -380,7 +413,7 @@ namespace Wsla.Server
                 client.AssignPeer(peer);
                 peer.Tag = client;
 
-                ConnectHandler(peer);
+                ConnectHandler(peer, ref data);
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
@@ -393,7 +426,7 @@ namespace Wsla.Server
                 request.Reject(writer);
             }
 
-            void ConnectHandler(NetPeer peer)
+            void ConnectHandler(NetPeer peer, ref ClientConnectionRequest request)
             {
                 var client = RetrieveFromPeer(peer);
 
@@ -423,7 +456,9 @@ namespace Wsla.Server
                 {
                     var writer = Room.Pools.SinglePackerWriter.Take();
 
-                    var message = new ClientConnectionResponse(client.ID, Master.ID, Count, client.SpawnAllowance, Room.Entities.Count);
+                    var TimeResponse = Room.Time.Respond(ref request.TimeRequest);
+
+                    var message = new ClientConnectionResponse(client.ID, Master.ID, TimeResponse, Count, client.SpawnAllowance, Room.Entities.Count);
                     NetworkSerializer.WriteHeader(in message, writer);
 
                     Room.WriteState(client, writer);
@@ -1164,6 +1199,7 @@ namespace Wsla.Server
             Scene = new SceneProperty(this, parameters);
             RPCs = new RpcProperty(this);
             Variables = new VariablesProperty(this);
+            Time = new TimeProperty(this);
         }
     }
 }

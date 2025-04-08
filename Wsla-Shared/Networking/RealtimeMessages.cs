@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Net;
 
 using Wsla.Serialization;
 
@@ -11,18 +9,23 @@ namespace Wsla
         public FixedString<FS20> Username;
         public FixedString<FS20> Password;
 
+        public RoomTimeRequest TimeRequest;
+
         public override string ToString() => $"(Username: {Username})";
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Username);
             context.Select(ref Password);
+            context.Select(ref TimeRequest);
         }
 
         public ClientConnectionRequest(FixedString<FS20> Username, FixedString<FS20> Password)
         {
             this.Username = Username;
             this.Password = Password;
+
+            TimeRequest = default;
         }
     }
     [NetworkBlittable]
@@ -31,16 +34,20 @@ namespace Wsla
         public NetworkClientID LocalID;
         public NetworkClientID MasterID;
 
+        public RoomTimeResponse TimeResponse;
+
         public byte Clients;
         public byte SpawnTokens;
         public ushort Entities;
 
         public override string ToString() => $"(ClientID: {LocalID})";
 
-        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, byte Clients, byte SpawnTokens, ushort Entities)
+        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, RoomTimeResponse TimeResponse, byte Clients, byte SpawnTokens, ushort Entities)
         {
             this.LocalID = LocalID;
             this.MasterID = MasterID;
+
+            this.TimeResponse = TimeResponse;
 
             this.Clients = Clients;
             this.SpawnTokens = SpawnTokens;
@@ -274,7 +281,6 @@ namespace Wsla
 
         public static NetworkPingMessage Create() => new NetworkPingMessage(DateTime.Now);
     }
-
     [NetworkBlittable]
     public struct NetworkPongMessage
     {
@@ -286,5 +292,28 @@ namespace Wsla
         }
 
         public static NetworkPongMessage From(NetworkPingMessage ping) => new NetworkPongMessage(ping.Time);
+    }
+
+    [NetworkBlittable]
+    public struct RoomTimeRequest
+    {
+        public TimeSpan ClientTime;
+
+        public RoomTimeRequest(TimeSpan ClientTime)
+        {
+            this.ClientTime = ClientTime;
+        }
+    }
+    [NetworkBlittable]
+    public struct RoomTimeResponse
+    {
+        public RoomTimeRequest ClientRequest;
+        public TimeSpan RoomTime;
+
+        public RoomTimeResponse(RoomTimeRequest ClientRequest, TimeSpan RoomTime)
+        {
+            this.ClientRequest = ClientRequest;
+            this.RoomTime = RoomTime;
+        }
     }
 }
