@@ -2,17 +2,11 @@
 using GenHTTP.Api.Infrastructure;
 using GenHTTP.Api.Protocol;
 using GenHTTP.Engine.Internal;
-using GenHTTP.Modules.Basics;
-using GenHTTP.Modules.Conversion.Serializers;
 using GenHTTP.Modules.Layouting;
 using GenHTTP.Modules.Webservices;
 
-using LiteNetLib.Utils;
-
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -175,22 +169,19 @@ namespace Wsla.Server
                         NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
                     }
 
-                    public bool CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
+                    public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
                     {
                         lock (Rooms)
                         {
                             if (Rooms.ContainsKey(id))
-                            {
-                                NetworkLog.Warning($"Room with ID {id} Already Registered");
-                                return false;
-                            }
+                                throw new Exception($"Room with ID {id} Already Registered");
 
                             var room = new Room(this, application, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
                             Rooms.Add(id, room);
 
                             room.MakeJoinReservation(reservations);
 
-                            return true;
+                            return room;
                         }
                     }
 
@@ -261,6 +252,37 @@ namespace Wsla.Server
                                     continue;
 
                                 if (room.Application != application)
+                                    continue;
+
+                                var vacancy = room.CheckVacancy();
+
+                                if (vacancy >= capacity)
+                                {
+                                    room.MakeJoinReservation(capacity);
+
+                                    target = room;
+                                    return true;
+                                }
+                            }
+                        }
+
+                        target = default;
+                        return false;
+                    }
+
+                    public bool TryReserveJoin(ApplicationID application, int capacity, Queue.MatchMakingPool pool, out Room target)
+                    {
+                        lock (Rooms)
+                        {
+                            foreach (var (id, room) in Rooms)
+                            {
+                                if (room.Privacy is RoomPrivacy.Private)
+                                    continue;
+
+                                if (room.Application != application)
+                                    continue;
+
+                                if (room.Pool != pool)
                                     continue;
 
                                 var vacancy = room.CheckVacancy();
@@ -350,6 +372,12 @@ namespace Wsla.Server
                         if (vacancy < 0) vacancy = 0;
 
                         return vacancy;
+                    }
+
+                    public Queue.MatchMakingPool Pool { get; private set; }
+                    public void SetPool(Queue.MatchMakingPool value)
+                    {
+                        Pool = value;
                     }
 
                     public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
@@ -482,6 +510,25 @@ namespace Wsla.Server
                     room = default;
                     return false;
                 }
+                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, Queue.MatchMakingPool pool, int capacity, out Room room)
+                {
+                    lock (Servers)
+                    {
+                        for (int i = 0; i < Servers.Count; i++)
+                        {
+                            var server = Servers[i];
+
+                            if (regions.Contains(server.Region) is false)
+                                continue;
+
+                            if (server.TryReserveJoin(application, capacity, pool, out room))
+                                return true;
+                        }
+                    }
+
+                    room = default;
+                    return false;
+                }
 
                 public static void ListRegions(List<ServerRegion> list)
                 {
@@ -524,12 +571,22 @@ namespace Wsla.Server
                     return true;
                 }
             }
-
             public static class Queue
             {
                 static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(250);
 
                 static Application[] Applications;
+                static bool TryGetPool(FixedString<FS20> ApplicationName, FixedString<FS20> PoolName, out MatchMakingPool pool)
+                {
+                    if (Configuration.TryGetApplicationID(ApplicationName, out var ApplicationID) is false)
+                    {
+                        pool = default;
+                        return false;
+                    }
+
+                    return Applications[ApplicationID.Value].TryFindPool(PoolName, out pool);
+                }
+
                 public class Application
                 {
                     readonly ConfigurationProperty.ApplicationData Configuration;
@@ -570,11 +627,12 @@ namespace Wsla.Server
                 }
                 public class MatchMakingPool
                 {
-                    readonly Application Application;
-                    readonly ConfigurationProperty.MatchMakingPoolData Configuration;
+                    public readonly Application Application;
+                    public readonly ConfigurationProperty.MatchMakingPoolData Configuration;
 
                     public string Name => Configuration.Name;
                     public TimeSpan Duration { get; }
+                    public bool Backfill => Configuration.Backfill;
 
                     List<Ticket> List;
 
@@ -744,18 +802,17 @@ namespace Wsla.Server
                             Regions = entry.Ticket.Request.Regions.ToList();
                         }
                     }
-
-                    public record struct TicketEntry(Ticket Ticket, int Index)
+                    record struct TicketEntry(Ticket Ticket, int Index)
                     {
                         public static TicketEntry For(List<Ticket> list, int index) => new TicketEntry(list[index], index);
                     }
 
                     async Task Dispatch(Batch batch)
                     {
-                        var Capacity = Configuration.Backfill ? Configuration.Capacity.Max : batch.Count;
+                        var Capacity = Backfill ? Configuration.Capacity.Max : batch.Count;
                         var Scene = batch.GetScene();
-                        var Privacy = Configuration.Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
-                        var Lock = Configuration.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
+                        var Privacy = Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
+                        var Lock = Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
                         var Parameters = new CreateRoomParameters(Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
 
                         var Regions = SparseArray.Clone(batch.Regions);
@@ -764,7 +821,11 @@ namespace Wsla.Server
 
                         try
                         {
-                            Info = await Matchmaking.CreateRoom(Application.ID, Regions, Parameters);
+                            var room = await Matchmaking.CreateRoom(Application.ID, Regions, Parameters);
+
+                            room.SetPool(this);
+
+                            Info = room.GetConnectionInfo();
                         }
                         catch (Exception ex)
                         {
@@ -791,7 +852,6 @@ namespace Wsla.Server
                         List = new();
                     }
                 }
-
                 public class Ticket
                 {
                     public readonly MessagingPeer Peer;
@@ -802,18 +862,10 @@ namespace Wsla.Server
                     public TimeSpan CalculateAge() => (TimeNow - Timestamp).Duration();
                     public bool IsExpired() => (CalculateAge() > Pool.Duration);
 
-                    public void Accept(RoomConnectionInfo info)
-                    {
-                        var response = new MatchmakingSuccessResponse(info);
-                        Peer.SendMessage(response);
-                    }
+                    public void Accept(RoomConnectionInfo info) => Queue.Accept(Peer, info);
 
-                    public void Fail() => Fail(WslaErrorCode.NoRoomFound);
-                    public void Fail(WslaErrorCode code)
-                    {
-                        var response = new MatchmakingFailResponse(code);
-                        Peer.SendMessage(response);
-                    }
+                    public void Fail() => Queue.Fail(Peer, WslaErrorCode.NoRoomFound);
+                    public void Fail(WslaErrorCode code) => Queue.Fail(Peer, code);
 
                     public void Unregister() => Pool.Unregister(this);
 
@@ -827,17 +879,6 @@ namespace Wsla.Server
                     }
 
                     static DateTime TimeNow => DateTime.UtcNow;
-                }
-
-                static bool TryGetPool(FixedString<FS20> ApplicationName, FixedString<FS20> PoolName, out MatchMakingPool pool)
-                {
-                    if (Configuration.TryGetApplicationID(ApplicationName, out var ApplicationID) is false)
-                    {
-                        pool = default;
-                        return false;
-                    }
-
-                    return Applications[ApplicationID.Value].TryFindPool(PoolName, out pool);
                 }
 
                 public static void Init()
@@ -873,8 +914,14 @@ namespace Wsla.Server
                 {
                     if (TryGetPool(request.Application, request.Pool, out var pool) is false)
                     {
-                        var response = new MatchmakingFailResponse(WslaErrorCode.InvalidRequest);
-                        peer.SendMessage(response);
+                        Fail(peer, WslaErrorCode.InvalidRequest);
+                        return;
+                    }
+
+                    if (pool.Backfill && Browser.TryFindFreeRoom(pool.Application.ID, request.Regions, 1, out var room))
+                    {
+                        var info = room.GetConnectionInfo();
+                        Accept(peer, info);
                         return;
                     }
 
@@ -889,28 +936,30 @@ namespace Wsla.Server
                 }
                 static void ClientDisconnectCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
                 {
-                    if (TryReadTag(connection, out var ticket) is false)
+                    if (connection.Tag is not Ticket ticket)
+                    {
+                        NetworkLog.Warning($"Peer {connection} not Tagged as Match Making Ticket");
                         return;
+                    }
 
                     ticket.Unregister();
                 }
 
-                static bool TryReadTag(MessagingConnection connection, out Ticket ticket)
+                #region Responses
+                public static void Accept(MessagingPeer peer, RoomConnectionInfo info)
                 {
-                    if (connection.Tag is not Ticket)
-                    {
-                        NetworkLog.Warning($"Peer {connection} not Tagged as Match Making Ticket");
-
-                        ticket = default;
-                        return false;
-                    }
-
-                    ticket = connection.Tag as Ticket;
-                    return true;
+                    var response = new MatchmakingSuccessResponse(info);
+                    peer.SendMessage(response);
                 }
-            }
 
-            static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
+                public static void Fail(MessagingPeer peer) => Fail(peer, WslaErrorCode.NoRoomFound);
+                public static void Fail(MessagingPeer peer, WslaErrorCode code)
+                {
+                    var response = new MatchmakingFailResponse(code);
+                    peer.SendMessage(response);
+                }
+                #endregion
+            }
 
             public class HttpEndpoints
             {
@@ -937,12 +986,14 @@ namespace Wsla.Server
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
-                public Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
+                public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
                     if (Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
 
-                    return Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
+                    var room = await Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
+
+                    return room.GetConnectionInfo();
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
@@ -981,7 +1032,6 @@ namespace Wsla.Server
                     return null;
                 }
             }
-
             public class MessageHandlers
             {
                 public static void RegisterHandlers(MessagingServer server)
@@ -1035,7 +1085,8 @@ namespace Wsla.Server
                 Queue.Init();
             }
 
-            public static async Task<RoomConnectionInfo> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
+            static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
+            public static async Task<Browser.Room> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
             {
                 //Find Region
                 if (Browser.TryFindFreeServer(regions, out var server) is false)
@@ -1063,111 +1114,7 @@ namespace Wsla.Server
                     throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
                 }
 
-                server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
-
-                return new RoomConnectionInfo(server.Address, Confirmation.Port);
-            }
-        }
-    }
-
-    class WslaSerializationFormat : ISerializationFormat
-    {
-        public ValueTask<IResponseBuilder> SerializeAsync(IRequest request, object response)
-        {
-            var result = request.Respond()
-                .Content(new WslaContent(response))
-                .Type(ContentType.ApplicationOctetStream);
-
-            return new ValueTask<IResponseBuilder>(result);
-        }
-        public async ValueTask<object> DeserializeAsync(Stream stream, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
-        {
-            var destination = NetworkStreamPool.Rent();
-
-            try
-            {
-                while (true)
-                {
-                    destination.EnsureFit(100);
-                    var memory = destination.PeekAvailableMemory();
-
-                    var read = await stream.ReadAsync(memory);
-
-                    if (read is 0)
-                        break;
-
-                    destination.Position += read;
-                }
-
-                destination.Position = 0;
-                return NetworkSerializer.Implicit.ReadValue(type, destination);
-            }
-            finally
-            {
-                NetworkStreamPool.Return(destination);
-            }
-        }
-
-        static class NetworkStreamPool
-        {
-            static Stack<INetworkStream> Stack;
-
-            public static INetworkStream Rent()
-            {
-                lock (Stack)
-                {
-                    if (Stack.TryPop(out var stream) is false)
-                        stream = new NetDataWriter(true, 128);
-
-                    return stream;
-                }
-            }
-
-            public static void Return(INetworkStream stream)
-            {
-                stream.Position = 0;
-
-                lock (Stack)
-                {
-                    Stack.Push(stream);
-                }
-            }
-
-            static NetworkStreamPool()
-            {
-                Stack = new(10);
-            }
-        }
-
-        class WslaContent : IResponseContent
-        {
-            object Response;
-
-            public ulong? Length => null;
-
-            public ValueTask<ulong?> CalculateChecksumAsync() => new((ulong)Response.GetHashCode());
-
-            public async ValueTask WriteAsync(Stream target, uint bufferSize)
-            {
-                var source = NetworkStreamPool.Rent();
-
-                try
-                {
-                    var type = Response.GetType();
-                    NetworkSerializer.Implicit.WriteValue(type, Response, source);
-
-                    var memory = source.PeekAllocatedMemory();
-                    await target.WriteAsync(memory);
-                }
-                finally
-                {
-                    NetworkStreamPool.Return(source);
-                }
-            }
-
-            public WslaContent(object Response)
-            {
-                this.Response = Response;
+                return server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
             }
         }
     }

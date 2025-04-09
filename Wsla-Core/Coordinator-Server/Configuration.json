@@ -15,10 +15,11 @@
           "Name": "mini-games",
           "Capacity":
           {
-            "Min": 2,
+            "Min": 1,
             "Max": 4
           },
-          "Duration": 10
+          "Duration": 10,
+          "Backfill": true
         }
       ]
     }
