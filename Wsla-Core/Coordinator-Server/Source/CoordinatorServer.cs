@@ -50,50 +50,55 @@ namespace Wsla.Server
         public static ConfigurationProperty Configuration { get; private set; }
         public class ConfigurationProperty
         {
-            public ApplicationsData Applications;
-            public class ApplicationsData
+            public ApplicationData[] Applications;
+            public class ApplicationData
             {
-                public string[] Names { get; }
+                public string Name;
 
-                public bool TryGetID(ReadOnlySpan<char> name, out ApplicationID id)
+                public MatchMakingPoolData[] Pools;
+            }
+            public struct MatchMakingPoolData
+            {
+                public string Name;
+
+                public CapacityData Capacity;
+                public struct CapacityData
                 {
-                    for (byte i = 0; i < Names.Length; i++)
+                    public byte Min;
+                    public byte Max;
+                }
+
+                public bool Backfill;
+
+                public float Duration;
+            }
+
+            public bool TryGetApplicationID(in FixedString<FS20> name, out ApplicationID id)
+            {
+                for (byte i = 0; i < Applications.Length; i++)
+                {
+                    if (name.Equals(Applications[i].Name, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (MemoryExtensions.Equals(Names[i], name, StringComparison.OrdinalIgnoreCase))
-                        {
-                            id = new ApplicationID(i);
-                            return true;
-                        }
+                        id = new ApplicationID(i);
+                        return true;
                     }
-
-                    id = default;
-                    return false;
                 }
 
-                public ApplicationsData(Data.ApplicationData[] data)
-                {
-                    Names = new string[data.Length];
-
-                    for (int i = 0; i < Names.Length; i++)
-                        Names[i] = data[i].Name;
-                }
+                id = default;
+                return false;
             }
 
             public static async Task<ConfigurationProperty> Create(Data data)
             {
                 return new ConfigurationProperty()
                 {
-                    Applications = new(data.Applications)
+                    Applications = data.Applications,
                 };
             }
 
             public class Data : ServerConfigurationData
             {
                 public ApplicationData[] Applications;
-                public struct ApplicationData
-                {
-                    public string Name;
-                }
             }
         }
         static async Task LoadConfig()
@@ -522,10 +527,280 @@ namespace Wsla.Server
 
             public static class Queue
             {
-                static List<Ticket> List;
+                static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(250);
+
+                static Application[] Applications;
+                public class Application
+                {
+                    readonly ConfigurationProperty.ApplicationData Configuration;
+
+                    public ApplicationID ID { get; }
+
+                    public MatchMakingPool[] Pools;
+                    public bool TryFindPool(in FixedString<FS20> Name, out MatchMakingPool pool)
+                    {
+                        for (byte i = 0; i < Pools.Length; i++)
+                        {
+                            pool = Pools[i];
+
+                            if (Name.Equals(pool.Name, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                        }
+
+                        pool = default;
+                        return false;
+                    }
+
+                    public void Refresh()
+                    {
+                        foreach (var pool in Pools)
+                            pool.Refresh();
+                    }
+
+                    public Application(ConfigurationProperty.ApplicationData Configuration, ApplicationID ID)
+                    {
+                        this.Configuration = Configuration;
+                        this.ID = ID;
+
+                        Pools = new MatchMakingPool[Configuration.Pools.Length];
+
+                        for (int i = 0; i < Pools.Length; i++)
+                            Pools[i] = new MatchMakingPool(this, Configuration.Pools[i]);
+                    }
+                }
+                public class MatchMakingPool
+                {
+                    readonly Application Application;
+                    readonly ConfigurationProperty.MatchMakingPoolData Configuration;
+
+                    public string Name => Configuration.Name;
+                    public TimeSpan Duration { get; }
+
+                    List<Ticket> List;
+
+                    public void Register(Ticket ticket)
+                    {
+                        lock (List)
+                        {
+                            List.Add(ticket);
+                        }
+                    }
+                    public bool Unregister(Ticket ticket)
+                    {
+                        lock (List)
+                        {
+                            return List.Remove(ticket);
+                        }
+                    }
+
+                    public void Refresh()
+                    {
+                        lock (List)
+                        {
+                            var index = 0;
+
+                            if (List.Count is 0)
+                                return;
+
+                            //Skip Expired Tickets
+                            for (/* Start at Index */; index < List.Count; index++)
+                            {
+                                if (List[index].IsExpired() is false)
+                                    break;
+
+                                List[index].Fail(WslaErrorCode.Timeout);
+                                List[index] = null;
+                            }
+
+                            var allocations = (List.Count - index); //Count of Remaining Valid Tickets
+
+                            //Dispatch Remaining Tickets
+                            if (allocations >= Configuration.Capacity.Min)
+                            {
+                                var dispatcher = new Dispatcher(this);
+
+                                for (/* Start at Index */; index < List.Count; index++)
+                                {
+                                    var entry = TicketEntry.For(List, index);
+                                    dispatcher.Accept(entry);
+                                }
+
+                                foreach (var batch in dispatcher.Batches)
+                                {
+                                    if (IsValid(batch) is false)
+                                        continue;
+
+                                    foreach (var entry in batch.Entries)
+                                        List[entry.Index] = null;
+
+                                    Dispatch(batch).Forget();
+                                }
+                            }
+
+                            List.RemoveAll(x => x is null);
+                        }
+                    }
+
+                    bool IsValid(Batch batch)
+                    {
+                        if (batch.Count < Configuration.Capacity.Min)
+                            return false;
+
+                        //Validate Age
+                        if (batch.IsFull is false)
+                        {
+                            var ticket = batch.GetOldestTicket();
+
+                            var age = ticket.CalculateAge();
+                            var factor = Duration * 0.75f;
+
+                            if (age < factor)
+                                return false;
+                        }
+
+                        return true;
+                    }
+
+                    class Dispatcher
+                    {
+                        readonly MatchMakingPool Pool;
+
+                        public List<Batch> Batches { get; }
+
+                        public Batch Accept(TicketEntry entry)
+                        {
+                            //Iterate Existing Batches
+                            {
+                                foreach (var batch in Batches)
+                                    if (batch.TryAccept(entry))
+                                        return batch;
+                            }
+
+                            //Create New Batch
+                            {
+                                var batch = new Batch(Pool, entry);
+                                Batches.Add(batch);
+                                return batch;
+                            }
+                        }
+
+                        public Dispatcher(MatchMakingPool Pool)
+                        {
+                            this.Pool = Pool;
+
+                            Batches = new List<Batch>();
+                        }
+                    }
+                    class Batch
+                    {
+                        readonly MatchMakingPool Pool;
+
+                        public List<TicketEntry> Entries { get; }
+
+                        public byte Count => (byte)Entries.Count;
+
+                        public bool IsFull => Count >= Pool.Configuration.Capacity.Max;
+
+                        public List<ServerRegion> Regions { get; }
+
+                        public bool TryAccept(TicketEntry entry)
+                        {
+                            if (IsFull)
+                                return false;
+
+                            var ticket = entry.Ticket;
+
+                            if (CheckAllowRegion(ticket.Request.Regions) is false)
+                                return false;
+
+                            Entries.Add(entry);
+                            CombineRegionList(ticket.Request.Regions);
+                            return true;
+                        }
+
+                        bool CheckAllowRegion(SparseArray<ServerRegion> input)
+                        {
+                            foreach (var item in input)
+                                if (Regions.Contains(item))
+                                    return true;
+
+                            return false;
+                        }
+                        void CombineRegionList(SparseArray<ServerRegion> input)
+                        {
+                            Regions.RemoveAll(x => input.Contains(x) is false);
+                        }
+
+                        public Ticket GetOldestTicket() => Entries[0].Ticket;
+
+                        public NetworkSceneID GetScene() => GetOldestTicket().Request.Scene;
+
+                        public Batch(MatchMakingPool Pool, TicketEntry entry)
+                        {
+                            this.Pool = Pool;
+
+                            Entries = new() { entry };
+
+                            Regions = entry.Ticket.Request.Regions.ToList();
+                        }
+                    }
+
+                    public record struct TicketEntry(Ticket Ticket, int Index)
+                    {
+                        public static TicketEntry For(List<Ticket> list, int index) => new TicketEntry(list[index], index);
+                    }
+
+                    async Task Dispatch(Batch batch)
+                    {
+                        var Capacity = Configuration.Backfill ? Configuration.Capacity.Max : batch.Count;
+                        var Scene = batch.GetScene();
+                        var Privacy = Configuration.Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
+                        var Lock = Configuration.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
+                        var Parameters = new CreateRoomParameters(Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
+
+                        var Regions = SparseArray.Clone(batch.Regions);
+
+                        RoomConnectionInfo Info;
+
+                        try
+                        {
+                            Info = await Matchmaking.CreateRoom(Application.ID, Regions, Parameters);
+                        }
+                        catch (Exception ex)
+                        {
+                            NetworkLog.Error($"Matchmaking Create Room Failed");
+                            NetworkLog.Error(ex);
+
+                            foreach (var entry in batch.Entries)
+                                entry.Ticket.Fail(WslaErrorCode.InternalError);
+
+                            return;
+                        }
+
+                        foreach (var entry in batch.Entries)
+                            entry.Ticket.Accept(Info);
+                    }
+
+                    public MatchMakingPool(Application Application, ConfigurationProperty.MatchMakingPoolData Configuration)
+                    {
+                        this.Application = Application;
+                        this.Configuration = Configuration;
+
+                        Duration = TimeSpan.FromSeconds(Configuration.Duration);
+
+                        List = new();
+                    }
+                }
+
                 public class Ticket
                 {
-                    readonly MessagingPeer Peer;
+                    public readonly MessagingPeer Peer;
+                    public readonly MatchMakingPool Pool;
+                    public readonly StartMatchMakingRequest Request;
+
+                    readonly DateTime Timestamp;
+                    public TimeSpan CalculateAge() => (TimeNow - Timestamp).Duration();
+                    public bool IsExpired() => (CalculateAge() > Pool.Duration);
 
                     public void Accept(RoomConnectionInfo info)
                     {
@@ -540,59 +815,84 @@ namespace Wsla.Server
                         Peer.SendMessage(response);
                     }
 
-                    public Ticket(MessagingPeer Peer)
+                    public void Unregister() => Pool.Unregister(this);
+
+                    public Ticket(MessagingPeer Peer, MatchMakingPool Pool, StartMatchMakingRequest Request)
                     {
                         this.Peer = Peer;
+                        this.Pool = Pool;
+                        this.Request = Request;
+
+                        Timestamp = TimeNow;
                     }
+
+                    static DateTime TimeNow => DateTime.UtcNow;
+                }
+
+                static bool TryGetPool(FixedString<FS20> ApplicationName, FixedString<FS20> PoolName, out MatchMakingPool pool)
+                {
+                    if (Configuration.TryGetApplicationID(ApplicationName, out var ApplicationID) is false)
+                    {
+                        pool = default;
+                        return false;
+                    }
+
+                    return Applications[ApplicationID.Value].TryFindPool(PoolName, out pool);
                 }
 
                 public static void Init()
                 {
-                    List = new List<Ticket>(100);
+                    //Applications
+                    {
+                        Applications = new Application[Configuration.Applications.Length];
+
+                        for (byte i = 0; i < Applications.Length; i++)
+                        {
+                            var id = new ApplicationID(i);
+                            Applications[i] = new Application(Configuration.Applications[i], id);
+                        }
+                    }
+
+                    Refresh().Forget();
+                }
+
+                static async Task Refresh()
+                {
+                    var timer = new PeriodicTimer(RefreshInterval);
+
+                    while (true)
+                    {
+                        await timer.WaitForNextTickAsync();
+
+                        for (int i = 0; i < Applications.Length; i++)
+                            Applications[i].Refresh();
+                    }
                 }
 
                 public static void Register(MessagingPeer peer, StartMatchMakingRequest request)
                 {
-                    var ticket = new Ticket(peer);
-
-                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                    if (TryGetPool(request.Application, request.Pool, out var pool) is false)
                     {
-                        ticket.Fail(WslaErrorCode.ApplicationNotFound);
+                        var response = new MatchmakingFailResponse(WslaErrorCode.InvalidRequest);
+                        peer.SendMessage(response);
                         return;
                     }
 
+                    var ticket = new Ticket(peer, pool, request);
                     peer.Tag = ticket;
 
-                    lock (List)
-                    {
-                        List.Add(ticket);
-                    }
+                    pool.Register(ticket);
 
                     NetworkLog.Info($"Match Making Ticket Created for {peer}");
 
                     peer.RegisterStopCallback(ClientDisconnectCallback);
-
-                    Resolve(ticket).Forget();
-                    static async Task Resolve(Ticket ticket)
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(2));
-                        ticket.Fail();
-                    }
                 }
                 static void ClientDisconnectCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
                 {
                     if (TryReadTag(connection, out var ticket) is false)
                         return;
 
-                    Remove(ticket);
-                }
-
-                static bool Remove(Ticket ticket)
-                {
-                    lock (List)
-                    {
-                        return List.Remove(ticket);
-                    }
+                    ticket.Unregister();
                 }
 
                 static bool TryReadTag(MessagingConnection connection, out Ticket ticket)
@@ -637,46 +937,18 @@ namespace Wsla.Server
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
-                public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
+                public Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
                 {
-                    if (Configuration.Applications.TryGetID(message.Application, out var applicationID) is false)
+                    if (Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
 
-                    //Find Region
-                    if (Browser.TryFindFreeServer(message.Regions, out var server) is false)
-                        throw new ProviderException(ResponseStatus.BadRequest, $"Regions not Available");
-
-                    var roomID = Guid.NewGuid();
-
-                    var operation = RoomCreationQueue.Create(roomID, server.MessagingPeer.DisconnectCancellationToken);
-
-                    //Forward Request to Relay
-                    {
-                        var request = new CreateRoomCommand(applicationID, roomID, message.Parameters);
-                        server.MessagingPeer.SendMessage(request);
-                    }
-
-                    CreateRoomConfirmation Confirmation;
-
-                    //Wait for Response from Relay
-                    try
-                    {
-                        Confirmation = await operation.Task;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
-                    }
-
-                    server.CreateRoom(applicationID, roomID, Confirmation.Port, message.Parameters, 1);
-
-                    return new RoomConnectionInfo(server.Address, Confirmation.Port);
+                    return Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
                 }
 
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
                 public List<RoomListEntryInfo> ListRooms(ListRoomsRequest request)
                 {
-                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                    if (Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
 
                     var list = new List<RoomListEntryInfo>();
@@ -689,7 +961,7 @@ namespace Wsla.Server
                 [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.FindRoom)]
                 public async Task<RoomConnectionInfo?> FindRoom(FindRoomRequest request)
                 {
-                    if (Configuration.Applications.TryGetID(request.Application, out var applicationID) is false)
+                    if (Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
                         throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
 
                     //Try Find Existing Room
@@ -761,6 +1033,39 @@ namespace Wsla.Server
 
                 Browser.Init();
                 Queue.Init();
+            }
+
+            public static async Task<RoomConnectionInfo> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
+            {
+                //Find Region
+                if (Browser.TryFindFreeServer(regions, out var server) is false)
+                    throw new ProviderException(ResponseStatus.BadRequest, $"Regions not Available");
+
+                var roomID = Guid.NewGuid();
+
+                var operation = RoomCreationQueue.Create(roomID, server.MessagingPeer.DisconnectCancellationToken);
+
+                //Forward Request to Relay
+                {
+                    var request = new CreateRoomCommand(applicationID, roomID, parameters);
+                    server.MessagingPeer.SendMessage(request);
+                }
+
+                CreateRoomConfirmation Confirmation;
+
+                //Wait for Response from Relay
+                try
+                {
+                    Confirmation = await operation.Task;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
+                }
+
+                server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
+
+                return new RoomConnectionInfo(server.Address, Confirmation.Port);
             }
         }
     }

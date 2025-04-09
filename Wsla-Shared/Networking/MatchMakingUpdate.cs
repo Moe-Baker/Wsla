@@ -5,19 +5,24 @@ namespace Wsla
     public struct StartMatchMakingRequest : IAutoNetworkSerialization
     {
         public FixedString<FS20> Application;
-
+        public FixedString<FS20> Pool;
         public SparseArray<ServerRegion> Regions;
+        public NetworkSceneID Scene;
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Application);
+            context.Select(ref Pool);
             context.Select(ref Regions);
+            context.Select(ref Scene);
         }
 
-        public StartMatchMakingRequest(FixedString<FS20> Application, SparseArray<ServerRegion> Regions)
+        public StartMatchMakingRequest(FixedString<FS20> Application, FixedString<FS20> Pool, SparseArray<ServerRegion> Regions, NetworkSceneID Scene)
         {
             this.Application = Application;
+            this.Pool = Pool;
             this.Regions = Regions;
+            this.Scene = Scene;
         }
     }
 

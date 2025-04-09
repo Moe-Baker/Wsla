@@ -153,6 +153,17 @@ namespace Wsla
             CopyTo(destination);
             return destination;
         }
+
+        public List<T> ToList()
+        {
+            var destination = new List<T>(Length);
+            var source = GetUsedSpan();
+
+            for (int i = 0; i < source.Length; i++)
+                destination.Add(source[i]);
+
+            return destination;
+        }
         #endregion
 
         #region Network Serialization

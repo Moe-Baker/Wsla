@@ -298,9 +298,11 @@ namespace Wsla.Server
                 {
                     var requests = new List<UpdateRoomRequest>(40);
 
+                    var timer = new PeriodicTimer(SendInterval);
+
                     while (true)
                     {
-                        await Task.Delay(SendInterval);
+                        await timer.WaitForNextTickAsync();
 
                         //Collect Changes
                         lock (Changes)

@@ -76,5 +76,8 @@ namespace Wsla
         RoomLocked = 17,
         NoRoomFound = 18,
         ApplicationNotFound = 19,
+        InvalidRequest = 20,
+        InternalError = 21,
+        Timeout = 22,
     }
 }

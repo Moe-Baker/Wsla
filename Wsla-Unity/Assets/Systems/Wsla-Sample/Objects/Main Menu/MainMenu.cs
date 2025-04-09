@@ -116,7 +116,7 @@ public class MainMenu : MonoBehaviour
     }
     async UniTask FindMatchAction()
     {
-        var response = await NetworkAPI.MatchMaking.FindMatch(ServerRegion.EU).Operate();
+        var response = await NetworkAPI.MatchMaking.FindMatch("mini-games", NetworkSceneID.From(1), (ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia)).Operate();
 
         if (response.IsError)
         {
