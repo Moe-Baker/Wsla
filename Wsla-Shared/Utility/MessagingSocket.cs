@@ -55,6 +55,8 @@ namespace Wsla
             {
                 await SendLock.WaitAsync(DisconnectCancellationToken);
 
+                SendBuffer.Position = 0;
+
                 Memory<byte> LengthBuffer;
 
                 //Allocate Length
@@ -96,7 +98,6 @@ namespace Wsla
             }
             finally
             {
-                SendBuffer.Position = 0;
                 SendLock.Release();
             }
         }
