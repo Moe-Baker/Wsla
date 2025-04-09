@@ -28,10 +28,10 @@ namespace Wsla.Unity
         /// <summary>
         /// Are you the owner of this entity? opposite of <see cref="IsRemote"/>
         /// </summary>
-        public bool IsMine => IsSpawned && Owner.IsLocal;
+        public bool IsLocal => IsSpawned && Owner.IsLocal;
 
         /// <summary>
-        /// Are you NOT the owner of this entity? opposite of <see cref="IsMine"/>
+        /// Are you NOT the owner of this entity? opposite of <see cref="IsLocal"/>
         /// </summary>
         public bool IsRemote => IsSpawned && Owner.IsRemote;
 
@@ -155,9 +155,9 @@ namespace Wsla.Unity
             public NetworkEntityAuthorityMode Authority => Entity.Authority;
 
             /// <summary>
-            /// <inheritdoc cref="NetworkEntity.IsMine"/>
+            /// <inheritdoc cref="NetworkEntity.IsLocal"/>
             /// </summary>
-            public bool IsMine => Entity.IsMine;
+            public bool IsLocal => Entity.IsLocal;
 
             /// <summary>
             /// <inheritdoc cref="NetworkEntity.IsRemote"/>
@@ -500,7 +500,7 @@ namespace Wsla.Unity
                 EditorGUILayout.BeginHorizontal();
                 {
                     //Take Ownership
-                    using (new EditorGUI.DisabledGroupScope(target.IsMine))
+                    using (new EditorGUI.DisabledGroupScope(target.IsLocal))
                     {
                         if (GUILayout.Button("Take Ownership"))
                         {

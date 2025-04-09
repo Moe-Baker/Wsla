@@ -9,6 +9,8 @@ using Cysharp.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
+using Toolbox;
+
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -119,6 +121,7 @@ namespace Wsla.Unity
             }
 
             OnDisconnect?.Invoke(info.Reason);
+            OnDisconnect = default;
         }
 
         public event DisconnectDelegate OnDisconnect;
@@ -594,19 +597,16 @@ namespace Wsla.Unity
                 var client = RemoteNetworkClient.ReadInstance(ref reader);
 
                 Register(client);
+
+                OnConnect?.Invoke(client);
             }
+            public event ClientDelegate OnConnect;
+
             void DisconnectHandler(ref ClientDisconnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 //Set Master Client
                 if (message.IsMasterClientChange(out var MasterID))
-                {
-                    if (TryGet(MasterID, out var current) is false)
-                        throw new InvalidOperationException($"No Client with ID {MasterID} Found to Assign as Master");
-
-                    Master = current;
-
-                    NetworkLog.Info($"Master Client Changed to {Master}");
-                }
+                    ChangeMaster(MasterID);
 
                 //Get Disconnected Client
                 if (TryGet(message.ClientID, out var client) is false)
@@ -656,13 +656,29 @@ namespace Wsla.Unity
 
                 Unregister(client.ID);
 
-                //Invoke Master Change
-                if (message.IsMasterClientChange())
-                    OnChangeMaster?.Invoke(Master);
+                OnDisconnect?.Invoke(client);
             }
+            public event ClientDelegate OnDisconnect;
 
-            public delegate void ChangeMasterDelegate(NetworkClient client);
-            public event ChangeMasterDelegate OnChangeMaster;
+            void ChangeMaster(NetworkClientID id)
+            {
+                if (TryGet(id, out var current) is false)
+                    throw new InvalidOperationException($"No Client with ID {id} Found to Assign as Master");
+
+                ChangeMaster(current);
+            }
+            void ChangeMaster(NetworkClient target)
+            {
+                var change = new ChangePairData<NetworkClient>(Master, target);
+
+                Master = target;
+
+                NetworkLog.Info($"Master Client Changed to {Master}");
+
+                OnChangeMaster?.Invoke(change);
+            }
+            public event MasterChangeDelegate OnChangeMaster;
+            public delegate void MasterChangeDelegate(ChangePairData<NetworkClient> client);
 
             void Register(NetworkClient client)
             {
@@ -689,6 +705,8 @@ namespace Wsla.Unity
                 Transport.Dispatcher.Register<ClientConnectMessage>(ConnectHandler);
                 Transport.Dispatcher.Register<ClientDisconnectMessage>(DisconnectHandler);
             }
+
+            public delegate void ClientDelegate(NetworkClient client);
         }
 
         public EntitiesProperty Entities { get; private set; }

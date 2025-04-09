@@ -40,7 +40,7 @@ public partial class Player : NetworkBehaviour
 
     void SpawnCallback()
     {
-        if (Network.IsMine)
+        if (Network.IsLocal)
         {
             RPCs.Colorize.Invoke(UnityEngine.Random.ColorHSV())
                 .SetBufferMode()

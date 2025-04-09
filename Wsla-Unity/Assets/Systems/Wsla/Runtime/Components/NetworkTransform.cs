@@ -429,7 +429,7 @@ namespace Wsla.Unity
             MotionDetector.Init();
             SnapshotInterpolation.Init();
 
-            if (Network.Entity.IsMine)
+            if (Network.Entity.IsLocal)
             {
                 TickTimer.Start();
                 TickTimer.OnTick += TickCallback;

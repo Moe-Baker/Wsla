@@ -31,8 +31,7 @@ public partial class Level : NetworkBehaviour
     public static Level Instance { get; private set; }
 
     NetworkAPI NetworkAPI => NetworkAPI.Instance;
-
-    CancellationToken OnDestroyCancellationToken;
+    RoomAPI Room => NetworkAPI.Room;
 
     void Awake()
     {
@@ -40,8 +39,6 @@ public partial class Level : NetworkBehaviour
 
         if (NetworkAPI.Room.IsConnected is false)
             throw new InvalidOperationException($"Scene {gameObject.scene.name} Should Only be Loaded When Connected to a Room");
-
-        OnDestroyCancellationToken = destroyCancellationToken;
 
         DisconnectButton.onClick.AddListener(DisconnectAction);
 
@@ -57,13 +54,6 @@ public partial class Level : NetworkBehaviour
         }
     }
 
-    public override void Set(NetworkEntity.Behaviour reference)
-    {
-        base.Set(reference);
-
-        Network.Entity.OnSpawn += SpawnCallback;
-    }
-
     void Update()
     {
         if (NetworkAPI.Room.IsConnected)
@@ -72,12 +62,39 @@ public partial class Level : NetworkBehaviour
             RoomTimeLabel.text = "Disconnected";
     }
 
+    public override void Set(NetworkEntity.Behaviour reference)
+    {
+        base.Set(reference);
+
+        Network.Entity.OnSpawn += SpawnCallback;
+
+        Room.Clients.OnDisconnect += ClientDisconnectCallback;
+        Room.Clients.OnConnect += ClientConnectCallback;
+        Room.Clients.OnChangeMaster += MasterChangeCallback;
+
+        Room.OnDisconnect += RoomDisconnectCallback;
+    }
+
     void SpawnCallback()
     {
         SpawnPlayer();
+    }
 
-        if (Network.Room.Clients.Local.IsMaster)
-            SwapScene().Forget();
+    void RoomDisconnectCallback(LiteNetLib.DisconnectReason reason)
+    {
+        NetworkLog.Info($"Room Disconnected, Reason: {reason}");
+    }
+    void MasterChangeCallback(ChangePairData<NetworkClient> client)
+    {
+        NetworkLog.Info($"Master Client Changed from {client.Previous} to {client.Current}");
+    }
+    void ClientConnectCallback(NetworkClient client)
+    {
+        NetworkLog.Info($"Client {client} Connected");
+    }
+    void ClientDisconnectCallback(NetworkClient client)
+    {
+        NetworkLog.Info($"Client {client} Disconnected");
     }
 
     public void SpawnPlayer()
@@ -103,32 +120,6 @@ public partial class Level : NetworkBehaviour
         }
 
         ticket.Send();
-    }
-
-    async UniTaskVoid SwapScene()
-    {
-        return;
-
-        try
-        {
-            await UniTask.Delay(TimeSpan.FromSeconds(6), cancellationToken: OnDestroyCancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        if (OnDestroyCancellationToken.IsCancellationRequested)
-            return;
-
-        var scene = gameObject.scene.buildIndex;
-
-        if (scene is 1)
-            scene = 2;
-        else
-            scene = 1;
-
-        Network.Room.Scene.Change(new NetworkSceneID((byte)scene));
     }
 
     void DisconnectAction()
