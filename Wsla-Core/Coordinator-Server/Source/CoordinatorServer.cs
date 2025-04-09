@@ -42,59 +42,7 @@ namespace Wsla.Server
         }
 
         public static ConfigurationProperty Configuration { get; private set; }
-        public class ConfigurationProperty
-        {
-            public ApplicationData[] Applications;
-            public class ApplicationData
-            {
-                public string Name;
 
-                public MatchMakingPoolData[] Pools;
-            }
-            public struct MatchMakingPoolData
-            {
-                public string Name;
-
-                public CapacityData Capacity;
-                public struct CapacityData
-                {
-                    public byte Min;
-                    public byte Max;
-                }
-
-                public bool Backfill;
-
-                public float Duration;
-            }
-
-            public bool TryGetApplicationID(in FixedString<FS20> name, out ApplicationID id)
-            {
-                for (byte i = 0; i < Applications.Length; i++)
-                {
-                    if (name.Equals(Applications[i].Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        id = new ApplicationID(i);
-                        return true;
-                    }
-                }
-
-                id = default;
-                return false;
-            }
-
-            public static async Task<ConfigurationProperty> Create(Data data)
-            {
-                return new ConfigurationProperty()
-                {
-                    Applications = data.Applications,
-                };
-            }
-
-            public class Data : ServerConfigurationData
-            {
-                public ApplicationData[] Applications;
-            }
-        }
         static async Task LoadConfig()
         {
             NetworkLog.Info($"Loading Configuration Data");
@@ -150,284 +98,7 @@ namespace Wsla.Server
         {
             public static class Browser
             {
-                public static List<Server> Servers { get; private set; }
-                public class Server : IDisposable
-                {
-                    public RelayServerInfo Info { get; }
-
-                    public MessagingPeer MessagingPeer { get; }
-
-                    public ServerRegion Region => Info.Region;
-                    public IPAddress Address => Info.Address;
-
-                    Dictionary<Guid, Room> Rooms;
-
-                    public int Occupancy;
-                    public void ModifyOccupancy(int modifier)
-                    {
-                        var value = Interlocked.Add(ref Occupancy, modifier);
-                        NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
-                    }
-
-                    public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
-                    {
-                        lock (Rooms)
-                        {
-                            if (Rooms.ContainsKey(id))
-                                throw new Exception($"Room with ID {id} Already Registered");
-
-                            var room = new Room(this, application, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
-                            Rooms.Add(id, room);
-
-                            room.MakeJoinReservation(reservations);
-
-                            return room;
-                        }
-                    }
-
-                    public bool RemoveRoom(Guid id)
-                    {
-                        lock (Rooms)
-                        {
-                            if (Rooms.Remove(id, out var room) is false)
-                            {
-                                NetworkLog.Warning($"No Room with ID {id} Registered");
-                                return false;
-                            }
-
-                            ModifyOccupancy(-room.Occupancy);
-                            return true;
-                        }
-                    }
-
-                    public void UpdateRooms(IEnumerable<UpdateRoomRequest> requests)
-                    {
-                        lock (Rooms)
-                        {
-                            foreach (var request in requests)
-                            {
-                                if (Rooms.TryGetValue(request.ID, out var room) is false)
-                                {
-                                    NetworkLog.Error($"No Room With ID {request.ID} Found to Update");
-                                    continue;
-                                }
-
-                                room.UpdateRoom(request.Parameters);
-                            }
-                        }
-                    }
-
-                    public void ListRooms(ApplicationID application, List<RoomListEntryInfo> list)
-                    {
-                        lock (Rooms)
-                        {
-                            foreach (var (id, room) in Rooms)
-                            {
-                                if (room.Privacy is RoomPrivacy.Private)
-                                    continue;
-
-                                if (room.Application != application)
-                                    continue;
-
-                                var connection = new RoomConnectionInfo(Address, room.Port);
-
-                                var name = room.Name;
-                                var capacity = room.Capacity;
-                                var occupancy = room.Occupancy;
-
-                                var entry = new RoomListEntryInfo(name, capacity, occupancy, connection);
-
-                                list.Add(entry);
-                            }
-                        }
-                    }
-
-                    public bool TryReserveJoin(ApplicationID application, int capacity, out Room target)
-                    {
-                        lock (Rooms)
-                        {
-                            foreach (var (id, room) in Rooms)
-                            {
-                                if (room.Privacy is RoomPrivacy.Private)
-                                    continue;
-
-                                if (room.Application != application)
-                                    continue;
-
-                                var vacancy = room.CheckVacancy();
-
-                                if (vacancy >= capacity)
-                                {
-                                    room.MakeJoinReservation(capacity);
-
-                                    target = room;
-                                    return true;
-                                }
-                            }
-                        }
-
-                        target = default;
-                        return false;
-                    }
-
-                    public bool TryReserveJoin(ApplicationID application, int capacity, Queue.MatchMakingPool pool, out Room target)
-                    {
-                        lock (Rooms)
-                        {
-                            foreach (var (id, room) in Rooms)
-                            {
-                                if (room.Privacy is RoomPrivacy.Private)
-                                    continue;
-
-                                if (room.Application != application)
-                                    continue;
-
-                                if (room.Pool != pool)
-                                    continue;
-
-                                var vacancy = room.CheckVacancy();
-
-                                if (vacancy >= capacity)
-                                {
-                                    room.MakeJoinReservation(capacity);
-
-                                    target = room;
-                                    return true;
-                                }
-                            }
-                        }
-
-                        target = default;
-                        return false;
-                    }
-
-                    public void Dispose() { }
-
-                    public override string ToString() => Info.ToString();
-
-                    public Server(RelayServerInfo Info, MessagingPeer MessagingPeer)
-                    {
-                        this.Info = Info;
-                        this.MessagingPeer = MessagingPeer;
-
-                        Rooms = new();
-                    }
-
-                    public static Server Create(RegisterRelayRequest request, MessagingPeer peer)
-                    {
-                        var server = new Server(request.Info, peer);
-
-                        if (request.Rooms?.Count > 0)
-                        {
-                            server.Rooms.EnsureCapacity(request.Rooms.Count);
-
-                            var occupancy = 0;
-
-                            foreach (var entry in request.Rooms)
-                            {
-                                var room = Room.Create(server, entry);
-                                server.Rooms.Add(entry.ID, room);
-
-                                occupancy += room.Occupancy;
-                            }
-
-                            server.ModifyOccupancy(occupancy);
-                        }
-
-                        return server;
-                    }
-                }
-                public class Room
-                {
-                    public Server Server { get; }
-
-                    public ApplicationID Application { get; }
-
-                    public ushort Port { get; }
-
-                    public FixedString<FS20> Name { get; }
-
-                    public byte Capacity;
-
-                    public byte Occupancy;
-                    public bool IsFull => Occupancy >= Capacity;
-
-                    public RoomPrivacy Privacy;
-
-                    public bool IsLocked;
-                    void Lock()
-                    {
-                        IsLocked = true;
-                        Privacy = RoomPrivacy.Private;
-                    }
-
-                    TimedReservationCollection JoinReservations;
-                    public void MakeJoinReservation(int capacity) => JoinReservations.ReserveCapacity(capacity);
-
-                    public int CheckVacancy()
-                    {
-                        var total = Occupancy + JoinReservations.CalculateCapacity();
-
-                        var vacancy = Capacity - total;
-                        if (vacancy < 0) vacancy = 0;
-
-                        return vacancy;
-                    }
-
-                    public Queue.MatchMakingPool Pool { get; private set; }
-                    public void SetPool(Queue.MatchMakingPool value)
-                    {
-                        Pool = value;
-                    }
-
-                    public RoomConnectionInfo GetConnectionInfo() => new RoomConnectionInfo(Server.Address, Port);
-
-                    public void UpdateRoom(UpdateRoomParameters parameters)
-                    {
-                        //Lock
-                        if (parameters.Lock)
-                        {
-                            Lock();
-                        }
-
-                        //Free Reservations
-                        if (parameters.Joins > 0)
-                        {
-                            JoinReservations.FreeCapacity(parameters.Joins);
-                        }
-
-                        //Update Occupancy
-                        if (parameters.Occupancy.HasValue)
-                        {
-                            var delta = (parameters.Occupancy.Value - Occupancy);
-                            Server.ModifyOccupancy(delta);
-
-                            Occupancy = parameters.Occupancy.Value;
-                        }
-                    }
-
-                    public Room(Server Server, ApplicationID Application, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
-                    {
-                        this.Application = Application;
-                        this.Server = Server;
-                        this.Port = Port;
-                        this.Name = Name;
-                        this.Capacity = Capacity;
-                        this.Occupancy = Occupancy;
-                        this.Privacy = Privacy;
-
-                        IsLocked = false;
-
-                        JoinReservations = new TimedReservationCollection(TimeSpan.FromSeconds(10));
-                    }
-
-                    public static Room Create(Server server, RoomMatchmakerEntryData data)
-                    {
-                        var state = data.State;
-
-                        return new Room(server, data.Application, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
-                    }
-                }
+                public static List<RelayServer> Servers { get; private set; }
 
                 public static void Init()
                 {
@@ -436,7 +107,7 @@ namespace Wsla.Server
 
                 public static void RegisterServer(MessagingPeer peer, RegisterRelayRequest message)
                 {
-                    var server = Server.Create(message, peer);
+                    var server = RelayServer.Create(message, peer);
                     peer.Tag = server;
 
                     lock (Servers)
@@ -456,7 +127,7 @@ namespace Wsla.Server
                     UnregisterServer(server);
                 }
 
-                static void UnregisterServer(Server server)
+                static void UnregisterServer(RelayServer server)
                 {
                     lock (Servers)
                     {
@@ -470,11 +141,11 @@ namespace Wsla.Server
                     }
                 }
 
-                public static bool TryFindFreeServer(SparseArray<ServerRegion> regions, out Server server)
+                public static bool TryFindFreeServer(SparseArray<ServerRegion> regions, out RelayServer server)
                 {
                     lock (Servers)
                     {
-                        var marker = (Found: false, Server: default(Server), Occupancy: int.MaxValue);
+                        var marker = (Found: false, Server: default(RelayServer), Occupancy: int.MaxValue);
 
                         for (int i = 0; i < Servers.Count; i++)
                         {
@@ -510,7 +181,7 @@ namespace Wsla.Server
                     room = default;
                     return false;
                 }
-                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, Queue.MatchMakingPool pool, int capacity, out Room room)
+                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, MatchMakingPool pool, int capacity, out Room room)
                 {
                     lock (Servers)
                     {
@@ -557,9 +228,9 @@ namespace Wsla.Server
                     }
                 }
 
-                public static bool TryReadTag(MessagingConnection connection, out Server server)
+                public static bool TryReadTag(MessagingConnection connection, out RelayServer server)
                 {
-                    if (connection.Tag is not Server)
+                    if (connection.Tag is not RelayServer)
                     {
                         NetworkLog.Warning($"Peer {connection} not Tagged as Relay Server");
 
@@ -567,7 +238,7 @@ namespace Wsla.Server
                         return false;
                     }
 
-                    server = connection.Tag as Server;
+                    server = connection.Tag as RelayServer;
                     return true;
                 }
             }
@@ -575,7 +246,7 @@ namespace Wsla.Server
             {
                 static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(250);
 
-                static Application[] Applications;
+                static MatchMakingApplication[] Applications;
                 static bool TryGetPool(FixedString<FS20> ApplicationName, FixedString<FS20> PoolName, out MatchMakingPool pool)
                 {
                     if (Configuration.TryGetApplicationID(ApplicationName, out var ApplicationID) is false)
@@ -587,310 +258,16 @@ namespace Wsla.Server
                     return Applications[ApplicationID.Value].TryFindPool(PoolName, out pool);
                 }
 
-                public class Application
-                {
-                    readonly ConfigurationProperty.ApplicationData Configuration;
-
-                    public ApplicationID ID { get; }
-
-                    public MatchMakingPool[] Pools;
-                    public bool TryFindPool(in FixedString<FS20> Name, out MatchMakingPool pool)
-                    {
-                        for (byte i = 0; i < Pools.Length; i++)
-                        {
-                            pool = Pools[i];
-
-                            if (Name.Equals(pool.Name, StringComparison.OrdinalIgnoreCase))
-                                return true;
-                        }
-
-                        pool = default;
-                        return false;
-                    }
-
-                    public void Refresh()
-                    {
-                        foreach (var pool in Pools)
-                            pool.Refresh();
-                    }
-
-                    public Application(ConfigurationProperty.ApplicationData Configuration, ApplicationID ID)
-                    {
-                        this.Configuration = Configuration;
-                        this.ID = ID;
-
-                        Pools = new MatchMakingPool[Configuration.Pools.Length];
-
-                        for (int i = 0; i < Pools.Length; i++)
-                            Pools[i] = new MatchMakingPool(this, Configuration.Pools[i]);
-                    }
-                }
-                public class MatchMakingPool
-                {
-                    public readonly Application Application;
-                    public readonly ConfigurationProperty.MatchMakingPoolData Configuration;
-
-                    public string Name => Configuration.Name;
-                    public TimeSpan Duration { get; }
-                    public bool Backfill => Configuration.Backfill;
-
-                    List<Ticket> List;
-
-                    public void Register(Ticket ticket)
-                    {
-                        lock (List)
-                        {
-                            List.Add(ticket);
-                        }
-                    }
-                    public bool Unregister(Ticket ticket)
-                    {
-                        lock (List)
-                        {
-                            return List.Remove(ticket);
-                        }
-                    }
-
-                    public void Refresh()
-                    {
-                        lock (List)
-                        {
-                            var index = 0;
-
-                            if (List.Count is 0)
-                                return;
-
-                            //Skip Expired Tickets
-                            for (/* Start at Index */; index < List.Count; index++)
-                            {
-                                if (List[index].IsExpired() is false)
-                                    break;
-
-                                List[index].Fail(WslaErrorCode.Timeout);
-                                List[index] = null;
-                            }
-
-                            var allocations = (List.Count - index); //Count of Remaining Valid Tickets
-
-                            //Dispatch Remaining Tickets
-                            if (allocations >= Configuration.Capacity.Min)
-                            {
-                                var dispatcher = new Dispatcher(this);
-
-                                for (/* Start at Index */; index < List.Count; index++)
-                                {
-                                    var entry = TicketEntry.For(List, index);
-                                    dispatcher.Accept(entry);
-                                }
-
-                                foreach (var batch in dispatcher.Batches)
-                                {
-                                    if (IsValid(batch) is false)
-                                        continue;
-
-                                    foreach (var entry in batch.Entries)
-                                        List[entry.Index] = null;
-
-                                    Dispatch(batch).Forget();
-                                }
-                            }
-
-                            List.RemoveAll(x => x is null);
-                        }
-                    }
-
-                    bool IsValid(Batch batch)
-                    {
-                        if (batch.Count < Configuration.Capacity.Min)
-                            return false;
-
-                        //Validate Age
-                        if (batch.IsFull is false)
-                        {
-                            var ticket = batch.GetOldestTicket();
-
-                            var age = ticket.CalculateAge();
-                            var factor = Duration * 0.75f;
-
-                            if (age < factor)
-                                return false;
-                        }
-
-                        return true;
-                    }
-
-                    class Dispatcher
-                    {
-                        readonly MatchMakingPool Pool;
-
-                        public List<Batch> Batches { get; }
-
-                        public Batch Accept(TicketEntry entry)
-                        {
-                            //Iterate Existing Batches
-                            {
-                                foreach (var batch in Batches)
-                                    if (batch.TryAccept(entry))
-                                        return batch;
-                            }
-
-                            //Create New Batch
-                            {
-                                var batch = new Batch(Pool, entry);
-                                Batches.Add(batch);
-                                return batch;
-                            }
-                        }
-
-                        public Dispatcher(MatchMakingPool Pool)
-                        {
-                            this.Pool = Pool;
-
-                            Batches = new List<Batch>();
-                        }
-                    }
-                    class Batch
-                    {
-                        readonly MatchMakingPool Pool;
-
-                        public List<TicketEntry> Entries { get; }
-
-                        public byte Count => (byte)Entries.Count;
-
-                        public bool IsFull => Count >= Pool.Configuration.Capacity.Max;
-
-                        public List<ServerRegion> Regions { get; }
-
-                        public bool TryAccept(TicketEntry entry)
-                        {
-                            if (IsFull)
-                                return false;
-
-                            var ticket = entry.Ticket;
-
-                            if (CheckAllowRegion(ticket.Request.Regions) is false)
-                                return false;
-
-                            Entries.Add(entry);
-                            CombineRegionList(ticket.Request.Regions);
-                            return true;
-                        }
-
-                        bool CheckAllowRegion(SparseArray<ServerRegion> input)
-                        {
-                            foreach (var item in input)
-                                if (Regions.Contains(item))
-                                    return true;
-
-                            return false;
-                        }
-                        void CombineRegionList(SparseArray<ServerRegion> input)
-                        {
-                            Regions.RemoveAll(x => input.Contains(x) is false);
-                        }
-
-                        public Ticket GetOldestTicket() => Entries[0].Ticket;
-
-                        public NetworkSceneID GetScene() => GetOldestTicket().Request.Scene;
-
-                        public Batch(MatchMakingPool Pool, TicketEntry entry)
-                        {
-                            this.Pool = Pool;
-
-                            Entries = new() { entry };
-
-                            Regions = entry.Ticket.Request.Regions.ToList();
-                        }
-                    }
-                    record struct TicketEntry(Ticket Ticket, int Index)
-                    {
-                        public static TicketEntry For(List<Ticket> list, int index) => new TicketEntry(list[index], index);
-                    }
-
-                    async Task Dispatch(Batch batch)
-                    {
-                        var Capacity = Backfill ? Configuration.Capacity.Max : batch.Count;
-                        var Scene = batch.GetScene();
-                        var Privacy = Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
-                        var Lock = Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
-                        var Parameters = new CreateRoomParameters(Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
-
-                        var Regions = SparseArray.Clone(batch.Regions);
-
-                        RoomConnectionInfo Info;
-
-                        try
-                        {
-                            var room = await Matchmaking.CreateRoom(Application.ID, Regions, Parameters);
-
-                            room.SetPool(this);
-
-                            Info = room.GetConnectionInfo();
-                        }
-                        catch (Exception ex)
-                        {
-                            NetworkLog.Error($"Matchmaking Create Room Failed");
-                            NetworkLog.Error(ex);
-
-                            foreach (var entry in batch.Entries)
-                                entry.Ticket.Fail(WslaErrorCode.InternalError);
-
-                            return;
-                        }
-
-                        foreach (var entry in batch.Entries)
-                            entry.Ticket.Accept(Info);
-                    }
-
-                    public MatchMakingPool(Application Application, ConfigurationProperty.MatchMakingPoolData Configuration)
-                    {
-                        this.Application = Application;
-                        this.Configuration = Configuration;
-
-                        Duration = TimeSpan.FromSeconds(Configuration.Duration);
-
-                        List = new();
-                    }
-                }
-                public class Ticket
-                {
-                    public readonly MessagingPeer Peer;
-                    public readonly MatchMakingPool Pool;
-                    public readonly StartMatchMakingRequest Request;
-
-                    readonly DateTime Timestamp;
-                    public TimeSpan CalculateAge() => (TimeNow - Timestamp).Duration();
-                    public bool IsExpired() => (CalculateAge() > Pool.Duration);
-
-                    public void Accept(RoomConnectionInfo info) => Queue.Accept(Peer, info);
-
-                    public void Fail() => Queue.Fail(Peer, WslaErrorCode.NoRoomFound);
-                    public void Fail(WslaErrorCode code) => Queue.Fail(Peer, code);
-
-                    public void Unregister() => Pool.Unregister(this);
-
-                    public Ticket(MessagingPeer Peer, MatchMakingPool Pool, StartMatchMakingRequest Request)
-                    {
-                        this.Peer = Peer;
-                        this.Pool = Pool;
-                        this.Request = Request;
-
-                        Timestamp = TimeNow;
-                    }
-
-                    static DateTime TimeNow => DateTime.UtcNow;
-                }
-
                 public static void Init()
                 {
                     //Applications
                     {
-                        Applications = new Application[Configuration.Applications.Length];
+                        Applications = new MatchMakingApplication[Configuration.Applications.Length];
 
                         for (byte i = 0; i < Applications.Length; i++)
                         {
                             var id = new ApplicationID(i);
-                            Applications[i] = new Application(Configuration.Applications[i], id);
+                            Applications[i] = new MatchMakingApplication(Configuration.Applications[i], id);
                         }
                     }
 
@@ -925,7 +302,7 @@ namespace Wsla.Server
                         return;
                     }
 
-                    var ticket = new Ticket(peer, pool, request);
+                    var ticket = new MatchMakingTicket(peer, pool, request);
                     peer.Tag = ticket;
 
                     pool.Register(ticket);
@@ -936,7 +313,7 @@ namespace Wsla.Server
                 }
                 static void ClientDisconnectCallback(MessagingConnection connection, MessagingSocketDisconnectReason reason)
                 {
-                    if (connection.Tag is not Ticket ticket)
+                    if (connection.Tag is not MatchMakingTicket ticket)
                     {
                         NetworkLog.Warning($"Peer {connection} not Tagged as Match Making Ticket");
                         return;
@@ -1086,7 +463,7 @@ namespace Wsla.Server
             }
 
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
-            public static async Task<Browser.Room> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
+            public static async Task<Room> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
             {
                 //Find Region
                 if (Browser.TryFindFreeServer(regions, out var server) is false)

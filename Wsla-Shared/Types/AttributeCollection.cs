@@ -11,7 +11,9 @@ namespace Wsla
     {
         public Dictionary<FixedString<FS20>, FixedBinary<FB40>> Dictionary;
 
-        public bool TryGetValue<T>(FixedString<FS20> key, out T value)
+        public int Count => Dictionary.Count;
+
+        public bool TryGetValue<T>(in FixedString<FS20> key, out T value)
         {
             if (Dictionary.TryGetValue(key, out var binary) is false)
             {
@@ -23,7 +25,7 @@ namespace Wsla
             NetworkSerializer.ReadValue(ref source, out value);
             return true;
         }
-        public void SetValue<T>(FixedString<FS20> key, T value)
+        public void SetValue<T>(in FixedString<FS20> key, T value)
         {
             var binary = new FixedBinary<FB40>();
             var source = BinarySource.From(ref binary);

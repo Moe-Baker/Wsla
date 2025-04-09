@@ -26,6 +26,7 @@ namespace Wsla
             };
 
             Options.Converters.Add(new JsonStringEnumConverter<ServerRegion>());
+            Options.Converters.Add(new MatchMakingValueJsonConverter());
         }
     }
 

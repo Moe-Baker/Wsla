@@ -15,11 +15,30 @@
           "Name": "mini-games",
           "Capacity":
           {
-            "Min": 1,
-            "Max": 4
+            "Min": 2,
+            "Max": 2
           },
           "Duration": 10,
-          "Backfill": true
+          "Backfill": true,
+          "Rules":
+          [
+            {
+              "Property": "Level",
+              "Type": "Difference",
+              "Value": 10,
+              "Relaxations":
+              [
+                {
+                  "Delay": 2,
+                  "Value": 10
+                },
+                {
+                  "Delay": 8,
+                  "Disable": true
+                }
+              ]
+            }
+          ]
         }
       ]
     }

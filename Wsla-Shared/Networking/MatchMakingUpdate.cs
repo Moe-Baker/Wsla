@@ -8,6 +8,7 @@ namespace Wsla
         public FixedString<FS20> Pool;
         public SparseArray<ServerRegion> Regions;
         public NetworkSceneID Scene;
+        public MatchMakingParameters Parameters;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -15,14 +16,16 @@ namespace Wsla
             context.Select(ref Pool);
             context.Select(ref Regions);
             context.Select(ref Scene);
+            context.Select(ref Parameters);
         }
 
-        public StartMatchMakingRequest(FixedString<FS20> Application, FixedString<FS20> Pool, SparseArray<ServerRegion> Regions, NetworkSceneID Scene)
+        public StartMatchMakingRequest(FixedString<FS20> Application, FixedString<FS20> Pool, SparseArray<ServerRegion> Regions, NetworkSceneID Scene, MatchMakingParameters Parameters)
         {
             this.Application = Application;
             this.Pool = Pool;
             this.Regions = Regions;
             this.Scene = Scene;
+            this.Parameters = Parameters;
         }
     }
 
