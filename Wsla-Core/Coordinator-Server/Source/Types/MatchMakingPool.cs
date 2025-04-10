@@ -80,6 +80,18 @@ namespace Wsla.Server
             }
         }
 
+        public bool ValidateParameters(in MatchMakingParameters parameters)
+        {
+            if (Configuration.Rules is null)
+                return true;
+
+            foreach (var rule in Configuration.Rules)
+                if (rule.ValidateParameters(in parameters) is false)
+                    return false;
+
+            return true;
+        }
+
         public bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
         {
             if (Configuration.Rules is null)
@@ -100,9 +112,7 @@ namespace Wsla.Server
             //Validate Age
             if (batch.IsFull is false)
             {
-                var ticket = batch.GetOldestTicket();
-
-                var age = ticket.CalculateAge();
+                var age = batch.Age;
                 var factor = Duration * 0.75f;
 
                 if (age < factor)
@@ -198,9 +208,11 @@ namespace Wsla.Server
     }
     public class MatchMakingPoolBatch
     {
-        readonly MatchMakingPool Pool;
+        public readonly MatchMakingPool Pool;
+        public readonly TimeSpan Age;
 
         public List<MatchMakingPoolTicketEntry> Entries { get; }
+        public MatchMakingTicket this[int index] => Entries[index].Ticket;
 
         public byte Count => (byte)Entries.Count;
 
@@ -259,7 +271,9 @@ namespace Wsla.Server
         {
             this.Pool = Pool;
 
-            Entries = new() { entry };
+            Entries = new(1) { entry };
+
+            Age = entry.Ticket.CalculateAge();
 
             Regions = entry.Ticket.Regions.ToList();
         }

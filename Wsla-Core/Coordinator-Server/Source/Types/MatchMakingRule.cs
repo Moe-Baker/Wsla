@@ -42,11 +42,18 @@ namespace Wsla.Server
             return ticket.Parameters.TryGet(Property, out value);
         }
 
+        public virtual bool ValidateParameters(in MatchMakingParameters parameters)
+        {
+            if (parameters.TryGet(Property, out var value) is false)
+                return false;
+
+            return ValidateValue(in value);
+        }
+        public virtual bool ValidateValue(in MatchMakingValue value) => true;
+
         public virtual bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
         {
-            var age = batch.GetOldestTicket().CalculateAge();
-
-            if (CheckDisable(age))
+            if (CheckDisable(batch.Age))
                 return true;
 
             if (TryReadParameter(ticket, out var remote) is false)
@@ -58,9 +65,7 @@ namespace Wsla.Server
 
         public virtual bool ValidateDispatch(MatchMakingPoolBatch batch)
         {
-            var age = batch.GetOldestTicket().CalculateAge();
-
-            if (CheckDisable(age))
+            if (CheckDisable(batch.Age))
                 return true;
 
             return CheckDispatch(batch);
@@ -71,7 +76,7 @@ namespace Wsla.Server
         {
             if (value.Type is not MatchMakingValue.ValueType.Number)
             {
-                NetworkLog.Error($"Expected Match Making Number, Got {value.Type}");
+                NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
                 return false;
             }
 
@@ -90,21 +95,24 @@ namespace Wsla.Server
             {
                 base.OnDeserialized();
 
-                //Sort Relaxations by Delay
-                Array.Sort(Relaxations, (x, y) => x.Delay.CompareTo(y.Delay));
-
-                //Calculate Disable Duration
+                if (Relaxations is not null)
                 {
-                    DisableDuration = float.PositiveInfinity;
+                    //Sort Relaxations by Delay
+                    Array.Sort(Relaxations, (x, y) => x.Delay.CompareTo(y.Delay));
 
-                    for (int i = Relaxations.Length - 1; i >= 0; i--)
+                    //Calculate Disable Duration
                     {
-                        ref var entry = ref Relaxations[i];
+                        DisableDuration = float.PositiveInfinity;
 
-                        if (entry.Disable)
+                        for (int i = Relaxations.Length - 1; i >= 0; i--)
                         {
-                            DisableDuration = entry.Delay;
-                            break;
+                            ref var entry = ref Relaxations[i];
+
+                            if (entry.Disable)
+                            {
+                                DisableDuration = entry.Delay;
+                                break;
+                            }
                         }
                     }
                 }
@@ -119,10 +127,20 @@ namespace Wsla.Server
             [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
+            public override bool ValidateValue(in MatchMakingValue value)
+            {
+                if (Reference.Type != value.Type)
+                {
+                    NetworkLog.Info($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
+                    return false;
+                }
+
+                return base.ValidateValue(value);
+            }
+
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
-                var age = batch.GetOldestTicket().CalculateAge();
-                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, Reference, out var local);
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, Reference, out var local);
 
                 return remote == local;
             }
@@ -137,10 +155,20 @@ namespace Wsla.Server
             [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
+            public override bool ValidateValue(in MatchMakingValue value)
+            {
+                if (Reference.Type != value.Type)
+                {
+                    NetworkLog.Info($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
+                    return false;
+                }
+
+                return base.ValidateValue(value);
+            }
+
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
-                var age = batch.GetOldestTicket().CalculateAge();
-                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, Reference, out var local);
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, Reference, out var local);
 
                 return remote != local;
             }
@@ -155,7 +183,10 @@ namespace Wsla.Server
 
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
-                if (TryReadParameter(batch.GetOldestTicket(), out var local) is false)
+                if (batch.Count is 0)
+                    return true;
+
+                if (TryReadParameter(batch[0], out var local) is false)
                     return false;
 
                 return remote == local;
@@ -170,6 +201,9 @@ namespace Wsla.Server
 
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
+                if (batch.Count is 0)
+                    return true;
+
                 foreach (var entry in batch.Entries)
                 {
                     if (TryReadParameter(entry.Ticket, out var local) is false)
@@ -193,13 +227,20 @@ namespace Wsla.Server
             [JsonRequired, Description("Reference Number to Compare Against")]
             public float Reference;
 
+            public override bool ValidateValue(in MatchMakingValue value)
+            {
+                if (value.Type is not MatchMakingValue.ValueType.Number)
+                {
+                    NetworkLog.Info($"Mis-Matched Value Types, Expecting Number, Got {value.Type}");
+                    return false;
+                }
+
+                return base.ValidateValue(value);
+            }
+
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
-                if (ValidateNumber(remote) is false)
-                    return false;
-
-                var age = batch.GetOldestTicket().CalculateAge();
-                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, this.Reference, out var Reference);
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, this.Reference, out var Reference);
 
                 foreach (var entry in batch.Entries)
                 {
@@ -218,21 +259,127 @@ namespace Wsla.Server
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
 
-        public class OddOneIn : GenericBase<MatchMakingRuleRelaxation.Int>
+        [Description("Checks for a Required Count of OddOnes in Batch")]
+        public class OddOneIn : GenericBase<OddOneIn.Relaxation>
         {
             public const string ID = "OddOneIn";
+
+            [JsonRequired]
+            public ReferenceData Reference;
+            public struct ReferenceData
+            {
+                [JsonRequired, Description("Value Marking Ordinary Ticket")]
+                public MatchMakingValue Ordinary;
+
+                [JsonRequired, Description("Value Marking OddOne Ticket")]
+                public MatchMakingValue OddOne;
+            }
 
             [JsonRequired, Description("Number of Odd Ones Required")]
             public int Require;
 
+            public override bool ValidateValue(in MatchMakingValue value)
+            {
+                if (value != Reference.Ordinary && value != Reference.OddOne)
+                {
+                    NetworkLog.Info($"Mis-Matched Value, Expecting [{Reference.Ordinary} or {Reference.OddOne}], Got ({value})");
+                    return false;
+                }
+
+                return base.ValidateValue(value);
+            }
+
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
-                throw new NotImplementedException();
+                var counter = new Counter();
+
+                //Collect all Existing Values
+                foreach (var entry in batch.Entries)
+                {
+                    if (Collect(ref counter, entry.Ticket) is false)
+                        return false;
+                }
+
+                //Collect Remote Value
+                Collect(ref counter, remote);
+
+                var capacity = batch.Pool.Configuration.Capacity.Max;
+                CalculateRelaxation(batch.Age, out var Require);
+
+                if (counter.OddOne > Require)
+                    return false;
+
+                if (counter.Ordinary > (capacity - Require))
+                    return false;
+
+                return true;
             }
 
             protected override bool CheckDispatch(MatchMakingPoolBatch batch)
             {
-                throw new NotImplementedException();
+                var counter = new Counter();
+
+                //Collect all Existing Values
+                foreach (var entry in batch.Entries)
+                {
+                    if (Collect(ref counter, entry.Ticket) is false)
+                        return false;
+                }
+
+                CalculateRelaxation(batch.Age, out var Require);
+
+                if (counter.OddOne != Require)
+                    return false;
+
+                return true;
+            }
+
+            record struct Counter(int Ordinary, int OddOne);
+            bool Collect(ref Counter counter, MatchMakingTicket ticket)
+            {
+                if (TryReadParameter(ticket, out var value) is false)
+                    throw new NotImplementedException();
+
+                return Collect(ref counter, value);
+            }
+            bool Collect(ref Counter counter, MatchMakingValue value)
+            {
+                if (value == Reference.Ordinary)
+                {
+                    counter.Ordinary += 1;
+                    return true;
+                }
+
+                if (value == Reference.OddOne)
+                {
+                    counter.OddOne += 1;
+                    return true;
+                }
+
+                return false;
+            }
+
+            public class Relaxation : MatchMakingRuleRelaxation
+            {
+                [Description("Assign to Modify the Required OddOnes")]
+                public int? Require;
+            }
+            void CalculateRelaxation(TimeSpan age, out int output)
+            {
+                output = Require;
+
+                ref var relaxations = ref Relaxations;
+
+                for (int i = 0; i < relaxations.Length; i++)
+                {
+                    ref var entry = ref relaxations[i];
+
+                    if (entry.Delay > age.TotalSeconds)
+                        return;
+
+                    if (entry.Require.HasValue)
+                        output = entry.Require.Value;
+                }
             }
         }
     }

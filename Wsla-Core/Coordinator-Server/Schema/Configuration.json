@@ -309,9 +309,33 @@
                         ]
                       },
                       {
+                        "description": "Checks for a Required Count of OddOnes in Batch",
                         "properties": {
                           "Type": {
                             "const": "OddOneIn"
+                          },
+                          "Reference": {
+                            "type": "object",
+                            "properties": {
+                              "Ordinary": {
+                                "description": "Value Marking Ordinary Ticket",
+                                "type": [
+                                  "string",
+                                  "number"
+                                ]
+                              },
+                              "OddOne": {
+                                "description": "Value Marking OddOne Ticket",
+                                "type": [
+                                  "string",
+                                  "number"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "Ordinary",
+                              "OddOne"
+                            ]
                           },
                           "Require": {
                             "description": "Number of Odd Ones Required",
@@ -326,7 +350,7 @@
                             "items": {
                               "type": "object",
                               "properties": {
-                                "Reference": {
+                                "Require": {
                                   "description": "Assign to Modify the Reference Value of the Rule",
                                   "type": [
                                     "integer",
@@ -360,6 +384,7 @@
                           }
                         },
                         "required": [
+                          "Reference",
                           "Require",
                           "Property"
                         ]

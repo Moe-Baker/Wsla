@@ -286,6 +286,12 @@ namespace Wsla.Server
                         return;
                     }
 
+                    if (pool.ValidateParameters(in request.Parameters) is false)
+                    {
+                        Fail(peer, WslaErrorCode.InvalidRequest);
+                        return;
+                    }
+
                     if (pool.Backfill)
                     {
                         var query = new RoomQueryFilter(pool, request.Regions, 1);

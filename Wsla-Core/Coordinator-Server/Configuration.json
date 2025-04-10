@@ -10,36 +10,28 @@
           "Name": "mini-games",
           "Capacity":
           {
-            "Min": 2,
-            "Max": 4
+            "Min": 3,
+            "Max": 5
           },
           "Duration": 10,
           "Backfill": false,
-          "Balanced": true,
+          "Balanced": false,
           "Rules":
           [
             {
-              "Type": "Delta",
-              "Property": "Level",
-              "Reference": 10,
-              "Invert": false,
+              "Type": "OddOneIn",
+              "Property": "Platform",
+              "Reference":
+              {
+                "OddOne": "Editor",
+                "Ordinary": "Player"
+              },
+              "Require": 2,
               "Relaxations":
               [
                 {
-                  "Delay": 2,
-                  "Reference": 20
-                },
-                {
-                  "Delay": 4,
-                  "Reference": 40
-                },
-                {
-                  "Delay": 6,
-                  "Reference": 60
-                },
-                {
                   "Delay": 8,
-                  "Disable": true
+                  "Require": 1
                 }
               ]
             }
