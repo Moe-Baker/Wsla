@@ -1,13 +1,13 @@
 {
-  //Accepts both IPs & Hostnames
+  "$schema": "./Schema/Configuration.json",
+
   "Coordinator Hostname": "10.0.0.10",
 
-  //Thread Count for Realtime Communication, 0 equals System Processor Count
-  "Realtime Thread Allowance": 0,
+  "Realtime Thread Allowance": 14,
 
   "Realtime Fixed Time": 5,
 
   "Region": "EU",
 
-  "Public Hostname" : "10.0.0.10"
+  "Public Hostname": "10.0.0.10"
 }

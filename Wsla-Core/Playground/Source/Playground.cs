@@ -1,5 +1,6 @@
-﻿using Wsla;
-using Wsla.Serialization;
+﻿using System.ComponentModel;
+
+using Wsla;
 
 unsafe class Playground
 {
@@ -15,31 +16,16 @@ unsafe class Playground
 
     static void Run()
     {
-        var source = BinarySource.From(stackalloc byte[200]);
+        ServerConfigurationLoader.Schema.Write<Data>("Schema.json");
+    }
 
-        var request = new CreateRoomRequest()
-        {
-            Application = "My App",
-            Regions = (ServerRegion.Asia, ServerRegion.EU, ServerRegion.USA),
-            Parameters = new CreateRoomParameters()
-            {
-                Name = "My Room",
-                Capacity = 10,
-                Scene = NetworkSceneID.From(1),
-                Password = "Hello Password",
-                Privacy = RoomPrivacy.Private,
-                Lock = RoomLockPolicy.AfterFill,
-            }
-        };
+    [Description("Data Type")]
+    public struct Data
+    {
+        [Description("Value 1")]
+        public MatchMakingValue PropertyValue { get; set; }
 
-        NetworkSerializer.WriteValue(request, ref source);
-
-        source.Position = 0;
-
-        var clone = NetworkSerializer.ReadValue<CreateRoomRequest>(ref source);
-
-        Console.WriteLine(clone.Application);
-
-        Console.WriteLine(clone.Application);
+        [Description("Value 2")]
+        public MatchMakingValue FieldValue;
     }
 }

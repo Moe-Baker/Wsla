@@ -1,0 +1,20 @@
+{
+  "description": "Data Type",
+  "type": "object",
+  "properties": {
+    "PropertyValue": {
+      "description": "Value 1",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "FieldValue": {
+      "description": "Value 2",
+      "type": [
+        "string",
+        "number"
+      ]
+    }
+  }
+}

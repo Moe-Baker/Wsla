@@ -1,13 +1,15 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Wsla.Server
 {
     public struct MatchMakingRule
     {
-        [JsonRequired]
+        [JsonRequired, Description("Property to Check on Tickets")]
         public string Property;
 
+        [Description("Type of Operation to Perform")]
         [JsonRequired, JsonConverter(typeof(JsonStringEnumConverter<OperationType>))]
         public OperationType Type;
         public enum OperationType
@@ -15,18 +17,23 @@ namespace Wsla.Server
             Equal, NotEqual, Difference
         }
 
+        [Description("Invert the Rule's Check, True = Rule Should Pass, False = Rule Should not Pass!")]
         public bool Invert;
 
+        [Description("Reference Value to Compare Against, Or Null Depending on Rule Type & Intended Usage")]
         public MatchMakingValue Value;
 
+        [Description("Relaxations to Apply Depending on Age of Oldest Ticket in Batch")]
         public Relaxation[] Relaxations;
         public struct Relaxation
         {
-            [JsonRequired]
+            [JsonRequired, Description("Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone")]
             public float Delay;
 
+            [Description("Set to True to Disable the Rule")]
             public bool Disable;
 
+            [Description("Assign to Modify the Reference Value of the Rule")]
             public MatchMakingValue? Value;
         }
 

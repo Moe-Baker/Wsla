@@ -1,0 +1,149 @@
+{
+  "type": "object",
+  "properties": {
+    "Applications": {
+      "description": "List of All Applications To Register To Server",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "Name": {
+            "description": "Application Name, Used as Identifier by Clients",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Pools": {
+            "description": "Match Making Pools",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "Name": {
+                  "description": "Pool Name, Used as Identifier by Clients",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "Capacity": {
+                  "description": "Min \u0026 Max Capacity of Pool, Min Capacity Will be Allowed after a Certain Ticket Age Has Passed",
+                  "type": "object",
+                  "properties": {
+                    "Min": {
+                      "type": "integer"
+                    },
+                    "Max": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "Min",
+                    "Max"
+                  ]
+                },
+                "Backfill": {
+                  "description": "Enabling Backfill Will Allow The Room to Be Joined by Clients After it\u0027s Created, but it disables Balance \u0026 Rules for Late Clients",
+                  "type": "boolean"
+                },
+                "Duration": {
+                  "description": "Duration of Match Making Process, If no Match is Found During Duration, Then the Ticket will Fail",
+                  "type": "number"
+                },
+                "Balanced": {
+                  "description": "A Balanced Pool Will be Of a Size Divisible by 2, Disabled if Backfill is Enabled",
+                  "type": "boolean"
+                },
+                "Rules": {
+                  "description": "Rules for Match Making",
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "Property": {
+                        "description": "Property to Check on Tickets",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "Type": {
+                        "description": "Type of Operation to Perform",
+                        "enum": [
+                          "Equal",
+                          "NotEqual",
+                          "Difference"
+                        ]
+                      },
+                      "Invert": {
+                        "description": "Invert the Rule\u0027s Check, True = Rule Should Pass, False = Rule Should not Pass!",
+                        "type": "boolean"
+                      },
+                      "Value": {
+                        "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
+                        "type": [
+                          "string",
+                          "number"
+                        ]
+                      },
+                      "Relaxations": {
+                        "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "Delay": {
+                              "description": "Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone",
+                              "type": "number"
+                            },
+                            "Disable": {
+                              "description": "Set to True to Disable the Rule",
+                              "type": "boolean"
+                            },
+                            "Value": {
+                              "description": "Assign to Modify the Reference Value of the Rule",
+                              "type": [
+                                "null",
+                                "string",
+                                "number"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "Delay"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "Property",
+                      "Type"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "Name",
+                "Capacity",
+                "Duration"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

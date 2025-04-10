@@ -45,6 +45,10 @@ namespace Wsla.Server
 
         static async Task LoadConfig()
         {
+#if DEBUG
+            ServerConfigurationLoader.Schema.Write<ConfigurationProperty.Data>("Schema/Configuration.json");
+#endif
+
             NetworkLog.Info($"Loading Configuration Data");
 
             var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();

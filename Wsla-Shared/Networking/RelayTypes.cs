@@ -8,10 +8,9 @@ namespace Wsla
     public struct RelayServerInfo : IEquatable<RelayServerInfo>, IAutoNetworkSerialization
     {
         public ServerRegion Region;
-        public int ID;
         public IPAddress Address;
 
-        public override string ToString() => $"[{Region}-{ID}]";
+        public override string ToString() => $"[{Address}-{Region}]";
 
         public override bool Equals(object obj)
         {
@@ -20,24 +19,22 @@ namespace Wsla
 
             return false;
         }
-        public bool Equals(RelayServerInfo other) => (Region == other.Region) && (ID == other.ID);
+        public bool Equals(RelayServerInfo other) => (Region == other.Region) && (Address.Equals(other.Address));
 
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref Region);
-            context.Select(ref ID);
             context.Select(ref Address);
         }
 
-        public override int GetHashCode() => (Region, ID).GetHashCode();
+        public override int GetHashCode() => (Region, Address).GetHashCode();
 
         public static bool operator ==(RelayServerInfo left, RelayServerInfo right) => left.Equals(right);
         public static bool operator !=(RelayServerInfo left, RelayServerInfo right) => !left.Equals(right);
 
-        public RelayServerInfo(ServerRegion Region, int ID, IPAddress Address)
+        public RelayServerInfo(ServerRegion Region, IPAddress Address)
         {
             this.Region = Region;
-            this.ID = ID;
             this.Address = Address;
         }
     }

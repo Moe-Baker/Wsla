@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Wsla.Serialization;
+using System.ComponentModel;
 
 namespace Wsla.Server
 {
@@ -40,7 +41,6 @@ namespace Wsla.Server
             public ushort RealtimeFixedTime { get; init; }
 
             public ServerRegion Region { get; init; }
-            public int ID { get; init; }
 
             public IPAddress PublicAddress { get; init; }
 
@@ -55,32 +55,25 @@ namespace Wsla.Server
                 IPAddress PublicAddress;
                 //Resolve Public Address
                 {
-                    if (string.IsNullOrEmpty(data.PublicHostname))
+                    if (data.PublicHostname is null)
                         PublicAddress = await FetchPublicAddress();
                     else
                         PublicAddress = await ResolveHostName(data.PublicHostname);
                 }
 
-                int RealtimeThreadAllowance;
-                //Validate Realtime Thread Allowance
-                {
-                    if (data.RealtimeThreadAllowance is 0)
-                        RealtimeThreadAllowance = Environment.ProcessorCount;
-                    else
-                        RealtimeThreadAllowance = data.RealtimeThreadAllowance;
-                }
+                data.RealtimeThreadAllowance ??= Environment.ProcessorCount;
+                data.RealtimeFixedTime ??= Data.DefaultRealtimeFixedTime;
 
                 return new ConfigurationProperty()
                 {
                     CoordinatorAddress = CoordinatorAddress,
 
-                    ID = data.ID,
                     Region = data.Region,
 
                     PublicAddress = PublicAddress,
 
-                    RealtimeFixedTime = data.RealtimeFixedTime,
-                    RealtimeThreadAllowance = RealtimeThreadAllowance,
+                    RealtimeFixedTime = data.RealtimeFixedTime.Value,
+                    RealtimeThreadAllowance = data.RealtimeFixedTime.Value,
                 };
             }
 
@@ -105,28 +98,35 @@ namespace Wsla.Server
 
             public class Data
             {
-                [JsonPropertyName("Coordinator Hostname")]
+                [JsonRequired, JsonPropertyName("Coordinator Hostname")]
+                [Description("Allows Both Host Names & IPs")]
                 public string CoordinatorHostname;
 
                 [JsonPropertyName("Realtime Thread Allowance")]
-                public int RealtimeThreadAllowance;
+                [Description("Thread Count to Use for Realtime Rooms, Defaults to Assign System's Thread Count")]
+                public int? RealtimeThreadAllowance;
 
                 [JsonPropertyName("Realtime Fixed Time")]
-                public ushort RealtimeFixedTime;
+                [Description("The Timestep Duration for Realtime Rooms, Defaults to 10")]
+                public ushort? RealtimeFixedTime;
+                public const ushort DefaultRealtimeFixedTime = 10;
 
-                [JsonPropertyName("Region")]
+                [JsonRequired, JsonPropertyName("Region")]
+                [Description("The Region to List This Server in")]
                 public ServerRegion Region;
 
-                [JsonPropertyName("ID")]
-                public int ID;
-
                 [JsonPropertyName("Public Hostname")]
+                [Description($"The Public Host Name for This Machine, Defaults to Automatically Fetching The Machine's Public IPv4 Address")]
                 public string PublicHostname;
             }
         }
         static async Task LoadConfig()
         {
             NetworkLog.Info($"Loading Configuration Data");
+
+#if DEBUG
+            ServerConfigurationLoader.Schema.Write<ConfigurationProperty.Data>("Schema/Configuration.json");
+#endif
 
             var data = ServerConfigurationLoader.Load<ConfigurationProperty.Data>();
 
@@ -357,7 +357,7 @@ namespace Wsla.Server
 
             public static void RegisterRelay()
             {
-                var info = new RelayServerInfo(Configuration.Region, Configuration.ID, Configuration.PublicAddress);
+                var info = new RelayServerInfo(Configuration.Region, Configuration.PublicAddress);
 
                 var rooms = new List<RoomMatchmakerEntryData>();
                 ListRooms(rooms);

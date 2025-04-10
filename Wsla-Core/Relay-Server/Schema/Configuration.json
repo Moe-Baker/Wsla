@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "Coordinator Hostname": {
+      "description": "Allows Both Host Names \u0026 IPs",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "Realtime Thread Allowance": {
+      "description": "Thread Count to Use for Realtime Rooms, Defaults to Assign System\u0027s Thread Count",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "Realtime Fixed Time": {
+      "description": "The Timestep Duration for Realtime Rooms, Defaults to 10",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "Region": {
+      "description": "The Region to List This Server in",
+      "enum": [
+        "Asia",
+        "EU",
+        "USA"
+      ]
+    },
+    "Public Hostname": {
+      "description": "The Public Host Name for This Machine, Defaults to Automatically Fetching The Machine\u0027s Public IPv4 Address",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "Coordinator Hostname",
+    "Region"
+  ]
+}
