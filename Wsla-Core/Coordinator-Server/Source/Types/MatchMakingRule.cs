@@ -25,6 +25,7 @@ namespace Wsla.Server
         /// <summary>
         /// Duration of Time after which to disable the rule, infinity if rule is never disabled
         /// </summary>
+        [JsonIgnore]
         public float DisableDuration { get; protected set; }
 
         /// <summary>

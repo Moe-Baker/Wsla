@@ -122,9 +122,6 @@
                               ]
                             }
                           },
-                          "DisableDuration": {
-                            "type": "number"
-                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -169,9 +166,6 @@
                             "items": {
                               "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/0/properties/Relaxations/items"
                             }
-                          },
-                          "DisableDuration": {
-                            "type": "number"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",
@@ -225,9 +219,6 @@
                               ]
                             }
                           },
-                          "DisableDuration": {
-                            "type": "number"
-                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -265,9 +256,6 @@
                             "items": {
                               "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
                             }
-                          },
-                          "DisableDuration": {
-                            "type": "number"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",
@@ -330,9 +318,6 @@
                               ]
                             }
                           },
-                          "DisableDuration": {
-                            "type": "number"
-                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -375,9 +360,6 @@
                             "items": {
                               "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
                             }
-                          },
-                          "DisableDuration": {
-                            "type": "number"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",
