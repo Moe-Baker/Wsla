@@ -83,9 +83,6 @@ namespace Wsla.Server
         public abstract class GenericBase<TRelaxation> : MatchMakingRule
             where TRelaxation : MatchMakingRuleRelaxation
         {
-            [Description("Reference Value to Compare Against, Or Null Depending on Rule Type & Intended Usage")]
-            public MatchMakingValue Value;
-
             [Description("Relaxations to Apply Depending on Age of Oldest Ticket in Batch")]
             public TRelaxation[] Relaxations;
 
@@ -114,11 +111,12 @@ namespace Wsla.Server
             }
         }
 
+        [Description("Checks for Equality Against Reference")]
         public class EqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
         {
             public const string ID = "Equal";
 
-            [JsonRequired]
+            [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
@@ -131,11 +129,12 @@ namespace Wsla.Server
 
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
+        [Description("Checks for In-Equality Against Reference")]
         public class NotEqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
         {
             public const string ID = "NotEqual";
 
-            [JsonRequired]
+            [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
@@ -149,6 +148,7 @@ namespace Wsla.Server
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
 
+        [Description("Checks that All Tickets Agree on Parameter")]
         public class AgreeRule : GenericBase<MatchMakingRuleRelaxation>
         {
             public const string ID = "Agree";
@@ -163,6 +163,7 @@ namespace Wsla.Server
 
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
+        [Description("Checks that All Tickets Disagree on Parameter")]
         public class DisagreeRule : GenericBase<MatchMakingRuleRelaxation>
         {
             public const string ID = "Disagree";
@@ -184,11 +185,12 @@ namespace Wsla.Server
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
 
+        [Description("Checks that the Delta (difference) Between all the Tickets is Smaller than Or Equal to the Reference")]
         public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Number>
         {
             public const string ID = "Delta";
 
-            [JsonRequired]
+            [JsonRequired, Description("Reference Number to Compare Against")]
             public float Reference;
 
             protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
@@ -250,7 +252,7 @@ namespace Wsla.Server
         public class Value : MatchMakingRuleRelaxation
         {
             [Description("Assign to Modify the Reference Value of the Rule")]
-            public MatchMakingValue? Reference { get; set; }
+            public MatchMakingValue? Reference;
         }
         public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in MatchMakingValue input, out MatchMakingValue output)
             where T : Value
@@ -274,7 +276,7 @@ namespace Wsla.Server
         public class Number : MatchMakingRuleRelaxation
         {
             [Description("Assign to Modify the Reference Value of the Rule")]
-            public float? Reference { get; set; }
+            public float? Reference;
         }
         public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in float input, out float output)
             where T : Number

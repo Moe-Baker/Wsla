@@ -74,18 +74,13 @@
                     ],
                     "anyOf": [
                       {
+                        "description": "Checks for Equality Against Reference",
                         "properties": {
                           "Type": {
                             "const": "Equal"
                           },
                           "Reference": {
-                            "type": [
-                              "string",
-                              "number"
-                            ]
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
+                            "description": "Reference Value to Compare Against",
                             "type": [
                               "string",
                               "number"
@@ -140,18 +135,13 @@
                         ]
                       },
                       {
+                        "description": "Checks for In-Equality Against Reference",
                         "properties": {
                           "Type": {
                             "const": "NotEqual"
                           },
                           "Reference": {
-                            "type": [
-                              "string",
-                              "number"
-                            ]
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
+                            "description": "Reference Value to Compare Against",
                             "type": [
                               "string",
                               "number"
@@ -185,16 +175,10 @@
                         ]
                       },
                       {
+                        "description": "Checks that All Tickets Agree on Parameter",
                         "properties": {
                           "Type": {
                             "const": "Agree"
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
-                            "type": [
-                              "string",
-                              "number"
-                            ]
                           },
                           "Relaxations": {
                             "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
@@ -236,16 +220,10 @@
                         ]
                       },
                       {
+                        "description": "Checks that All Tickets Disagree on Parameter",
                         "properties": {
                           "Type": {
                             "const": "Disagree"
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
-                            "type": [
-                              "string",
-                              "number"
-                            ]
                           },
                           "Relaxations": {
                             "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
@@ -274,19 +252,14 @@
                         ]
                       },
                       {
+                        "description": "Checks that the Delta (difference) Between all the Tickets is Smaller than Or Equal to the Reference",
                         "properties": {
                           "Type": {
                             "const": "Delta"
                           },
                           "Reference": {
+                            "description": "Reference Number to Compare Against",
                             "type": "number"
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
-                            "type": [
-                              "string",
-                              "number"
-                            ]
                           },
                           "Relaxations": {
                             "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
@@ -343,13 +316,6 @@
                           "Require": {
                             "description": "Number of Odd Ones Required",
                             "type": "integer"
-                          },
-                          "Value": {
-                            "description": "Reference Value to Compare Against, Or Null Depending on Rule Type \u0026 Intended Usage",
-                            "type": [
-                              "string",
-                              "number"
-                            ]
                           },
                           "Relaxations": {
                             "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
