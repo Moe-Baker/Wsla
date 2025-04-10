@@ -93,4 +93,42 @@ namespace Wsla.Server
             return new Room(server, data.Application, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
         }
     }
+
+    public ref struct RoomQueryFilter
+    {
+        public ApplicationID Application { get; }
+
+        public Span<ServerRegion> Regions { get; }
+        public bool CheckRegion(ServerRegion target)
+        {
+            for (int i = 0; i < Regions.Length; i++)
+            {
+                if (Regions[i] == target)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public int Vacancy { get; }
+
+        public MatchMakingPool Pool { get; }
+
+        public RoomQueryFilter(ApplicationID Application, Span<ServerRegion> Regions, int Vacancy)
+        {
+            this.Application = Application;
+            this.Regions = Regions;
+            this.Vacancy = Vacancy;
+
+            Pool = default;
+        }
+        public RoomQueryFilter(MatchMakingPool Pool, Span<ServerRegion> Regions, int Vacancy)
+        {
+            Application = Pool.Application.ID;
+
+            this.Pool = Pool;
+            this.Regions = Regions;
+            this.Vacancy = Vacancy;
+        }
+    }
 }

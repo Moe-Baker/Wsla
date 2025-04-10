@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using System;
+using System.Text.Json.Serialization;
 
 namespace Wsla.Server
 {
@@ -45,8 +46,10 @@ namespace Wsla.Server
 
     public struct MatchMakingPoolData
     {
+        [JsonRequired]
         public string Name;
 
+        [JsonRequired]
         public CapacityData Capacity;
         public struct CapacityData
         {
@@ -56,7 +59,13 @@ namespace Wsla.Server
 
         public bool Backfill;
 
+        [JsonRequired]
         public float Duration;
+
+        /// <summary>
+        /// Pool is made to be split into two teams
+        /// </summary>
+        public bool Balanced;
 
         public MatchMakingRule[] Rules;
     }

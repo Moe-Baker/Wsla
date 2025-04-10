@@ -279,5 +279,8 @@ namespace Wsla
         public static implicit operator SparseArray<T>(T Item0) => SparseArray.From(Item0);
         public static implicit operator SparseArray<T>((T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2);
         public static implicit operator SparseArray<T>((T, T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2, tuple.Item3);
+
+        public static implicit operator ReadOnlySpan<T>(SparseArray<T> array) => array.GetUsedSpan();
+        public static implicit operator Span<T>(SparseArray<T> array) => array.GetUsedSpan();
     }
 }

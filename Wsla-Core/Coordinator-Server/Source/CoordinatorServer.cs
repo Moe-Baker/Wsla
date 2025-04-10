@@ -162,26 +162,13 @@ namespace Wsla.Server
                         return marker.Found;
                     }
                 }
-                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, int capacity, out Room room)
+
+                public static bool TryReserveRoom(ApplicationID application, Span<ServerRegion> regions, int vacancy, out Room room)
                 {
-                    lock (Servers)
-                    {
-                        for (int i = 0; i < Servers.Count; i++)
-                        {
-                            var server = Servers[i];
-
-                            if (regions.Contains(server.Region) is false)
-                                continue;
-
-                            if (server.TryReserveJoin(application, capacity, out room))
-                                return true;
-                        }
-                    }
-
-                    room = default;
-                    return false;
+                    var filter = new RoomQueryFilter(application, regions, vacancy);
+                    return TryReserveRoom(in filter, out room);
                 }
-                public static bool TryFindFreeRoom(ApplicationID application, SparseArray<ServerRegion> regions, MatchMakingPool pool, int capacity, out Room room)
+                public static bool TryReserveRoom(in RoomQueryFilter filter, out Room room)
                 {
                     lock (Servers)
                     {
@@ -189,10 +176,10 @@ namespace Wsla.Server
                         {
                             var server = Servers[i];
 
-                            if (regions.Contains(server.Region) is false)
+                            if (filter.CheckRegion(server.Region) is false)
                                 continue;
 
-                            if (server.TryReserveJoin(application, capacity, pool, out room))
+                            if (server.TryReserveRoom(in filter, out room))
                                 return true;
                         }
                     }
@@ -295,11 +282,16 @@ namespace Wsla.Server
                         return;
                     }
 
-                    if (pool.Backfill && Browser.TryFindFreeRoom(pool.Application.ID, request.Regions, 1, out var room))
+                    if (pool.Backfill)
                     {
-                        var info = room.GetConnectionInfo();
-                        Accept(peer, info);
-                        return;
+                        var query = new RoomQueryFilter(pool, request.Regions, 1);
+
+                        if (Browser.TryReserveRoom(in query, out var room))
+                        {
+                            var info = room.GetConnectionInfo();
+                            Accept(peer, info);
+                            return;
+                        }
                     }
 
                     var ticket = new MatchMakingTicket(peer, pool, request);
@@ -394,7 +386,7 @@ namespace Wsla.Server
 
                     //Try Find Existing Room
                     {
-                        if (Browser.TryFindFreeRoom(applicationID, request.Regions, 1, out var room))
+                        if (Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
                             return room.GetConnectionInfo();
                     }
 

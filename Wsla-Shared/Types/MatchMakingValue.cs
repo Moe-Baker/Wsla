@@ -13,6 +13,8 @@ namespace Wsla
             Null, Number, Text
         }
 
+        public bool IsNull => Type is ValueType.Null;
+
         public float Number;
         public FixedString<FS20> Text;
 

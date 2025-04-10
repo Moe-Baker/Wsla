@@ -96,58 +96,28 @@ namespace Wsla.Server
             }
         }
 
-        public bool TryReserveJoin(ApplicationID application, int capacity, out Room target)
+        public bool TryReserveRoom(in RoomQueryFilter filter, out Room target)
         {
             lock (Rooms)
             {
                 foreach (var (id, room) in Rooms)
                 {
+                    if (room.Application != filter.Application)
+                        continue;
+
+                    if (room.Pool != filter.Pool)
+                        continue;
+
                     if (room.Privacy is RoomPrivacy.Private)
                         continue;
 
-                    if (room.Application != application)
+                    if (room.CheckVacancy() < filter.Vacancy)
                         continue;
 
-                    var vacancy = room.CheckVacancy();
+                    room.MakeJoinReservation(filter.Vacancy);
 
-                    if (vacancy >= capacity)
-                    {
-                        room.MakeJoinReservation(capacity);
-
-                        target = room;
-                        return true;
-                    }
-                }
-            }
-
-            target = default;
-            return false;
-        }
-
-        public bool TryReserveJoin(ApplicationID application, int capacity, MatchMakingPool pool, out Room target)
-        {
-            lock (Rooms)
-            {
-                foreach (var (id, room) in Rooms)
-                {
-                    if (room.Privacy is RoomPrivacy.Private)
-                        continue;
-
-                    if (room.Application != application)
-                        continue;
-
-                    if (room.Pool != pool)
-                        continue;
-
-                    var vacancy = room.CheckVacancy();
-
-                    if (vacancy >= capacity)
-                    {
-                        room.MakeJoinReservation(capacity);
-
-                        target = room;
-                        return true;
-                    }
+                    target = room;
+                    return true;
                 }
             }
 

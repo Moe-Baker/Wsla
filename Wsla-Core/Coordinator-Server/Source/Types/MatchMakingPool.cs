@@ -64,6 +64,8 @@ namespace Wsla.Server
 
                     foreach (var batch in dispatcher.Batches)
                     {
+                        batch.EnforceBalance();
+
                         if (IsValid(batch) is false)
                             continue;
 
@@ -213,6 +215,19 @@ namespace Wsla.Server
             Entries.Add(entry);
             CombineRegionList(ticket.Regions);
             return true;
+        }
+
+        public void EnforceBalance()
+        {
+            if (Pool.Configuration.Balanced is false)
+                return;
+
+            if (Pool.Configuration.Backfill is true)
+                return;
+
+            var imbalance = Entries.Count % 2;
+
+            Entries.RemoveRange(Entries.Count - imbalance, imbalance);
         }
 
         bool CheckAllowRegion(SparseArray<ServerRegion> input)
