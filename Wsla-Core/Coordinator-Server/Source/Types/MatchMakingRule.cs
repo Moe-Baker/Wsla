@@ -4,148 +4,69 @@ using System.Text.Json.Serialization;
 
 namespace Wsla.Server
 {
-    public struct MatchMakingRule
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "Type")]
+    //Equality
+    [JsonDerivedType(typeof(EqualRule), EqualRule.ID)]
+    [JsonDerivedType(typeof(NotEqualRule), NotEqualRule.ID)]
+    //Agreement
+    [JsonDerivedType(typeof(AgreeRule), AgreeRule.ID)]
+    [JsonDerivedType(typeof(DisagreeRule), DisagreeRule.ID)]
+    //Misc
+    [JsonDerivedType(typeof(DeltaRule), DeltaRule.ID)]
+    [JsonDerivedType(typeof(OddOneIn), OddOneIn.ID)]
+    public abstract partial class MatchMakingRule : IJsonOnDeserialized
     {
         [JsonRequired, Description("Property to Check on Tickets")]
         public string Property;
 
-        [Description("Type of Operation to Perform")]
-        [JsonRequired, JsonConverter(typeof(JsonStringEnumConverter<OperationType>))]
-        public OperationType Type;
-        public enum OperationType
-        {
-            Equal, NotEqual, Difference
-        }
-
         [Description("Invert the Rule's Check, True = Rule Should Pass, False = Rule Should not Pass!")]
         public bool Invert;
 
-        [Description("Reference Value to Compare Against, Or Null Depending on Rule Type & Intended Usage")]
-        public MatchMakingValue Value;
-
-        [Description("Relaxations to Apply Depending on Age of Oldest Ticket in Batch")]
-        public Relaxation[] Relaxations;
-        public struct Relaxation
-        {
-            [JsonRequired, Description("Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone")]
-            public float Delay;
-
-            [Description("Set to True to Disable the Rule")]
-            public bool Disable;
-
-            [Description("Assign to Modify the Reference Value of the Rule")]
-            public MatchMakingValue? Value;
-        }
+        /// <summary>
+        /// Duration of Time after which to disable the rule, infinity if rule is never disabled
+        /// </summary>
+        public float DisableDuration { get; protected set; }
 
         /// <summary>
-        /// Calculates Relaxation Value Modifications
+        /// Check if the rule can be disabled after this timespan
         /// </summary>
-        /// <returns>true if rule is still enabled, false if disabled</returns>
-        public bool CalculateRelaxation(MatchMakingPoolBatch batch, out MatchMakingValue target)
+        /// <param name="age"></param>
+        /// <returns>true if rule disabled, false if not</returns>
+        public bool CheckDisable(TimeSpan age) => age.TotalSeconds >= DisableDuration;
+
+        public virtual void OnDeserialized() { }
+
+        public bool TryReadParameter(MatchMakingTicket ticket, out MatchMakingValue value)
+        {
+            return ticket.Parameters.TryGet(Property, out value);
+        }
+
+        public virtual bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
         {
             var age = batch.GetOldestTicket().CalculateAge();
 
-            target = Value;
-
-            if (Relaxations is null)
+            if (CheckDisable(age))
                 return true;
 
-            for (int i = 0; i < Relaxations.Length; i++)
-            {
-                ref var entry = ref Relaxations[i];
+            if (TryReadParameter(ticket, out var remote) is false)
+                return false;
 
-                if (entry.Delay > age.TotalSeconds)
-                    continue;
-
-                if (entry.Value.HasValue)
-                    target = entry.Value.Value;
-
-                if (entry.Disable)
-                    return false;
-            }
-
-            return true;
+            return CheckJoin(batch, ticket, remote);
         }
+        protected abstract bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote);
 
-        public bool Validate(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
+        public virtual bool ValidateDispatch(MatchMakingPoolBatch batch)
         {
-            //Get relaxed value
-            var enabled = CalculateRelaxation(batch, out var local);
-            if (enabled is false)
+            var age = batch.GetOldestTicket().CalculateAge();
+
+            if (CheckDisable(age))
                 return true;
 
-            if (ticket.Parameters.TryGet(Property, out var remote) is false)
-                return false;
-
-            var response = Type switch
-            {
-                OperationType.Equal => ValidateEqual(batch, ticket, local, remote),
-                OperationType.NotEqual => ValidateNotEqual(batch, ticket, local, remote),
-                OperationType.Difference => ValidateDifference(batch, ticket, local, remote),
-
-                _ => throw new NotImplementedException(),
-            };
-
-            if (Invert)
-                return response is false;
-            else
-                return response is true;
+            return CheckDispatch(batch);
         }
-        public bool ValidateEqual(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue local, MatchMakingValue remote)
-        {
-            //If local value is null, comparison is against all tickets
-            //But we compare only against a single ticket since they are all equal
-            if (local.IsNull && batch.GetOldestTicket().Parameters.TryGet(Property, out local) is false)
-                return false;
+        protected abstract bool CheckDispatch(MatchMakingPoolBatch batch);
 
-            return remote == local;
-        }
-        public bool ValidateNotEqual(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue local, MatchMakingValue remote)
-        {
-            if (local.IsNull) //Compare All Tickets
-            {
-                foreach (var entry in batch.Entries)
-                {
-                    if (entry.Ticket.Parameters.TryGet(Property, out local) is false)
-                        return false;
-
-                    if (remote == local)
-                        return false;
-                }
-
-                return true;
-            }
-            else //Compare to Local
-            {
-                return remote != local;
-            }
-        }
-        public bool ValidateDifference(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue local, MatchMakingValue remote)
-        {
-            if (ValidateNumber(in local) is false)
-                return false;
-
-            if (ValidateNumber(in remote) is false)
-                return false;
-
-            foreach (var entry in batch.Entries)
-            {
-                if (entry.Ticket.Parameters.TryGet(Property, out var value) is false)
-                    return false;
-
-                if (ValidateNumber(in value) is false)
-                    return false;
-
-                var difference = MathF.Abs(remote.Number - value.Number);
-
-                if (difference > (local.Number + MatchMakingValue.Epsilon))
-                    return false;
-            }
-
-            return true;
-        }
-
-        bool ValidateNumber(in MatchMakingValue value)
+        public static bool ValidateNumber(in MatchMakingValue value)
         {
             if (value.Type is not MatchMakingValue.ValueType.Number)
             {
@@ -154,6 +75,223 @@ namespace Wsla.Server
             }
 
             return true;
+        }
+    }
+    partial class MatchMakingRule
+    {
+        public abstract class GenericBase<TRelaxation> : MatchMakingRule
+            where TRelaxation : MatchMakingRuleRelaxation
+        {
+            [Description("Reference Value to Compare Against, Or Null Depending on Rule Type & Intended Usage")]
+            public MatchMakingValue Value;
+
+            [Description("Relaxations to Apply Depending on Age of Oldest Ticket in Batch")]
+            public TRelaxation[] Relaxations;
+
+            public override void OnDeserialized()
+            {
+                base.OnDeserialized();
+
+                //Sort Relaxations by Delay
+                Array.Sort(Relaxations, (x, y) => x.Delay.CompareTo(y.Delay));
+
+                //Calculate Disable Duration
+                {
+                    DisableDuration = float.PositiveInfinity;
+
+                    for (int i = Relaxations.Length - 1; i >= 0; i--)
+                    {
+                        ref var entry = ref Relaxations[i];
+
+                        if (entry.Disable)
+                        {
+                            DisableDuration = entry.Delay;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        public class EqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
+        {
+            public const string ID = "Equal";
+
+            [JsonRequired]
+            public MatchMakingValue Reference;
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                var age = batch.GetOldestTicket().CalculateAge();
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, Reference, out var local);
+
+                return remote == local;
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        }
+        public class NotEqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
+        {
+            public const string ID = "NotEqual";
+
+            [JsonRequired]
+            public MatchMakingValue Reference;
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                var age = batch.GetOldestTicket().CalculateAge();
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, Reference, out var local);
+
+                return remote != local;
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        }
+
+        public class AgreeRule : GenericBase<MatchMakingRuleRelaxation>
+        {
+            public const string ID = "Agree";
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                if (TryReadParameter(batch.GetOldestTicket(), out var local) is false)
+                    return false;
+
+                return remote == local;
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        }
+        public class DisagreeRule : GenericBase<MatchMakingRuleRelaxation>
+        {
+            public const string ID = "Disagree";
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                foreach (var entry in batch.Entries)
+                {
+                    if (TryReadParameter(entry.Ticket, out var local) is false)
+                        return false;
+
+                    if (remote == local)
+                        return false;
+                }
+
+                return true;
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        }
+
+        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Number>
+        {
+            public const string ID = "Delta";
+
+            [JsonRequired]
+            public float Reference;
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                if (ValidateNumber(remote) is false)
+                    return false;
+
+                var age = batch.GetOldestTicket().CalculateAge();
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, this.Reference, out var Reference);
+
+                foreach (var entry in batch.Entries)
+                {
+                    if (TryReadParameter(entry.Ticket, out var local) is false || ValidateNumber(local) is false)
+                        return false;
+
+                    var delta = MathF.Abs(remote.Number - local.Number);
+
+                    if (delta > (Reference + MatchMakingValue.Epsilon))
+                        return false;
+                }
+
+                return true;
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        }
+
+        public class OddOneIn : GenericBase<MatchMakingRuleRelaxation>
+        {
+            public const string ID = "OddOneIn";
+
+            [JsonRequired, Description("Number of Odd Ones Required")]
+            public int Require;
+
+            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                throw new NotImplementedException();
+            }
+
+            protected override bool CheckDispatch(MatchMakingPoolBatch batch)
+            {
+                throw new NotImplementedException();
+            }
+        }
+    }
+
+    public abstract partial class MatchMakingRuleRelaxation
+    {
+        [JsonRequired, Description("Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone")]
+        public float Delay;
+
+        [Description("Set to True to Disable the Rule")]
+        public bool Disable;
+    }
+    partial class MatchMakingRuleRelaxation
+    {
+        public class Empty : MatchMakingRuleRelaxation { }
+
+        public class Value : MatchMakingRuleRelaxation
+        {
+            [Description("Assign to Modify the Reference Value of the Rule")]
+            public MatchMakingValue? Reference { get; set; }
+        }
+        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in MatchMakingValue input, out MatchMakingValue output)
+            where T : Value
+        {
+            output = input;
+
+            ref var relaxations = ref rule.Relaxations;
+
+            for (int i = 0; i < relaxations.Length; i++)
+            {
+                ref var entry = ref relaxations[i];
+
+                if (entry.Delay > age.TotalSeconds)
+                    return;
+
+                if (entry.Reference.HasValue)
+                    output = entry.Reference.Value;
+            }
+        }
+
+        public class Number : MatchMakingRuleRelaxation
+        {
+            [Description("Assign to Modify the Reference Value of the Rule")]
+            public float? Reference { get; set; }
+        }
+        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in float input, out float output)
+            where T : Number
+        {
+            output = input;
+
+            ref var relaxations = ref rule.Relaxations;
+
+            for (int i = 0; i < relaxations.Length; i++)
+            {
+                ref var entry = ref relaxations[i];
+
+                if (entry.Delay > age.TotalSeconds)
+                    return;
+
+                if (entry.Reference.HasValue)
+                    output = entry.Reference.Value;
+            }
         }
     }
 }

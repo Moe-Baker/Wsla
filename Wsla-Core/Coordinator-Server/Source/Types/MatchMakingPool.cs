@@ -66,7 +66,7 @@ namespace Wsla.Server
                     {
                         batch.EnforceBalance();
 
-                        if (IsValid(batch) is false)
+                        if (ValidateDispatch(batch) is false)
                             continue;
 
                         foreach (var entry in batch.Entries)
@@ -80,8 +80,20 @@ namespace Wsla.Server
             }
         }
 
-        bool IsValid(MatchMakingPoolBatch batch)
+        public bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
         {
+            if (Configuration.Rules is null)
+                return true;
+
+            foreach (var rule in Configuration.Rules)
+                if (rule.ValidateJoin(batch, ticket) is false)
+                    return false;
+
+            return true;
+        }
+        public bool ValidateDispatch(MatchMakingPoolBatch batch)
+        {
+            //Validate Min Count
             if (batch.Count < Configuration.Capacity.Min)
                 return false;
 
@@ -97,17 +109,13 @@ namespace Wsla.Server
                     return false;
             }
 
-            return true;
-        }
-
-        public bool ValidateRules(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
-        {
-            if (Configuration.Rules is null)
-                return true;
-
-            foreach (var rule in Configuration.Rules)
-                if (rule.Validate(batch, ticket) is false)
-                    return false;
+            //Validate Dispatch Rules
+            if (Configuration.Rules is not null)
+            {
+                foreach (var rule in Configuration.Rules)
+                    if (rule.ValidateDispatch(batch) is false)
+                        return false;
+            }
 
             return true;
         }
@@ -209,7 +217,7 @@ namespace Wsla.Server
             if (CheckAllowRegion(ticket.Regions) is false)
                 return false;
 
-            if (Pool.ValidateRules(this, ticket) is false)
+            if (Pool.ValidateJoin(this, ticket) is false)
                 return false;
 
             Entries.Add(entry);

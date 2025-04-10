@@ -14,28 +14,28 @@
             "Max": 4
           },
           "Duration": 10,
-          "Backfill": true,
+          "Backfill": false,
           "Balanced": true,
           "Rules":
           [
             {
+              "Type": "Delta",
               "Property": "Level",
-              "Type": "Difference",
-              "Value": 10,
+              "Reference": 10,
               "Invert": false,
               "Relaxations":
               [
                 {
                   "Delay": 2,
-                  "Value": 20
+                  "Reference": 20
                 },
                 {
                   "Delay": 4,
-                  "Value": 40
+                  "Reference": 40
                 },
                 {
                   "Delay": 6,
-                  "Value": 60
+                  "Reference": 60
                 },
                 {
                   "Delay": 800,
