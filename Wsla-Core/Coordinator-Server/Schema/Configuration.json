@@ -324,7 +324,27 @@
                               "null"
                             ],
                             "items": {
-                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
+                              "type": "object",
+                              "properties": {
+                                "Reference": {
+                                  "description": "Assign to Modify the Reference Value of the Rule",
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ]
+                                },
+                                "Delay": {
+                                  "description": "Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone",
+                                  "type": "number"
+                                },
+                                "Disable": {
+                                  "description": "Set to True to Disable the Rule",
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "Delay"
+                              ]
                             }
                           },
                           "Property": {

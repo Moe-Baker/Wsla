@@ -186,7 +186,7 @@ namespace Wsla.Server
         }
 
         [Description("Checks that the Delta (difference) Between all the Tickets is Smaller than Or Equal to the Reference")]
-        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Number>
+        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Float>
         {
             public const string ID = "Delta";
 
@@ -218,7 +218,7 @@ namespace Wsla.Server
             protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
 
-        public class OddOneIn : GenericBase<MatchMakingRuleRelaxation>
+        public class OddOneIn : GenericBase<MatchMakingRuleRelaxation.Int>
         {
             public const string ID = "OddOneIn";
 
@@ -273,13 +273,37 @@ namespace Wsla.Server
             }
         }
 
-        public class Number : MatchMakingRuleRelaxation
+        public class Float : MatchMakingRuleRelaxation
         {
             [Description("Assign to Modify the Reference Value of the Rule")]
             public float? Reference;
         }
         public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in float input, out float output)
-            where T : Number
+            where T : Float
+        {
+            output = input;
+
+            ref var relaxations = ref rule.Relaxations;
+
+            for (int i = 0; i < relaxations.Length; i++)
+            {
+                ref var entry = ref relaxations[i];
+
+                if (entry.Delay > age.TotalSeconds)
+                    return;
+
+                if (entry.Reference.HasValue)
+                    output = entry.Reference.Value;
+            }
+        }
+
+        public class Int : MatchMakingRuleRelaxation
+        {
+            [Description("Assign to Modify the Reference Value of the Rule")]
+            public int? Reference;
+        }
+        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in int input, out int output)
+            where T : Int
         {
             output = input;
 
