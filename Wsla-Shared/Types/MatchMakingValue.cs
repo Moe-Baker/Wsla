@@ -49,7 +49,7 @@ namespace Wsla
         }
         public MatchMakingValue(FixedString<FS20> Text)
         {
-            Type = ValueType.Number;
+            Type = ValueType.Text;
             this.Text = Text;
 
             Number = default;
