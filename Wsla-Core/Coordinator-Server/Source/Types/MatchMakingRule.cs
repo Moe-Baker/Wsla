@@ -8,19 +8,27 @@ namespace Wsla.Server
     //Equality
     [JsonDerivedType(typeof(EqualRule), EqualRule.ID)]
     [JsonDerivedType(typeof(NotEqualRule), NotEqualRule.ID)]
+    //Comparison
+    [JsonDerivedType(typeof(BiggerRule), BiggerRule.ID)]
+    [JsonDerivedType(typeof(BiggerOrEqualRule), BiggerOrEqualRule.ID)]
+    [JsonDerivedType(typeof(SmallerRule), SmallerRule.ID)]
+    [JsonDerivedType(typeof(SmallerOrEqualRule), SmallerOrEqualRule.ID)]
     //Agreement
     [JsonDerivedType(typeof(AgreeRule), AgreeRule.ID)]
     [JsonDerivedType(typeof(DisagreeRule), DisagreeRule.ID)]
     //Misc
     [JsonDerivedType(typeof(DeltaRule), DeltaRule.ID)]
     [JsonDerivedType(typeof(OddOneIn), OddOneIn.ID)]
-    public abstract partial class MatchMakingRule : IJsonOnDeserialized
+    public abstract partial class MatchMakingRule : IMatchMakingRule, IJsonOnDeserialized
     {
+        [Description("Assign to Disable Rule Without Removing It")]
+        public bool Disable { get; set; }
+
         [JsonRequired, Description("Property to Check on Tickets")]
-        public string Property;
+        public string Property { get; set; }
 
         [Description("Invert the Rule's Check, True = Rule Should Pass, False = Rule Should not Pass!")]
-        public bool Invert;
+        public bool Invert { get; set; }
 
         /// <summary>
         /// Duration of Time after which to disable the rule, infinity if rule is never disabled
@@ -37,50 +45,143 @@ namespace Wsla.Server
 
         public virtual void OnDeserialized() { }
 
-        public bool TryReadParameter(MatchMakingTicket ticket, out MatchMakingValue value)
+        public bool TryReadParameter(MatchMakingTicket ticket, out MatchMakingValue value) => TryReadParameter(ticket.Parameters, out value);
+        public bool TryReadParameter(in MatchMakingParameters parameters, out MatchMakingValue value) => parameters.TryGet(Property, out value);
+
+        public static class Validator
         {
-            return ticket.Parameters.TryGet(Property, out value);
-        }
-
-        public virtual bool ValidateParameters(in MatchMakingParameters parameters)
-        {
-            if (parameters.TryGet(Property, out var value) is false)
-                return false;
-
-            return ValidateValue(in value);
-        }
-        public virtual bool ValidateValue(in MatchMakingValue value) => true;
-
-        public virtual bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
-        {
-            if (CheckDisable(batch.Age))
-                return true;
-
-            if (TryReadParameter(ticket, out var remote) is false)
-                return false;
-
-            return CheckJoin(batch, ticket, remote);
-        }
-        protected abstract bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote);
-
-        public virtual bool ValidateDispatch(MatchMakingPoolBatch batch)
-        {
-            if (CheckDisable(batch.Age))
-                return true;
-
-            return CheckDispatch(batch);
-        }
-        protected abstract bool CheckDispatch(MatchMakingPoolBatch batch);
-
-        public static bool ValidateNumber(in MatchMakingValue value)
-        {
-            if (value.Type is not MatchMakingValue.ValueType.Number)
+            public static bool ValidateNumber(in MatchMakingValue value)
             {
-                NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
-                return false;
+                if (value.Type is not MatchMakingValue.ValueType.Number)
+                {
+                    NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
+                    return false;
+                }
+
+                return true;
             }
 
-            return true;
+            public static bool ValidateInput(MatchMakingPool pool, in MatchMakingParameters parameters)
+            {
+                foreach (var rule in pool.Configuration.IterateRules())
+                    if (ValidateInput(rule, in parameters) is false)
+                        return false;
+
+                return true;
+            }
+            public static bool ValidateInput(IMatchMakingRule rule, in MatchMakingParameters parameters)
+            {
+                if (rule.TryReadParameter(in parameters, out var value) is false)
+                    return false;
+
+                if (rule is not IInputCheck contract)
+                    return true;
+
+                return contract.CheckInput(in value);
+            }
+
+            public static bool ValidateCreate(MatchMakingTicket ticket)
+            {
+                foreach (var rule in ticket.Pool.Configuration.IterateRules<ICreateCheck>())
+                    if (ValidateCreate(rule, ticket) is false)
+                        return false;
+
+                return true;
+            }
+            public static bool ValidateCreate(ICreateCheck rule, MatchMakingTicket ticket)
+            {
+                var age = ticket.CalculateAge();
+                if (rule.CheckDisable(age))
+                    return true;
+
+                if (rule.TryReadParameter(ticket, out var remote) is false)
+                    return false;
+
+                return rule.CheckCreate(ticket, age, remote);
+            }
+
+            public static bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
+            {
+                foreach (var rule in batch.Pool.Configuration.IterateRules<IJoinCheck>())
+                    if (ValidateJoin(rule, batch, ticket) is false)
+                        return false;
+
+                return true;
+            }
+            public static bool ValidateJoin(IJoinCheck rule, MatchMakingPoolBatch batch, MatchMakingTicket ticket)
+            {
+                if (rule.CheckDisable(batch.Age))
+                    return true;
+
+                if (rule.TryReadParameter(ticket, out var remote) is false)
+                    return false;
+
+                return rule.CheckJoin(batch, ticket, remote);
+            }
+
+            public static bool ValidateDispatch(MatchMakingPoolBatch batch)
+            {
+                foreach (var rule in batch.Pool.Configuration.IterateRules<IDispatchCheck>())
+                    if (ValidateDispatch(rule, batch) is false)
+                        return false;
+
+                return true;
+            }
+            public static bool ValidateDispatch(IDispatchCheck rule, MatchMakingPoolBatch batch)
+            {
+                if (rule.CheckDisable(batch.Age))
+                    return true;
+
+                return rule.CheckDispatch(batch);
+            }
+        }
+
+        /// <summary>
+        /// Validate Match Making Ticket Input
+        /// </summary>
+        public interface IInputCheck : IMatchMakingRule
+        {
+            /// <summary>
+            /// <inheritdoc cref="IInputCheck"/>
+            /// </summary>
+            /// <returns>True if valid operation</returns>
+            bool CheckInput(in MatchMakingValue value);
+        }
+
+        /// <summary>
+        /// Validate Batch Creation for this Single Ticket
+        /// </summary>
+        public interface ICreateCheck : IMatchMakingRule
+        {
+            /// <summary>
+            /// <inheritdoc cref="ICreateCheck"/>
+            /// </summary>
+            /// <returns>True if valid operation</returns>
+            bool CheckCreate(MatchMakingTicket ticket, TimeSpan age, MatchMakingValue remote);
+        }
+
+        /// <summary>
+        /// Validate Ticket Ability Join To Batch
+        /// </summary>
+        public interface IJoinCheck : IMatchMakingRule
+        {
+            /// <summary>
+            /// <inheritdoc cref="IJoinCheck"/>
+            /// </summary>
+            /// <returns>True if valid operation</returns>
+            bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote);
+        }
+
+        /// <summary>
+        /// Validate Batch Dispatch after All Tickets are Finished
+        /// </summary>
+        public interface IDispatchCheck : IMatchMakingRule
+        {
+            /// <summary>
+            /// <inheritdoc cref="IDispatchCheck"/>
+            /// </summary>
+            /// <returns>True if valid operation</returns>
+            bool CheckDispatch(MatchMakingPoolBatch batch);
         }
     }
     partial class MatchMakingRule
@@ -119,15 +220,16 @@ namespace Wsla.Server
             }
         }
 
+        #region Equality
         [Description("Checks for Equality Against Reference")]
-        public class EqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
+        public class EqualRule : GenericBase<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
         {
             public const string ID = "Equal";
 
             [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
-            public override bool ValidateValue(in MatchMakingValue value)
+            public bool CheckInput(in MatchMakingValue value)
             {
                 if (Reference.Type != value.Type)
                 {
@@ -135,27 +237,25 @@ namespace Wsla.Server
                     return false;
                 }
 
-                return base.ValidateValue(value);
+                return true;
             }
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, Reference, out var local);
 
                 return remote == local;
             }
-
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
         [Description("Checks for In-Equality Against Reference")]
-        public class NotEqualRule : GenericBase<MatchMakingRuleRelaxation.Value>
+        public class NotEqualRule : GenericBase<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
         {
             public const string ID = "NotEqual";
 
             [JsonRequired, Description("Reference Value to Compare Against")]
             public MatchMakingValue Reference;
 
-            public override bool ValidateValue(in MatchMakingValue value)
+            public bool CheckInput(in MatchMakingValue value)
             {
                 if (Reference.Type != value.Type)
                 {
@@ -163,25 +263,25 @@ namespace Wsla.Server
                     return false;
                 }
 
-                return base.ValidateValue(value);
+                return true;
             }
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, Reference, out var local);
 
                 return remote != local;
             }
-
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
+        #endregion
 
+        #region Agreement
         [Description("Checks that All Tickets Agree on Parameter")]
-        public class AgreeRule : GenericBase<MatchMakingRuleRelaxation>
+        public class AgreeRule : GenericBase<MatchMakingRuleRelaxation>, IJoinCheck
         {
             public const string ID = "Agree";
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 if (batch.Count is 0)
                     return true;
@@ -191,15 +291,13 @@ namespace Wsla.Server
 
                 return remote == local;
             }
-
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
         [Description("Checks that All Tickets Disagree on Parameter")]
-        public class DisagreeRule : GenericBase<MatchMakingRuleRelaxation>
+        public class DisagreeRule : GenericBase<MatchMakingRuleRelaxation>, IJoinCheck
         {
             public const string ID = "Disagree";
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 if (batch.Count is 0)
                     return true;
@@ -215,19 +313,100 @@ namespace Wsla.Server
 
                 return true;
             }
+        }
+        #endregion
 
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
+        #region Comparison
+        public abstract class ComparisonRule : GenericBase<MatchMakingRuleRelaxation.Float>, ICreateCheck, IInputCheck, IJoinCheck
+        {
+            [Description("Reference Value to Compare Against")]
+            public float Reference;
+
+            public abstract bool Compare(float remote, float local);
+
+            public bool CheckCreate(MatchMakingTicket ticket, TimeSpan age, MatchMakingValue remote)
+            {
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, age, this.Reference, out var Reference);
+                return Compare(remote.Number, Reference);
+            }
+            public bool CheckInput(in MatchMakingValue value)
+            {
+                if (value.Type is not MatchMakingValue.ValueType.Number)
+                {
+                    NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
+                    return false;
+                }
+
+                return true;
+            }
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            {
+                MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, this.Reference, out var Reference);
+
+                return Compare(remote.Number, Reference);
+            }
         }
 
+        [Description("Checks that the Remote (Incoming) Value is Bigger than the Reference Value")]
+        public class BiggerRule : ComparisonRule
+        {
+            public const string ID = "Bigger";
+
+            public override bool Compare(float remote, float local) => remote > local;
+        }
+
+        [Description("Checks that the Remote (Incoming) Value is Bigger than or Equal the Reference Value")]
+        public class BiggerOrEqualRule : ComparisonRule
+        {
+            public const string ID = "BiggerOrEqual";
+
+            public override bool Compare(float remote, float local)
+            {
+                if (remote >= local)
+                    return true;
+
+                if (MatchMakingValue.CompareNumbers(remote, local))
+                    return true;
+
+                return false;
+            }
+        }
+
+        [Description("Checks that the Remote (Incoming) Value is Smaller than the Reference Value")]
+        public class SmallerRule : ComparisonRule
+        {
+            public const string ID = "Smaller";
+
+            public override bool Compare(float remote, float local) => remote < local;
+        }
+
+        [Description("Checks that the Remote (Incoming) Value is Smaller than or Equal the Reference Value")]
+        public class SmallerOrEqualRule : ComparisonRule
+        {
+            public const string ID = "SmallerOrEqual";
+
+            public override bool Compare(float remote, float local)
+            {
+                if (remote <= local)
+                    return true;
+
+                if (MatchMakingValue.CompareNumbers(remote, local))
+                    return true;
+
+                return false;
+            }
+        }
+        #endregion
+
         [Description("Checks that the Delta (difference) Between all the Tickets is Smaller than Or Equal to the Reference")]
-        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Float>
+        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Float>, IInputCheck, IJoinCheck
         {
             public const string ID = "Delta";
 
             [JsonRequired, Description("Reference Number to Compare Against")]
             public float Reference;
 
-            public override bool ValidateValue(in MatchMakingValue value)
+            public bool CheckInput(in MatchMakingValue value)
             {
                 if (value.Type is not MatchMakingValue.ValueType.Number)
                 {
@@ -235,16 +414,16 @@ namespace Wsla.Server
                     return false;
                 }
 
-                return base.ValidateValue(value);
+                return true;
             }
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 MatchMakingRuleRelaxation.CalculateRelaxation(this, batch.Age, this.Reference, out var Reference);
 
                 foreach (var entry in batch.Entries)
                 {
-                    if (TryReadParameter(entry.Ticket, out var local) is false || ValidateNumber(local) is false)
+                    if (TryReadParameter(entry.Ticket, out var local) is false || Validator.ValidateNumber(local) is false)
                         return false;
 
                     var delta = MathF.Abs(remote.Number - local.Number);
@@ -255,12 +434,10 @@ namespace Wsla.Server
 
                 return true;
             }
-
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch) => true;
         }
 
         [Description("Checks for a Required Count of OddOnes in Batch")]
-        public class OddOneIn : GenericBase<OddOneIn.Relaxation>
+        public class OddOneIn : GenericBase<OddOneIn.Relaxation>, IInputCheck, IJoinCheck, IDispatchCheck
         {
             public const string ID = "OddOneIn";
 
@@ -278,7 +455,7 @@ namespace Wsla.Server
             [JsonRequired, Description("Number of Odd Ones Required")]
             public int Require;
 
-            public override bool ValidateValue(in MatchMakingValue value)
+            public bool CheckInput(in MatchMakingValue value)
             {
                 if (value != Reference.Ordinary && value != Reference.OddOne)
                 {
@@ -286,10 +463,10 @@ namespace Wsla.Server
                     return false;
                 }
 
-                return base.ValidateValue(value);
+                return true;
             }
 
-            protected override bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
+            public bool CheckJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket, MatchMakingValue remote)
             {
                 var counter = new Counter();
 
@@ -315,7 +492,7 @@ namespace Wsla.Server
                 return true;
             }
 
-            protected override bool CheckDispatch(MatchMakingPoolBatch batch)
+            public bool CheckDispatch(MatchMakingPoolBatch batch)
             {
                 var counter = new Counter();
 
@@ -382,6 +559,20 @@ namespace Wsla.Server
                 }
             }
         }
+    }
+
+    public interface IMatchMakingRule
+    {
+        bool Disable { get; }
+
+        string Property { get; }
+
+        bool Invert { get; }
+
+        bool CheckDisable(TimeSpan age);
+
+        bool TryReadParameter(in MatchMakingParameters parameters, out MatchMakingValue value);
+        bool TryReadParameter(MatchMakingTicket ticket, out MatchMakingValue value);
     }
 
     public abstract partial class MatchMakingRuleRelaxation
@@ -466,6 +657,48 @@ namespace Wsla.Server
                 if (entry.Reference.HasValue)
                     output = entry.Reference.Value;
             }
+        }
+    }
+
+    public ref struct MatchMakingRuleNumerator<T>
+        where T : class, IMatchMakingRule
+    {
+        readonly MatchMakingRule[] Array;
+        readonly int Count;
+        int Index;
+
+        public T Current { get; private set; }
+        public bool MoveNext()
+        {
+            while (true)
+            {
+                Index += 1;
+
+                if (Index >= Count)
+                    return false;
+
+                var entry = Array[Index];
+
+                if (entry.Disable) continue;
+                if (entry is not T) continue;
+
+                Current = entry as T;
+                return true;
+            }
+        }
+
+        public MatchMakingRuleNumerator<T> GetEnumerator() => this;
+
+        public MatchMakingRuleNumerator(MatchMakingRule[] Array)
+        {
+            this.Array = Array;
+
+            if (Array == null)
+                Count = 0;
+            else
+                Count = Array.Length;
+
+            Index = -1;
         }
     }
 }

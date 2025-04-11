@@ -59,7 +59,7 @@ namespace Wsla.Server
                     for (/* Start at Index */; index < List.Count; index++)
                     {
                         var entry = MatchMakingPoolTicketEntry.For(List, index);
-                        dispatcher.Accept(entry);
+                        dispatcher.TryAccept(entry);
                     }
 
                     foreach (var batch in dispatcher.Batches)
@@ -80,29 +80,6 @@ namespace Wsla.Server
             }
         }
 
-        public bool ValidateParameters(in MatchMakingParameters parameters)
-        {
-            if (Configuration.Rules is null)
-                return true;
-
-            foreach (var rule in Configuration.Rules)
-                if (rule.ValidateParameters(in parameters) is false)
-                    return false;
-
-            return true;
-        }
-
-        public bool ValidateJoin(MatchMakingPoolBatch batch, MatchMakingTicket ticket)
-        {
-            if (Configuration.Rules is null)
-                return true;
-
-            foreach (var rule in Configuration.Rules)
-                if (rule.ValidateJoin(batch, ticket) is false)
-                    return false;
-
-            return true;
-        }
         public bool ValidateDispatch(MatchMakingPoolBatch batch)
         {
             //Validate Min Count
@@ -120,12 +97,8 @@ namespace Wsla.Server
             }
 
             //Validate Dispatch Rules
-            if (Configuration.Rules is not null)
-            {
-                foreach (var rule in Configuration.Rules)
-                    if (rule.ValidateDispatch(batch) is false)
-                        return false;
-            }
+            if (MatchMakingRule.Validator.ValidateDispatch(batch) is false)
+                return false;
 
             return true;
         }
@@ -182,21 +155,24 @@ namespace Wsla.Server
 
         public List<MatchMakingPoolBatch> Batches { get; }
 
-        public MatchMakingPoolBatch Accept(MatchMakingPoolTicketEntry entry)
+        public bool TryAccept(MatchMakingPoolTicketEntry entry)
         {
             //Iterate Existing Batches
             {
                 foreach (var batch in Batches)
                     if (batch.TryAccept(entry))
-                        return batch;
+                        return true;
             }
 
             //Create New Batch
+            if (MatchMakingRule.Validator.ValidateCreate(entry.Ticket))
             {
                 var batch = new MatchMakingPoolBatch(Pool, entry);
                 Batches.Add(batch);
-                return batch;
+                return true;
             }
+
+            return false;
         }
 
         public MatchMakingPoolDispatcher(MatchMakingPool Pool)
@@ -229,7 +205,7 @@ namespace Wsla.Server
             if (CheckAllowRegion(ticket.Regions) is false)
                 return false;
 
-            if (Pool.ValidateJoin(this, ticket) is false)
+            if (MatchMakingRule.Validator.ValidateJoin(this, ticket) is false)
                 return false;
 
             Entries.Add(entry);

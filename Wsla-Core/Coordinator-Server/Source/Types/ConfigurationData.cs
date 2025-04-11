@@ -75,5 +75,8 @@ namespace Wsla.Server
 
         [Description("Rules for Match Making")]
         public MatchMakingRule[] Rules;
+
+        public MatchMakingRuleNumerator<MatchMakingRule> IterateRules() => new MatchMakingRuleNumerator<MatchMakingRule>(Rules);
+        public MatchMakingRuleNumerator<T> IterateRules<T>() where T : class, IMatchMakingRule => new MatchMakingRuleNumerator<T>(Rules);
     }
 }

@@ -70,7 +70,7 @@ namespace Wsla
             switch (Type)
             {
                 case ValueType.Number:
-                    return MathF.Abs(Number - other.Number) <= Epsilon;
+                    return CompareNumbers(Number, other.Number);
 
                 case ValueType.Text:
                     return Text.Equals(other.Text);
@@ -107,6 +107,8 @@ namespace Wsla
 
         public static bool operator ==(in MatchMakingValue left, in MatchMakingValue right) => left.Equals(right);
         public static bool operator !=(in MatchMakingValue left, in MatchMakingValue right) => !left.Equals(right);
+
+        public static bool CompareNumbers(float left, float right) => MathF.Abs(left - right) <= Epsilon;
     }
 
     public struct MatchMakingParameters : IAutoNetworkSerialization

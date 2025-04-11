@@ -117,6 +117,10 @@
                               ]
                             }
                           },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -157,6 +161,10 @@
                               "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/0/properties/Relaxations/items"
                             }
                           },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -171,6 +179,186 @@
                         },
                         "required": [
                           "Reference",
+                          "Property"
+                        ]
+                      },
+                      {
+                        "description": "Checks that the Remote (Incoming) Value is Bigger than the Reference Value",
+                        "properties": {
+                          "Type": {
+                            "const": "Bigger"
+                          },
+                          "Reference": {
+                            "description": "Reference Value to Compare Against",
+                            "type": "number"
+                          },
+                          "Relaxations": {
+                            "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "Reference": {
+                                  "description": "Assign to Modify the Reference Value of the Rule",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "Delay": {
+                                  "description": "Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone",
+                                  "type": "number"
+                                },
+                                "Disable": {
+                                  "description": "Set to True to Disable the Rule",
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "Delay"
+                              ]
+                            }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
+                          "Property": {
+                            "description": "Property to Check on Tickets",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "Invert": {
+                            "description": "Invert the Rule\u0027s Check, True = Rule Should Pass, False = Rule Should not Pass!",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "Property"
+                        ]
+                      },
+                      {
+                        "description": "Checks that the Remote (Incoming) Value is Bigger than or Equal the Reference Value",
+                        "properties": {
+                          "Type": {
+                            "const": "BiggerOrEqual"
+                          },
+                          "Reference": {
+                            "description": "Reference Value to Compare Against",
+                            "type": "number"
+                          },
+                          "Relaxations": {
+                            "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
+                            }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
+                          "Property": {
+                            "description": "Property to Check on Tickets",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "Invert": {
+                            "description": "Invert the Rule\u0027s Check, True = Rule Should Pass, False = Rule Should not Pass!",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "Property"
+                        ]
+                      },
+                      {
+                        "description": "Checks that the Remote (Incoming) Value is Smaller than the Reference Value",
+                        "properties": {
+                          "Type": {
+                            "const": "Smaller"
+                          },
+                          "Reference": {
+                            "description": "Reference Value to Compare Against",
+                            "type": "number"
+                          },
+                          "Relaxations": {
+                            "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
+                            }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
+                          "Property": {
+                            "description": "Property to Check on Tickets",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "Invert": {
+                            "description": "Invert the Rule\u0027s Check, True = Rule Should Pass, False = Rule Should not Pass!",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "Property"
+                        ]
+                      },
+                      {
+                        "description": "Checks that the Remote (Incoming) Value is Smaller than or Equal the Reference Value",
+                        "properties": {
+                          "Type": {
+                            "const": "SmallerOrEqual"
+                          },
+                          "Reference": {
+                            "description": "Reference Value to Compare Against",
+                            "type": "number"
+                          },
+                          "Relaxations": {
+                            "description": "Relaxations to Apply Depending on Age of Oldest Ticket in Batch",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
+                            }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
+                          "Property": {
+                            "description": "Property to Check on Tickets",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "Invert": {
+                            "description": "Invert the Rule\u0027s Check, True = Rule Should Pass, False = Rule Should not Pass!",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
                           "Property"
                         ]
                       },
@@ -203,6 +391,10 @@
                               ]
                             }
                           },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
+                          },
                           "Property": {
                             "description": "Property to Check on Tickets",
                             "type": [
@@ -232,8 +424,12 @@
                               "null"
                             ],
                             "items": {
-                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
+                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/6/properties/Relaxations/items"
                             }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",
@@ -268,28 +464,12 @@
                               "null"
                             ],
                             "items": {
-                              "type": "object",
-                              "properties": {
-                                "Reference": {
-                                  "description": "Assign to Modify the Reference Value of the Rule",
-                                  "type": [
-                                    "number",
-                                    "null"
-                                  ]
-                                },
-                                "Delay": {
-                                  "description": "Apply Relaxation After this Duration, Not Stackable with Other Relaxations, Each Value is Standalone",
-                                  "type": "number"
-                                },
-                                "Disable": {
-                                  "description": "Set to True to Disable the Rule",
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "Delay"
-                              ]
+                              "$ref": "#/properties/Applications/items/properties/Pools/items/properties/Rules/items/anyOf/2/properties/Relaxations/items"
                             }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",
@@ -351,7 +531,7 @@
                               "type": "object",
                               "properties": {
                                 "Require": {
-                                  "description": "Assign to Modify the Reference Value of the Rule",
+                                  "description": "Assign to Modify the Required OddOnes",
                                   "type": [
                                     "integer",
                                     "null"
@@ -370,6 +550,10 @@
                                 "Delay"
                               ]
                             }
+                          },
+                          "Disable": {
+                            "description": "Assign to Disable Rule Without Removing It",
+                            "type": "boolean"
                           },
                           "Property": {
                             "description": "Property to Check on Tickets",

@@ -286,7 +286,7 @@ namespace Wsla.Server
                         return;
                     }
 
-                    if (pool.ValidateParameters(in request.Parameters) is false)
+                    if (MatchMakingRule.Validator.ValidateInput(pool, in request.Parameters) is false)
                     {
                         Fail(peer, WslaErrorCode.InvalidRequest);
                         return;

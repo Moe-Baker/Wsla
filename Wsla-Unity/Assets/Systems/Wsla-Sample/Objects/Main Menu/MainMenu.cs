@@ -117,8 +117,9 @@ public class MainMenu : MonoBehaviour
     async UniTask FindMatchAction()
     {
         var parameters = MatchMakingParameters.New()
-            .Add("Level", 80)
-            .Add("Platform", Application.isEditor ? "Editor" : "Player");
+            .Add("Level", Level)
+            .Add("Role", Role)
+            .Add("Honor", Honor);
 
         var response = await NetworkAPI.MatchMaking.FindMatch("mini-games", NetworkSceneID.From(1), (ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia), parameters: parameters).Operate();
 
@@ -130,6 +131,51 @@ public class MainMenu : MonoBehaviour
 
         await JoinRoom(response.Value);
     }
+
+    #region Match Making Paramaters
+    static int Honor = 4;
+    static string Role = "Hunter";
+    static int Level = 10;
+
+    void OnGUI()
+    {
+        GUI.matrix = Matrix4x4.Scale(Vector3.one * 2);
+
+        DrawIntField("Honor", ref Honor);
+        DrawTextField("Role", ref Role);
+        DrawIntField("Level", ref Level);
+    }
+
+    void DrawIntField(string title, ref int field)
+    {
+        GUILayout.BeginHorizontal();
+
+        GUILayout.Label(title);
+
+        GUILayout.Space(10);
+
+        var text = field.ToString();
+
+        text = GUILayout.TextField(text);
+
+        if (int.TryParse(text, out field) is false)
+            field = 0;
+
+        GUILayout.EndHorizontal();
+    }
+    void DrawTextField(string title, ref string field)
+    {
+        GUILayout.BeginHorizontal();
+
+        GUILayout.Label(title);
+
+        GUILayout.Space(10);
+
+        field = GUILayout.TextField(field);
+
+        GUILayout.EndHorizontal();
+    }
+    #endregion
 
     public async UniTask JoinRoom(RoomConnectionInfo info)
     {

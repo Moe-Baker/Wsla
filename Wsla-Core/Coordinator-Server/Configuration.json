@@ -11,7 +11,7 @@
           "Capacity":
           {
             "Min": 3,
-            "Max": 5
+            "Max": 4
           },
           "Duration": 10,
           "Backfill": false,
@@ -19,18 +19,62 @@
           "Rules":
           [
             {
+              "Type": "BiggerOrEqual",
+              "Property": "Honor",
+              "Reference": 4,
+              "Relaxations":
+              [
+                {
+                  "Delay": 3,
+                  "Reference": 3
+                },
+                {
+                  "Delay": 6,
+                  "Reference": 2
+                },
+                {
+                  "Delay": 8,
+                  "Disable": true
+                }
+              ]
+            },
+            {
+              "Type": "Delta",
+              "Property": "Level",
+              "Reference": 5,
+              "Relaxations":
+              [
+                {
+                  "Delay": 2,
+                  "Reference": 10
+                },
+                {
+                  "Delay": 4,
+                  "Reference": 20
+                },
+                {
+                  "Delay": 6,
+                  "Reference": 30
+                },
+                {
+                  "Delay": 8,
+                  "Reference": 40
+                }
+              ]
+            },
+            {
               "Type": "OddOneIn",
-              "Property": "Platform",
+              "Property": "Role",
               "Reference":
               {
-                "OddOne": "Editor",
-                "Ordinary": "Player"
+                "OddOne": "Hunter",
+                "Ordinary": "Runner"
               },
               "Require": 2,
               "Relaxations":
               [
                 {
-                  "Delay": 8,
+                  "Delay": 9,
                   "Require": 1
                 }
               ]
