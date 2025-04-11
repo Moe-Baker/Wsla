@@ -8,22 +8,16 @@ namespace Wsla
     {
         Stack<T> Stack;
 
-        public CreateDelegate Creator { get; }
+        public CreateDelegate Create { get; }
         public delegate T CreateDelegate();
 
-        public ResetDelegate Resetter { get; set; }
+        public ResetDelegate Reset { get; set; }
         public delegate void ResetDelegate(T instance);
 
         public T Rent()
         {
-            if (Stack.TryPop(out var instance))
-            {
-                Resetter?.Invoke(instance);
-            }
-            else
-            {
-                instance = Creator();
-            }
+            if (Stack.TryPop(out var instance) is false)
+                instance = Create();
 
             return instance;
         }
@@ -53,6 +47,7 @@ namespace Wsla
 
         public void Return(T instance)
         {
+            Reset(instance);
             Stack.Push(instance);
         }
 
@@ -60,7 +55,7 @@ namespace Wsla
         {
             Stack = new Stack<T>();
 
-            this.Creator = Creator;
+            this.Create = Creator;
         }
     }
 }

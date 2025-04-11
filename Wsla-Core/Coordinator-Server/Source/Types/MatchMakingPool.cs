@@ -10,83 +10,95 @@ namespace Wsla.Server
         public readonly MatchMakingPoolData Configuration;
 
         public string Name => Configuration.Name;
-        public TimeSpan Duration { get; }
         public bool Backfill => Configuration.Backfill;
+        public TimeSpan Duration { get; }
 
-        List<MatchMakingTicket> List;
+        List<MatchMakingTicket> Tickets;
+
+        MatchMakingPoolDispatcher Dispatcher;
 
         public void Register(MatchMakingTicket ticket)
         {
-            lock (List)
+            lock (Tickets)
             {
-                List.Add(ticket);
+                Tickets.Add(ticket);
             }
         }
         public bool Unregister(MatchMakingTicket ticket)
         {
-            lock (List)
+            lock (Tickets)
             {
-                return List.Remove(ticket);
+                return Tickets.Remove(ticket);
             }
         }
 
         public void Refresh()
         {
-            lock (List)
+            lock (Tickets)
             {
-                var index = 0;
-
-                if (List.Count is 0)
+                if (Tickets.Count is 0)
                     return;
 
-                //Skip Expired Tickets
-                for (/* Start at Index */; index < List.Count; index++)
-                {
-                    if (List[index].IsExpired() is false)
-                        break;
+                var index = 0;
 
-                    List[index].Fail(WslaErrorCode.Timeout);
-                    List[index] = null;
-                }
+                CleanExpiredTickets(ref index);
+                RunDispatcher(ref index);
 
-                var allocations = (List.Count - index); //Count of Remaining Valid Tickets
-
-                //Dispatch Remaining Tickets
-                if (allocations >= Configuration.Capacity.Min)
-                {
-                    var dispatcher = new MatchMakingPoolDispatcher(this);
-
-                    for (/* Start at Index */; index < List.Count; index++)
-                    {
-                        var entry = MatchMakingPoolTicketEntry.For(List, index);
-                        dispatcher.TryAccept(entry);
-                    }
-
-                    foreach (var batch in dispatcher.Batches)
-                    {
-                        batch.EnforceBalance();
-
-                        if (ValidateDispatch(batch) is false)
-                            continue;
-
-                        foreach (var entry in batch.Entries)
-                            List[entry.Index] = null;
-
-                        Dispatch(batch).Forget();
-                    }
-                }
-
-                List.RemoveAll(x => x is null);
+                Tickets.RemoveAll(x => x is null);
             }
         }
 
+        void CleanExpiredTickets(ref int index)
+        {
+            for (/* Start at Index */; index < Tickets.Count; index++)
+            {
+                if (Tickets[index].IsExpired() is false)
+                    break;
+
+                Tickets[index].Fail(WslaErrorCode.Timeout);
+                Tickets[index] = null;
+            }
+        }
+
+        void RunDispatcher(ref int index)
+        {
+            //Check if Number of Remaining Tickets can Fill a Room
+            if ((Tickets.Count - index) < Configuration.Capacity.Min)
+                return;
+
+            Dispatcher.Clear();
+
+            for (/* Start at Index */; index < Tickets.Count; index++)
+            {
+                var entry = MatchMakingPoolTicketEntry.For(Tickets, index);
+                Dispatcher.TryAccept(entry);
+            }
+
+            foreach (var batch in Dispatcher.Batches)
+            {
+                //Enforce Balance
+                batch.EnforceBalance();
+
+                if (ValidateDispatch(batch) is false)
+                {
+                    Dispatcher.ReturnBatch(batch);
+                    continue;
+                }
+
+                //Clear Out Tickets
+                foreach (var entry in batch.Entries)
+                    Tickets[entry.Index] = null;
+
+                InvokeDispatch(batch).Forget();
+            }
+        }
         public bool ValidateDispatch(MatchMakingPoolBatch batch)
         {
             //Validate Min Count
             if (batch.Count < Configuration.Capacity.Min)
                 return false;
 
-            //Validate Age
+            //Validate Full Considering Age
             if (batch.IsFull is false)
             {
                 var age = batch.Age;
@@ -102,26 +114,21 @@ namespace Wsla.Server
 
             return true;
         }
-
-        async Task Dispatch(MatchMakingPoolBatch batch)
+        async Task InvokeDispatch(MatchMakingPoolBatch batch)
         {
-            var Capacity = Backfill ? Configuration.Capacity.Max : batch.Count;
-            var Scene = batch.GetScene();
-            var Privacy = Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
-            var Lock = Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
-            var Parameters = new CreateRoomParameters(Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
-
-            var Regions = SparseArray.Clone(batch.Regions);
-
-            RoomConnectionInfo Info;
-
             try
             {
-                var room = await CoordinatorServer.Matchmaking.CreateRoom(Application.ID, Regions, Parameters);
+                var parameters = batch.CalculateRoomParameters();
 
+                var Regions = SparseArray.Clone(batch.Regions);
+
+                var room = await CoordinatorServer.Matchmaking.CreateRoom(Application.ID, Regions, parameters);
                 room.SetPool(this);
 
-                Info = room.GetConnectionInfo();
+                var info = room.GetConnectionInfo();
+
+                foreach (var entry in batch.Entries)
+                    entry.Ticket.Accept(info);
             }
             catch (Exception ex)
             {
@@ -133,9 +140,10 @@ namespace Wsla.Server
 
                 return;
             }
-
-            foreach (var entry in batch.Entries)
-                entry.Ticket.Accept(Info);
+            finally
+            {
+                Dispatcher.ReturnBatch(batch);
+            }
         }
 
         public MatchMakingPool(MatchMakingApplication Application, MatchMakingPoolData Configuration)
@@ -145,14 +153,14 @@ namespace Wsla.Server
 
             Duration = TimeSpan.FromSeconds(Configuration.Duration);
 
-            List = new();
+            Tickets = new();
+
+            Dispatcher = new();
         }
     }
 
     public class MatchMakingPoolDispatcher
     {
-        readonly MatchMakingPool Pool;
-
         public List<MatchMakingPoolBatch> Batches { get; }
 
         public bool TryAccept(MatchMakingPoolTicketEntry entry)
@@ -167,34 +175,64 @@ namespace Wsla.Server
             //Create New Batch
             if (MatchMakingRule.Validator.ValidateCreate(entry.Ticket))
             {
-                var batch = new MatchMakingPoolBatch(Pool, entry);
+                var batch = BatchPool.Rent();
+                batch.Assign(entry);
                 Batches.Add(batch);
                 return true;
             }
 
             return false;
         }
-
-        public MatchMakingPoolDispatcher(MatchMakingPool Pool)
+        public void Clear()
         {
-            this.Pool = Pool;
-
-            Batches = new List<MatchMakingPoolBatch>();
+            Batches.Clear();
         }
+
+        public MatchMakingPoolDispatcher()
+        {
+            Batches = new List<MatchMakingPoolBatch>();
+
+            BatchPool = new(() => new MatchMakingPoolBatch())
+            {
+                Reset = (x) => x.Clear()
+            };
+        }
+
+        ObjectPool<MatchMakingPoolBatch> BatchPool;
+        public void ReturnBatch(MatchMakingPoolBatch batch) => BatchPool.Return(batch);
     }
+
     public class MatchMakingPoolBatch
     {
-        public readonly MatchMakingPool Pool;
-        public readonly TimeSpan Age;
+        public MatchMakingPool Pool;
+        public TimeSpan Age;
 
         public List<MatchMakingPoolTicketEntry> Entries { get; }
         public MatchMakingTicket this[int index] => Entries[index].Ticket;
-
         public byte Count => (byte)Entries.Count;
-
         public bool IsFull => Count >= Pool.Configuration.Capacity.Max;
 
         public List<ServerRegion> Regions { get; }
+
+        public void Assign(MatchMakingPoolTicketEntry entry)
+        {
+            var ticket = entry.Ticket;
+
+            Pool = ticket.Pool;
+            Age = ticket.CalculateAge();
+
+            Entries.Add(entry);
+
+            foreach (var region in ticket.Regions)
+                Regions.Add(region);
+        }
+        public void Clear()
+        {
+            Pool = default;
+
+            Entries.Clear();
+            Regions.Clear();
+        }
 
         public bool TryAccept(MatchMakingPoolTicketEntry entry)
         {
@@ -213,19 +251,6 @@ namespace Wsla.Server
             return true;
         }
 
-        public void EnforceBalance()
-        {
-            if (Pool.Configuration.Balanced is false)
-                return;
-
-            if (Pool.Configuration.Backfill is true)
-                return;
-
-            var imbalance = Entries.Count % 2;
-
-            Entries.RemoveRange(Entries.Count - imbalance, imbalance);
-        }
-
         bool CheckAllowRegion(SparseArray<ServerRegion> input)
         {
             foreach (var item in input)
@@ -239,21 +264,39 @@ namespace Wsla.Server
             Regions.RemoveAll(x => input.Contains(x) is false);
         }
 
+        public void EnforceBalance()
+        {
+            if (Pool.Configuration.Balanced is false)
+                return;
+
+            if (Pool.Configuration.Backfill is true)
+                return;
+
+            if (Entries.Count % 2 == 0)
+                return;
+
+            Entries.RemoveAt(Entries.Count - 1);
+        }
+
         public MatchMakingTicket GetOldestTicket() => Entries[0].Ticket;
 
-        public NetworkSceneID GetScene() => GetOldestTicket().Scene;
-
-        public MatchMakingPoolBatch(MatchMakingPool Pool, MatchMakingPoolTicketEntry entry)
+        public CreateRoomParameters CalculateRoomParameters()
         {
-            this.Pool = Pool;
+            var Capacity = Pool.Backfill ? Pool.Configuration.Capacity.Max : Count;
+            var Scene = GetOldestTicket().Scene;
+            var Privacy = Pool.Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
+            var Lock = Pool.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
 
-            Entries = new(1) { entry };
+            return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
+        }
 
-            Age = entry.Ticket.CalculateAge();
-
-            Regions = entry.Ticket.Regions.ToList();
+        public MatchMakingPoolBatch()
+        {
+            Entries = new();
+            Regions = new();
         }
     }
+
     public record struct MatchMakingPoolTicketEntry(MatchMakingTicket Ticket, int Index)
     {
         public static MatchMakingPoolTicketEntry For(List<MatchMakingTicket> list, int index) => new MatchMakingPoolTicketEntry(list[index], index);

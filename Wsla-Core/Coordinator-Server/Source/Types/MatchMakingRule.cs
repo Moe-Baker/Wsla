@@ -54,7 +54,7 @@ namespace Wsla.Server
             {
                 if (value.Type is not MatchMakingValue.ValueType.Number)
                 {
-                    NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
+                    NetworkLog.Warning($"Expected Match Making Number, Got ({value.Type})");
                     return false;
                 }
 
@@ -72,7 +72,10 @@ namespace Wsla.Server
             public static bool ValidateInput(IMatchMakingRule rule, in MatchMakingParameters parameters)
             {
                 if (rule.TryReadParameter(in parameters, out var value) is false)
+                {
+                    NetworkLog.Warning($"Expected Match Making Parameter {rule.Property} not Found");
                     return false;
+                }
 
                 if (rule is not IInputCheck contract)
                     return true;
@@ -233,7 +236,7 @@ namespace Wsla.Server
             {
                 if (Reference.Type != value.Type)
                 {
-                    NetworkLog.Info($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
+                    NetworkLog.Warning($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
                     return false;
                 }
 
@@ -259,7 +262,7 @@ namespace Wsla.Server
             {
                 if (Reference.Type != value.Type)
                 {
-                    NetworkLog.Info($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
+                    NetworkLog.Warning($"Mis-Matched Value Types, Expecting {Reference.Type} Got {value.Type}");
                     return false;
                 }
 
@@ -333,7 +336,7 @@ namespace Wsla.Server
             {
                 if (value.Type is not MatchMakingValue.ValueType.Number)
                 {
-                    NetworkLog.Error($"Expected Match Making Number, Got ({value.Type})");
+                    NetworkLog.Warning($"Expected Match Making Number, Got ({value.Type})");
                     return false;
                 }
 
@@ -410,7 +413,7 @@ namespace Wsla.Server
             {
                 if (value.Type is not MatchMakingValue.ValueType.Number)
                 {
-                    NetworkLog.Info($"Mis-Matched Value Types, Expecting Number, Got {value.Type}");
+                    NetworkLog.Warning($"Mis-Matched Value Types, Expecting Number, Got {value.Type}");
                     return false;
                 }
 
@@ -459,7 +462,7 @@ namespace Wsla.Server
             {
                 if (value != Reference.Ordinary && value != Reference.OddOne)
                 {
-                    NetworkLog.Info($"Mis-Matched Value, Expecting [{Reference.Ordinary} or {Reference.OddOne}], Got ({value})");
+                    NetworkLog.Warning($"Mis-Matched Value, Expecting [{Reference.Ordinary} or {Reference.OddOne}], Got ({value})");
                     return false;
                 }
 
