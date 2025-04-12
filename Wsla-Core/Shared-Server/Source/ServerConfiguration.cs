@@ -42,7 +42,9 @@ namespace Wsla
 
                 var json = schema.ToString();
 
-                File.WriteAllText($"../../../{file}", json);
+                var directory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+
+                File.WriteAllText(Path.Join(directory, file), json);
             }
 
             static JsonNode Transform(JsonSchemaExporterContext context, JsonNode node)

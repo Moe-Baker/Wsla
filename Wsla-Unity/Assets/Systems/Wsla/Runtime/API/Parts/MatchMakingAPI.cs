@@ -26,8 +26,6 @@ namespace Wsla.Unity
 
         public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
         {
-            NetworkLog.Info(API.ApplicationID.Value);
-
             var request = new CreateRoomRequest(API.ApplicationID.Value, regions, parameters);
             return CreateRoom(request);
         }

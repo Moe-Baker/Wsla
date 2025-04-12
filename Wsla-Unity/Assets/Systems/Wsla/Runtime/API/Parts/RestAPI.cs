@@ -9,6 +9,7 @@ using LiteNetLib.Utils;
 using System.Collections.Generic;
 using Wsla.Serialization;
 using UnityEngine;
+using System.Net.Http.Headers;
 
 namespace Wsla.Unity
 {
@@ -22,11 +23,20 @@ namespace Wsla.Unity
         IPAddress Address => API.CoordinatorAddress.IP;
         ushort Port => Constants.CoordinatorHttpPort;
 
+        static MediaTypeWithQualityHeaderValue WslaContentType = MediaTypeWithQualityHeaderValue.Parse(Constants.WslaContentType);
+
         public override void Set(NetworkAPI value)
         {
             base.Set(value);
 
-            ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () => new HttpClient());
+            ClientCycle = new AutoCyclingValue<HttpClient>(TimeSpan.FromMinutes(15), () =>
+            {
+                var client = new HttpClient();
+
+                client.DefaultRequestHeaders.Accept.Add(WslaContentType);
+
+                return client;
+            });
             UrlCache = new UrlStringCache();
 
             API.OnDispose += DisposeCallback;
@@ -44,7 +54,10 @@ namespace Wsla.Unity
 
             var memory = stream.PeekAllocatedMemory();
 
-            return new MemoryContent(memory);
+            var content = new MemoryContent(memory);
+            content.Headers.ContentType = WslaContentType;
+
+            return content;
         }
         async ValueTask<T> ReadContent<T>(HttpContent content, CancellationToken cancellation)
         {
@@ -108,7 +121,7 @@ namespace Wsla.Unity
 
             try
             {
-                var response = await client.GetAsync(url, cancellationToken: cancellation);
+                var response = await client.GetAsync(url, cancellation);
 
                 if (response.IsSuccessStatusCode is false)
                     return RestResponse.From(response);
@@ -182,26 +195,28 @@ namespace Wsla.Unity
                 Stack = new(10);
             }
         }
-    }
 
-    public class MemoryContent : HttpContent
-    {
-        ReadOnlyMemory<byte> Content;
-
-        protected override bool TryComputeLength(out long length)
+        class MemoryContent : HttpContent
         {
-            length = Content.Length;
-            return true;
-        }
+            ReadOnlyMemory<byte> Content;
 
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
-        {
-            return stream.WriteAsync(Content).AsTask();
-        }
+            protected override bool TryComputeLength(out long length)
+            {
+                length = Content.Length;
+                return true;
+            }
 
-        public MemoryContent(ReadOnlyMemory<byte> Content)
-        {
-            this.Content = Content;
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
+            {
+                return stream.WriteAsync(Content).AsTask();
+            }
+
+            public MemoryContent(ReadOnlyMemory<byte> Content)
+            {
+                this.Content = Content;
+            }
+
+
         }
     }
 }

@@ -1,19 +1,10 @@
-﻿using GenHTTP.Api.Content;
-using GenHTTP.Api.Protocol;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Wsla.Server
 {
     public static class CoordinatorServerExtensions
     {
-        public static ProviderException ToProviderException(this RestResponse response)
-        {
-            var code = (ResponseStatus)response.Code;
-            return new ProviderException((ResponseStatus)response.Code, response.Message);
-        }
-
         public static bool Contains<T>(this Span<T> span, T entry) => Contains((ReadOnlySpan<T>)span, entry);
         public static bool Contains<T>(this ReadOnlySpan<T> span, T entry)
         {

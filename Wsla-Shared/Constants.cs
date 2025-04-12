@@ -31,5 +31,7 @@ namespace Wsla
             public const string UpdateMatch = "update-match";
             public const string CancelMatch = "cancel-match";
         }
+
+        public const string WslaContentType = "application/x-wsla";
     }
 }

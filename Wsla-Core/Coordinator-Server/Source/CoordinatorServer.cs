@@ -1,13 +1,9 @@
-﻿using GenHTTP.Api.Content;
-using GenHTTP.Api.Infrastructure;
-using GenHTTP.Api.Protocol;
-using GenHTTP.Engine.Internal;
-using GenHTTP.Modules.Layouting;
-using GenHTTP.Modules.Webservices;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,7 +24,7 @@ namespace Wsla.Server
             //Initialize
             {
                 Messaging.Initialize();
-                REST.Init();
+                REST.Init(args);
                 Matchmaking.Init();
             }
 
@@ -58,26 +54,29 @@ namespace Wsla.Server
 
         public static class REST
         {
-            static IServerHost Contract;
+            static WebApplication Application;
 
-            public static void Init()
+            public static void Init(string[] args)
             {
-                var serializers = GenHTTP.Modules.Conversion.Serialization.Empty()
-                    .Default(ContentType.ApplicationOctetStream)
-                    .Add(ContentType.ApplicationOctetStream, new WslaSerializationFormat());
+                var builder = WebApplication.CreateBuilder(args);
 
-                var api = Layout.Create()
-                    .AddService<Matchmaking.HttpEndpoints>("/", serializers: serializers);
+                builder.Services.AddControllers(options =>
+                {
+                    options.OutputFormatters.Add(new WslaSerializationFormatters.Output());
+                    options.InputFormatters.Add(new WslaSerializationFormatters.Input());
+                });
 
-                Contract = Host.Create()
-                    .Handler(api)
-                    .Bind(IPAddress.Any, Constants.CoordinatorHttpPort)
-                    .Development()
-                    .Console();
+                builder.Services.AddControllers();
+
+                Application = builder.Build();
+
+                Application.MapControllers();
+
+                Application.Urls.Add($"http://0.0.0.0:{Constants.CoordinatorHttpPort}");
             }
             public static void Start()
             {
-                Contract.StartAsync().Forget();
+                Application.StartAsync().Forget();
             }
         }
 
@@ -340,77 +339,6 @@ namespace Wsla.Server
                 #endregion
             }
 
-            public class HttpEndpoints
-            {
-                public void Usages()
-                {
-                    Register(ListRegions);
-                    Register<CreateRoomRequest, RoomConnectionInfo>(CreateRoom);
-                    Register<ListRoomsRequest, List<RoomListEntryInfo>>(ListRooms);
-                    Register<FindRoomRequest, RoomConnectionInfo?>(FindRoom);
-                }
-
-                void Register<[NetworkSerializationMarker] T>(Func<T> function) { }
-                void Register<[NetworkSerializationMarker] TRequest, [NetworkSerializationMarker] TResponse>(Func<TRequest, TResponse> function) { }
-                void Register<[NetworkSerializationMarker] TRequest, [NetworkSerializationMarker] TResponse>(Func<TRequest, Task<TResponse>> function) { }
-
-                [ResourceMethod(RequestMethod.Get, Constants.RestRoutes.ListRegions)]
-                public List<ServerRegion> ListRegions()
-                {
-                    var list = new List<ServerRegion>();
-
-                    Browser.ListRegions(list);
-
-                    return list;
-                }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.CreateRoom)]
-                public async Task<RoomConnectionInfo> CreateRoom(CreateRoomRequest message)
-                {
-                    if (Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
-                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
-
-                    var room = await Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
-
-                    return room.GetConnectionInfo();
-                }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.ListRooms)]
-                public List<RoomListEntryInfo> ListRooms(ListRoomsRequest request)
-                {
-                    if (Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
-                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
-
-                    var list = new List<RoomListEntryInfo>();
-
-                    Browser.ListRooms(applicationID, request.Regions, list);
-
-                    return list;
-                }
-
-                [ResourceMethod(RequestMethod.Post, Constants.RestRoutes.FindRoom)]
-                public async Task<RoomConnectionInfo?> FindRoom(FindRoomRequest request)
-                {
-                    if (Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
-                        throw new ProviderException(ResponseStatus.BadRequest, $"Application not Found");
-
-                    //Try Find Existing Room
-                    {
-                        if (Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
-                            return room.GetConnectionInfo();
-                    }
-
-                    //Try Create Room
-                    if (request.CreateRoom.HasValue)
-                    {
-                        var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
-
-                        return await CreateRoom(create);
-                    }
-
-                    return null;
-                }
-            }
             public class MessageHandlers
             {
                 public static void RegisterHandlers(MessagingServer server)
@@ -465,11 +393,11 @@ namespace Wsla.Server
             }
 
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
-            public static async Task<Room> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
+            public static async Task<WslaResponse<Room, WslaError>> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
             {
                 //Find Region
                 if (Browser.TryFindFreeServer(regions, out var server) is false)
-                    throw new ProviderException(ResponseStatus.BadRequest, $"Regions not Available");
+                    return WslaError.From(WslaErrorCode.NoRegion);
 
                 var roomID = Guid.NewGuid();
 
@@ -490,11 +418,93 @@ namespace Wsla.Server
                 }
                 catch (OperationCanceledException)
                 {
-                    throw new ProviderException(ResponseStatus.InternalServerError, $"Room Creation on Relay Failed");
+                    return WslaError.From(WslaErrorCode.InternalError);
                 }
 
                 return server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
             }
         }
+    }
+
+    [Route("/")]
+    [ApiController]
+    public class CoordinatorHttpEndpoints : ControllerBase
+    {
+        [HttpGet(Constants.RestRoutes.ListRegions)]
+        public ActionResult ListRegions()
+        {
+            var list = new List<ServerRegion>();
+
+            CoordinatorServer.Matchmaking.Browser.ListRegions(list);
+
+            return Accept(list);
+        }
+
+        [HttpPost(Constants.RestRoutes.CreateRoom)]
+        public async Task<ActionResult> CreateRoom(CreateRoomRequest message)
+        {
+            if (CoordinatorServer.Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
+                return BadRequest();
+
+            var response = await CoordinatorServer.Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
+
+            if (response.IsError)
+                return BadRequest();
+
+            var info = response.Value.GetConnectionInfo();
+
+            return Accept(info);
+        }
+
+        [HttpPost(Constants.RestRoutes.ListRooms)]
+        public ActionResult ListRooms(ListRoomsRequest request)
+        {
+            if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
+                return BadRequest();
+
+            var list = new List<RoomListEntryInfo>();
+
+            CoordinatorServer.Matchmaking.Browser.ListRooms(applicationID, request.Regions, list);
+
+            return Accept(list);
+        }
+
+        [HttpPost(Constants.RestRoutes.FindRoom)]
+        public async Task<ActionResult> FindRoom(FindRoomRequest request)
+        {
+            if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
+                return BadRequest();
+
+            //Try Find Existing Room
+            {
+                if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
+                {
+                    var info = room.GetConnectionInfo();
+
+                    return Accept(info);
+                }
+            }
+
+            //Try Create Room
+            if (request.CreateRoom.HasValue)
+            {
+                var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
+
+                return await CreateRoom(create);
+            }
+
+            return NoContent();
+        }
+
+        public CoordinatorHttpEndpoints()
+        {
+            RecordInput<CreateRoomRequest>(CreateRoom);
+            RecordInput<ListRoomsRequest>(ListRooms);
+            RecordInput<FindRoomRequest>(FindRoom);
+        }
+
+        static void RecordInput<[NetworkSerializationMarker] T>(Func<T, ActionResult> function) { }
+        static void RecordInput<[NetworkSerializationMarker] T>(Func<T, Task<ActionResult>> function) { }
+        AcceptedResult Accept<[NetworkSerializationMarker] T>(T response) => Accepted(response);
     }
 }

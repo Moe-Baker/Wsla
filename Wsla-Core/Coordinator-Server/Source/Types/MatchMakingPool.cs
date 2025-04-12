@@ -71,7 +71,7 @@ namespace Wsla.Server
             for (/* Start at Index */; index < Tickets.Count; index++)
             {
                 var entry = MatchMakingPoolTicketEntry.For(Tickets, index);
-                Dispatcher.TryAccept(entry);
+                Dispatcher.TryJoin(entry);
             }
 
             foreach (var batch in Dispatcher.Batches)
@@ -122,22 +122,28 @@ namespace Wsla.Server
 
                 var Regions = SparseArray.Clone(batch.Regions);
 
-                var room = await CoordinatorServer.Matchmaking.CreateRoom(Application.ID, Regions, parameters);
+                var response = await CoordinatorServer.Matchmaking.CreateRoom(Application.ID, Regions, parameters);
+
+                if (response.IsError)
+                {
+                    batch.FailAll();
+                    return;
+                }
+
+                var room = response.Value;
+
                 room.SetPool(this);
 
                 var info = room.GetConnectionInfo();
 
-                foreach (var entry in batch.Entries)
-                    entry.Ticket.Accept(info);
+                batch.AcceptAll(info);
             }
             catch (Exception ex)
             {
                 NetworkLog.Error($"Matchmaking Create Room Failed");
                 NetworkLog.Error(ex);
 
-                foreach (var entry in batch.Entries)
-                    entry.Ticket.Fail(WslaErrorCode.InternalError);
-
+                batch.FailAll();
                 return;
             }
             finally
@@ -163,12 +169,12 @@ namespace Wsla.Server
     {
         public List<MatchMakingPoolBatch> Batches { get; }
 
-        public bool TryAccept(MatchMakingPoolTicketEntry entry)
+        public bool TryJoin(MatchMakingPoolTicketEntry entry)
         {
             //Iterate Existing Batches
             {
                 foreach (var batch in Batches)
-                    if (batch.TryAccept(entry))
+                    if (batch.TryJoin(entry))
                         return true;
             }
 
@@ -234,7 +240,7 @@ namespace Wsla.Server
             Regions.Clear();
         }
 
-        public bool TryAccept(MatchMakingPoolTicketEntry entry)
+        public bool TryJoin(MatchMakingPoolTicketEntry entry)
         {
             if (IsFull) return false;
 
@@ -288,6 +294,19 @@ namespace Wsla.Server
             var Lock = Pool.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
 
             return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
+        }
+
+        public void AcceptAll(RoomConnectionInfo info)
+        {
+            foreach (var entry in Entries)
+                entry.Ticket.Accept(info);
+        }
+
+        public void FailAll() => FailAll(WslaErrorCode.InternalError);
+        public void FailAll(WslaErrorCode error)
+        {
+            foreach (var entry in Entries)
+                entry.Ticket.Fail(error);
         }
 
         public MatchMakingPoolBatch()
