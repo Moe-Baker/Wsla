@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -212,19 +211,27 @@ namespace Wsla.Server
                 client.Peer.Send(writer, channel, delivery);
             }
 
-            public void BroadcastData<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient? except = null)
+            public void BroadcastData<[NetworkSerializationMarker] T>(in T data, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient except = null, NetworkGroupCollection? groups = null)
             {
                 var writer = Room.Pools.SinglePackerWriter.Take();
                 NetworkSerializer.WriteHeader(data, writer);
 
-                BroadcastWriter(writer, channel, delivery, except: except);
+                BroadcastWriter(writer, channel, delivery, except, groups);
             }
-            public void BroadcastWriter(NetDataWriter writer, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient? except = null)
+            public void BroadcastWriter(NetDataWriter writer, byte channel = 0, DeliveryMethod delivery = DeliveryMethod.ReliableOrdered, NetworkClient except = null, NetworkGroupCollection? groups = null)
             {
-                if (except is null)
-                    Manager.SendToAll(writer, channel, delivery);
-                else
-                    Manager.SendToAll(writer, channel, delivery, except.Peer);
+                if (groups == null) groups = NetworkGroupCollection.Everyone;
+
+                foreach (var client in Room.Clients.Collection)
+                {
+                    if (except == client)
+                        continue;
+
+                    if (client.CheckGroups(groups.Value) is false)
+                        continue;
+
+                    client.Peer.Send(writer, channel, delivery);
+                }
             }
 
             public void Kick(NetworkClient client, WslaError error)
@@ -336,49 +343,49 @@ namespace Wsla.Server
                 }
             }
 
-            public NetworkClient? Master { get; private set; }
+            public NetworkClient Master { get; private set; }
 
             TransportProperty Transport => Room.Transport;
 
-            void RequestHandler(ConnectionRequest request)
+            void RequestHandler(ConnectionRequest connection)
             {
-                NetworkLog.Info($"Connection Request from {request.RemoteEndPoint}");
+                NetworkLog.Info($"Connection Request from {connection.RemoteEndPoint}");
 
                 if (Room.Properties.IsLocked)
                 {
-                    RejectConnection(request, WslaErrorCode.RoomLocked);
+                    RejectConnection(connection, WslaErrorCode.RoomLocked);
                     return;
                 }
 
                 if (Room.Properties.IsFull)
                 {
                     NetworkLog.Error($"Room {Room} Full, Connection Request Rejected");
-                    RejectConnection(request, WslaErrorCode.CapacityFull);
+                    RejectConnection(connection, WslaErrorCode.CapacityFull);
                     return;
                 }
 
-                var reader = request.Data;
+                var reader = connection.Data;
 
-                ClientConnectionRequest data;
+                ClientConnectionRequest request;
 
                 try
                 {
-                    NetworkSerializer.ReadValue(reader, out data);
+                    NetworkSerializer.ReadValue(reader, out request);
                 }
                 catch (Exception)
                 {
-                    NetworkLog.Warning($"Connection Request From {request.RemoteEndPoint} Couldn't be Deserialized");
-                    RejectConnection(request, WslaErrorCode.RequestDeserializationFailure);
+                    NetworkLog.Warning($"Connection Request From {connection.RemoteEndPoint} Couldn't be Deserialized");
+                    RejectConnection(connection, WslaErrorCode.RequestDeserializationFailure);
                     return;
                 }
 
-                NetworkLog.Info($"Connection Request from {data}");
+                NetworkLog.Info($"Connection Request from {request}");
 
                 //Check Password
-                if (Room.Properties.CheckPassword(in data.Password) is false)
+                if (Room.Properties.CheckPassword(in request.Password) is false)
                 {
-                    NetworkLog.Error($"Room {Room} Client Password Mismatch, Expected ({Room.Properties.Password}) Got ({data.Password}), Connection Request Rejected");
-                    RejectConnection(request, WslaErrorCode.InvalidPassword);
+                    NetworkLog.Error($"Room {Room} Client Password Mismatch, Expected ({Room.Properties.Password}) Got ({request.Password}), Connection Request Rejected");
+                    RejectConnection(connection, WslaErrorCode.InvalidPassword);
                     return;
                 }
 
@@ -386,7 +393,7 @@ namespace Wsla.Server
                 if (IDGenerator.TryReserve(out var id) is false)
                 {
                     NetworkLog.Error($"Room {Room} Client ID Generator Overloaded, Connection Request Rejected");
-                    RejectConnection(request, WslaErrorCode.ClientIDGeneratorOverloaded);
+                    RejectConnection(connection, WslaErrorCode.ClientIDGeneratorOverloaded);
                     return;
                 }
 
@@ -394,7 +401,7 @@ namespace Wsla.Server
                 if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[Room.Entities.ClientSpawnTokenAllowance], out var spawnTokens) is false)
                 {
                     NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded, Connection Request Rejected");
-                    RejectConnection(request, WslaErrorCode.EntityIDGeneratorOverloaded);
+                    RejectConnection(connection, WslaErrorCode.EntityIDGeneratorOverloaded);
 
                     IDGenerator.Return(id);
 
@@ -403,17 +410,17 @@ namespace Wsla.Server
 
                 var version = Versions.Retrieve(id);
 
-                var client = new NetworkClient(Room, id, data.Username, spawnTokens.Length, version);
+                var client = new NetworkClient(Room, id, request.Username, request.Groups, spawnTokens.Length, version);
 
                 for (int i = 0; i < spawnTokens.Length; i++)
                     client.AddSpawnToken(spawnTokens[i]);
 
-                var peer = request.Accept();
+                var peer = connection.Accept();
 
                 client.AssignPeer(peer);
                 peer.Tag = client;
 
-                ConnectHandler(peer, ref data);
+                ConnectHandler(peer, ref request);
             }
             void RejectConnection(ConnectionRequest request, WslaErrorCode code)
             {
@@ -587,6 +594,11 @@ namespace Wsla.Server
                 return client;
             }
 
+            void ChangeGroupsRequestHandler(NetworkClient sender, ref ChangeGroupsRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            {
+                sender.AssignGroups(message.Groups);
+            }
+
             void ReplaceMaster()
             {
                 Master = ChooseMaster();
@@ -625,6 +637,7 @@ namespace Wsla.Server
 
                 Transport.Listener.ConnectionRequestEvent += RequestHandler;
                 Transport.Listener.PeerDisconnectedEvent += DisconnectHandler;
+                Transport.Dispatcher.Register<ChangeGroupsRequest>(ChangeGroupsRequestHandler);
             }
         }
 
@@ -888,7 +901,7 @@ namespace Wsla.Server
                 {
                     var writer = Room.Pools.SinglePackerWriter.Take();
                     WriteCommand(sender, ref message.Parameters, reader, writer);
-                    Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
+                    Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender, groups: message.Groups);
                 }
             }
 

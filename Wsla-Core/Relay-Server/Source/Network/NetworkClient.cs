@@ -14,10 +14,23 @@ namespace Wsla.Server
 
         public FixedString<FS20> Username { get; private set; }
 
-        public NetPeer? Peer { get; private set; }
+        public NetPeer Peer { get; private set; }
         internal void AssignPeer(NetPeer value)
         {
             this.Peer = value;
+        }
+
+        public NetworkGroupCollection Groups { get; private set; }
+        internal void AssignGroups(NetworkGroupCollection value)
+        {
+            Groups = value;
+        }
+        public bool CheckGroups(NetworkGroupCollection target)
+        {
+            if (target == NetworkGroupCollection.Everyone)
+                return true;
+
+            return Groups.Intersects(target);
         }
 
         public NetworkClientVersion Version { get; private set; }
@@ -89,12 +102,13 @@ namespace Wsla.Server
         }
 
         readonly Room Room;
-        public NetworkClient(Room Room, NetworkClientID ID, FixedString<FS20> Username, int SpawnTokenCapacity, NetworkClientVersion Version)
+        public NetworkClient(Room Room, NetworkClientID ID, FixedString<FS20> Username, NetworkGroupCollection Groups, int SpawnTokenCapacity, NetworkClientVersion Version)
         {
             this.Room = Room;
 
             this.ID = ID;
             this.Username = Username;
+            this.Groups = Groups;
             this.Version = Version;
 
             SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);

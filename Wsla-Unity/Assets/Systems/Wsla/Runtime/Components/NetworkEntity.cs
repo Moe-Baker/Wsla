@@ -52,6 +52,11 @@ namespace Wsla.Unity
         [field: SerializeField]
         public NetworkEntityAuthorityMode Authority { get; internal set; }
 
+        /// <summary>
+        /// The default groups that this entity will output data (RPCs) to
+        /// </summary>
+        public NetworkGroupCollection OutputGroups { get; set; } = NetworkGroupCollection.Everyone;
+
         internal NetworkEntityTransferToken TransferToken;
         internal void AssignTransferToken(NetworkEntityTransferToken value)
         {

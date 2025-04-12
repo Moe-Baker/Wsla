@@ -9,6 +9,8 @@ namespace Wsla
         public FixedString<FS20> Username;
         public FixedString<FS20> Password;
 
+        public NetworkGroupCollection Groups;
+
         public RoomTimeRequest TimeRequest;
 
         public override string ToString() => $"(Username: {Username})";
@@ -17,13 +19,15 @@ namespace Wsla
         {
             context.Select(ref Username);
             context.Select(ref Password);
+            context.Select(ref Groups);
             context.Select(ref TimeRequest);
         }
 
-        public ClientConnectionRequest(FixedString<FS20> Username, FixedString<FS20> Password)
+        public ClientConnectionRequest(FixedString<FS20> Username, FixedString<FS20> Password, NetworkGroupCollection Groups)
         {
             this.Username = Username;
             this.Password = Password;
+            this.Groups = Groups;
 
             TimeRequest = default;
         }
@@ -314,6 +318,17 @@ namespace Wsla
         {
             this.ClientRequest = ClientRequest;
             this.RoomTime = RoomTime;
+        }
+    }
+
+    [NetworkBlittable]
+    public struct ChangeGroupsRequest
+    {
+        public NetworkGroupCollection Groups;
+
+        public ChangeGroupsRequest(NetworkGroupCollection Groups)
+        {
+            this.Groups = Groups;
         }
     }
 }

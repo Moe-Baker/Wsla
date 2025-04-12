@@ -26,7 +26,7 @@ namespace Wsla
         public static byte Get(Type type)
         {
             if (TryGet(type, out var id) is false)
-                throw new ArgumentException($"Type {type} is not Registerd as a NetworkType");
+                throw new ArgumentException($"Type {type} is not Registered as a NetworkType");
 
             return id;
         }
@@ -106,6 +106,8 @@ namespace Wsla
 
             Add<RoomTimeRequest>(ref counter);
             Add<RoomTimeResponse>(ref counter);
+
+            Add<ChangeGroupsRequest>(ref counter);
         }
     }
 

@@ -6,11 +6,13 @@ namespace Wsla
     public struct BroadcastNetworkRpcRequest
     {
         public RemoteBufferMode Buffer;
+        public NetworkGroupCollection Groups;
         public NetworkSyncMemberParameters Parameters;
 
-        public BroadcastNetworkRpcRequest(RemoteBufferMode Buffer, NetworkSyncMemberParameters Parameters)
+        public BroadcastNetworkRpcRequest(RemoteBufferMode Buffer, NetworkGroupCollection Groups, NetworkSyncMemberParameters Parameters)
         {
             this.Buffer = Buffer;
+            this.Groups = Groups;
             this.Parameters = Parameters;
         }
     }

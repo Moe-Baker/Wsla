@@ -1,7 +1,4 @@
-using Cysharp.Threading.Tasks;
-
 using System;
-using System.Threading;
 
 using TMPro;
 
@@ -62,6 +59,29 @@ public partial class Level : NetworkBehaviour
             RoomTimeLabel.text = "Disconnected";
     }
 
+    void OnGUI()
+    {
+        if (Room.IsConnected is false)
+            return;
+
+        var group = new NetworkGroupID(0);
+
+        if (Room.Clients.Groups.Contains(group))
+        {
+            if (GUILayout.Button("Leave Group"))
+            {
+                Room.Clients.LeaveGroups(group);
+            }
+        }
+        else
+        {
+            if (GUILayout.Button("Join Group"))
+            {
+                Room.Clients.JoinGroups(group);
+            }
+        }
+    }
+
     public override void Set(NetworkEntity.Behaviour reference)
     {
         base.Set(reference);
@@ -119,7 +139,9 @@ public partial class Level : NetworkBehaviour
             player.NetworkTransform.Initialize(ticket, position: position, rotation: rotation);
         }
 
-        ticket.Send();
+        var entity = ticket.Send();
+
+        entity.OutputGroups = new NetworkGroupID(0);
     }
 
     void DisconnectAction()

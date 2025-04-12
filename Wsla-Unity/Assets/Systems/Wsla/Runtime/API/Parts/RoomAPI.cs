@@ -60,7 +60,10 @@ namespace Wsla.Unity
             {
                 Transport = new TransportProperty(this);
                 Time = new TimeProperty(this);
+
                 Clients = new ClientsProperty(this);
+                Clients.Groups = request.Groups;
+
                 Entities = new EntitiesProperty(this);
                 Scene = new SceneProperty(this);
                 RPCs = new RpcsProperty(this);
@@ -552,6 +555,27 @@ namespace Wsla.Unity
             ExpandArray<NetworkClient> Collection;
             public byte Count => (byte)Collection.Count;
             public bool TryGet(NetworkClientID id, out NetworkClient client) => Collection.TryGet(id.Value, out client);
+
+            /// <summary>
+            /// The Groups that the local client is in
+            /// </summary>
+            public NetworkGroupCollection Groups { get; internal set; }
+            public void JoinGroups(NetworkGroupCollection target)
+            {
+                ChangeGroups(Groups + target);
+            }
+            public void LeaveGroups(NetworkGroupCollection target)
+            {
+                ChangeGroups(Groups - target);
+            }
+            public void ChangeGroups(NetworkGroupCollection target)
+            {
+                Groups = target;
+
+                var request = new ChangeGroupsRequest(Groups);
+
+                Transport.SendData(request, delivery: DeliveryMethod.ReliableUnordered);
+            }
 
             TransportProperty Transport => Room.Transport;
 

@@ -621,6 +621,19 @@ namespace Wsla.Unity
             return this;
         }
 
+        internal NetworkGroupCollection Groups;
+        public RpcInvocationBuilder<TBind, TParameters> SetGroups(NetworkGroupCollection value)
+        {
+            Groups = value;
+            return this;
+        }
+        public RpcInvocationBuilder<TBind, TParameters> SetGroups(NetworkGroupID value)
+        {
+            var collection = NetworkGroupCollection.From(value);
+
+            return SetGroups(collection);
+        }
+
         internal RemoteBufferMode BufferMode;
         public RpcInvocationBuilder<TBind, TParameters> SetBufferMode() => SetBufferMode(RemoteBufferMode.Buffer);
         public RpcInvocationBuilder<TBind, TParameters> SetBufferMode(RemoteBufferMode value)
@@ -666,7 +679,7 @@ namespace Wsla.Unity
             //Remote
             {
                 var parameters = GetParameters();
-                var request = new BroadcastNetworkRpcRequest(BufferMode, parameters);
+                var request = new BroadcastNetworkRpcRequest(BufferMode, Groups, parameters);
 
                 NetworkSerializer.WriteHeader(in request, PacketWriter);
 
@@ -750,6 +763,8 @@ namespace Wsla.Unity
             this.Parameters = Parameters;
 
             PacketWriter = Room.Pools.SinglePackerWriter.Take();
+
+            Groups = Bind.Entity.OutputGroups;
 
             Channel = 0;
             Delivery = DeliveryMethod.ReliableOrdered;

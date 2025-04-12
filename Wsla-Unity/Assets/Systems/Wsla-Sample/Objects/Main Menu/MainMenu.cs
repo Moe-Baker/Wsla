@@ -179,7 +179,7 @@ public class MainMenu : MonoBehaviour
 
     public async UniTask JoinRoom(RoomConnectionInfo info)
     {
-        var request = new ClientConnectionRequest("SAMPLE-USERNAME", "HELLO-WORLD");
+        var request = new ClientConnectionRequest("SAMPLE-USERNAME", "HELLO-WORLD", NetworkGroupCollection.Empty);
         var response = await NetworkAPI.Room.Connect(info, request);
 
         if (response.IsError)
