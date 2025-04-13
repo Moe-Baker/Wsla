@@ -64,7 +64,7 @@
             },
             {
               "Type": "OddOneIn",
-              "Disable": true,
+              "Disable": false,
               "Property": "Role",
               "Reference":
               {

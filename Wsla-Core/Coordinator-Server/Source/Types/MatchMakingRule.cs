@@ -31,17 +31,11 @@ namespace Wsla.Server
         public bool Invert { get; set; }
 
         /// <summary>
-        /// Duration of Time after which to disable the rule, infinity if rule is never disabled
-        /// </summary>
-        [JsonIgnore]
-        public float DisableDuration { get; protected set; }
-
-        /// <summary>
         /// Check if the rule can be disabled after this timespan
         /// </summary>
         /// <param name="age"></param>
         /// <returns>true if rule disabled, false if not</returns>
-        public bool CheckDisable(TimeSpan age) => age.TotalSeconds >= DisableDuration;
+        public abstract bool CheckDisable(TimeSpan age);
 
         public virtual void OnDeserialized() { }
 
@@ -189,9 +183,15 @@ namespace Wsla.Server
     }
     partial class MatchMakingRule
     {
-        public abstract class GenericBase<TRelaxation> : MatchMakingRule
+        public abstract class RelaxationRule<TRelaxation> : MatchMakingRule
             where TRelaxation : MatchMakingRuleRelaxation
         {
+            /// <summary>
+            /// Duration of Time after which to disable the rule, max timespan if rule is never disabled
+            /// </summary>
+            [JsonIgnore]
+            public TimeSpan DisableTimespan { get; protected set; }
+
             [Description("Relaxations to Apply Depending on Age of Oldest Ticket in Batch")]
             public TRelaxation[] Relaxations;
 
@@ -206,7 +206,7 @@ namespace Wsla.Server
 
                     //Calculate Disable Duration
                     {
-                        DisableDuration = float.PositiveInfinity;
+                        DisableTimespan = TimeSpan.MaxValue;
 
                         for (int i = Relaxations.Length - 1; i >= 0; i--)
                         {
@@ -214,18 +214,20 @@ namespace Wsla.Server
 
                             if (entry.Disable)
                             {
-                                DisableDuration = entry.Delay;
+                                DisableTimespan = TimeSpan.FromSeconds(entry.Delay);
                                 break;
                             }
                         }
                     }
                 }
             }
+
+            public override bool CheckDisable(TimeSpan age) => age >= DisableTimespan;
         }
 
         #region Equality
         [Description("Checks for Equality Against Reference")]
-        public class EqualRule : GenericBase<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
+        public class EqualRule : RelaxationRule<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
         {
             public const string ID = "Equal";
 
@@ -251,7 +253,7 @@ namespace Wsla.Server
             }
         }
         [Description("Checks for In-Equality Against Reference")]
-        public class NotEqualRule : GenericBase<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
+        public class NotEqualRule : RelaxationRule<MatchMakingRuleRelaxation.Value>, IInputCheck, IJoinCheck
         {
             public const string ID = "NotEqual";
 
@@ -280,7 +282,7 @@ namespace Wsla.Server
 
         #region Agreement
         [Description("Checks that All Tickets Agree on Parameter")]
-        public class AgreeRule : GenericBase<MatchMakingRuleRelaxation>, IJoinCheck
+        public class AgreeRule : RelaxationRule<MatchMakingRuleRelaxation>, IJoinCheck
         {
             public const string ID = "Agree";
 
@@ -296,7 +298,7 @@ namespace Wsla.Server
             }
         }
         [Description("Checks that All Tickets Disagree on Parameter")]
-        public class DisagreeRule : GenericBase<MatchMakingRuleRelaxation>, IJoinCheck
+        public class DisagreeRule : RelaxationRule<MatchMakingRuleRelaxation>, IJoinCheck
         {
             public const string ID = "Disagree";
 
@@ -320,7 +322,7 @@ namespace Wsla.Server
         #endregion
 
         #region Comparison
-        public abstract class ComparisonRule : GenericBase<MatchMakingRuleRelaxation.Float>, ICreateCheck, IInputCheck, IJoinCheck
+        public abstract class ComparisonRule : RelaxationRule<MatchMakingRuleRelaxation.Float>, ICreateCheck, IInputCheck, IJoinCheck
         {
             [Description("Reference Value to Compare Against")]
             public float Reference;
@@ -402,7 +404,7 @@ namespace Wsla.Server
         #endregion
 
         [Description("Checks that the Delta (difference) Between all the Tickets is Smaller than Or Equal to the Reference")]
-        public class DeltaRule : GenericBase<MatchMakingRuleRelaxation.Float>, IInputCheck, IJoinCheck
+        public class DeltaRule : RelaxationRule<MatchMakingRuleRelaxation.Float>, IInputCheck, IJoinCheck
         {
             public const string ID = "Delta";
 
@@ -440,7 +442,7 @@ namespace Wsla.Server
         }
 
         [Description("Checks for a Required Count of OddOnes in Batch")]
-        public class OddOneIn : GenericBase<OddOneIn.Relaxation>, IInputCheck, IJoinCheck, IDispatchCheck
+        public class OddOneIn : RelaxationRule<OddOneIn.Relaxation>, IInputCheck, IJoinCheck, IDispatchCheck
         {
             public const string ID = "OddOneIn";
 
@@ -595,16 +597,16 @@ namespace Wsla.Server
             [Description("Assign to Modify the Reference Value of the Rule")]
             public MatchMakingValue? Reference;
         }
-        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in MatchMakingValue input, out MatchMakingValue output)
+        public static void CalculateRelaxation<T>(MatchMakingRule.RelaxationRule<T> rule, TimeSpan age, in MatchMakingValue input, out MatchMakingValue output)
             where T : Value
         {
             output = input;
 
-            ref var relaxations = ref rule.Relaxations;
+            var relaxations = rule.Relaxations;
 
             for (int i = 0; i < relaxations.Length; i++)
             {
-                ref var entry = ref relaxations[i];
+                var entry = relaxations[i];
 
                 if (entry.Delay > age.TotalSeconds)
                     return;
@@ -619,16 +621,16 @@ namespace Wsla.Server
             [Description("Assign to Modify the Reference Value of the Rule")]
             public float? Reference;
         }
-        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in float input, out float output)
+        public static void CalculateRelaxation<T>(MatchMakingRule.RelaxationRule<T> rule, TimeSpan age, in float input, out float output)
             where T : Float
         {
             output = input;
 
-            ref var relaxations = ref rule.Relaxations;
+            var relaxations = rule.Relaxations;
 
             for (int i = 0; i < relaxations.Length; i++)
             {
-                ref var entry = ref relaxations[i];
+                var entry = relaxations[i];
 
                 if (entry.Delay > age.TotalSeconds)
                     return;
@@ -643,16 +645,16 @@ namespace Wsla.Server
             [Description("Assign to Modify the Reference Value of the Rule")]
             public int? Reference;
         }
-        public static void CalculateRelaxation<T>(MatchMakingRule.GenericBase<T> rule, TimeSpan age, in int input, out int output)
+        public static void CalculateRelaxation<T>(MatchMakingRule.RelaxationRule<T> rule, TimeSpan age, in int input, out int output)
             where T : Int
         {
             output = input;
 
-            ref var relaxations = ref rule.Relaxations;
+            var relaxations = rule.Relaxations;
 
             for (int i = 0; i < relaxations.Length; i++)
             {
-                ref var entry = ref relaxations[i];
+                var entry = relaxations[i];
 
                 if (entry.Delay > age.TotalSeconds)
                     return;
