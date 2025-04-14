@@ -8,7 +8,7 @@ namespace Wsla
 
         public const ushort RelayRealtimePort = 4527;
 
-        public const ushort CoordinatorHttpPort = 4895;
+        public const ushort CoordinatorHttpPort = 80;
         public const ushort CoordinatorMessagingPort = 4724;
 
         public static TimeSpan Timeout = TimeSpan.FromSeconds(10);

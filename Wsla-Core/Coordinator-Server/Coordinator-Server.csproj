@@ -10,9 +10,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Shared-Server\Shared-Server.csproj" />
-	</ItemGroup>
 
-	<ItemGroup>
 		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
 			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
 			<OutputItemType>Analyzer</OutputItemType>
@@ -20,16 +18,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Update="Configuration.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Schema\Configuration.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	</ItemGroup>
+		<Folder Include="wwwroot\" />
+		<Folder Include="Schema\" />
 
-	<ItemGroup>
-	  <Folder Include="Schema\" />
+		<None Update="Configuration.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Schema\Configuration.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 
 </Project>

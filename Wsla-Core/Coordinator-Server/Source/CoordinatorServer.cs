@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -60,6 +62,10 @@ namespace Wsla.Server
             {
                 var builder = WebApplication.CreateBuilder(args);
 
+#if DEBUG
+                builder.Environment.WebRootFileProvider = new PhysicalFileProvider($"{Directory.GetCurrentDirectory()}/../Control-Panel/bin/Publish/wwwroot");
+#endif
+
                 builder.Services.AddControllers(options =>
                 {
                     options.OutputFormatters.Add(new WslaSerializationFormatters.Output());
@@ -67,6 +73,12 @@ namespace Wsla.Server
                 });
 
                 Application = builder.Build();
+
+                Application.UseStaticFiles(new StaticFileOptions()
+                {
+                    ServeUnknownFileTypes = true,
+                });
+                Application.MapFallbackToFile("index.html");
 
                 Application.MapControllers();
 

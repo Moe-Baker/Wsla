@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Network-Generator", "Networ
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unit-Tests", "Unit-Tests\Unit-Tests.csproj", "{A7EAC854-9F26-4BE5-B440-107348454630}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Control-Panel", "Control-Panel\Control-Panel.csproj", "{8B1D0AFC-6E22-4806-89EB-997379BCAC14}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,10 @@ Global
 		{A7EAC854-9F26-4BE5-B440-107348454630}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A7EAC854-9F26-4BE5-B440-107348454630}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A7EAC854-9F26-4BE5-B440-107348454630}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B1D0AFC-6E22-4806-89EB-997379BCAC14}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B1D0AFC-6E22-4806-89EB-997379BCAC14}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B1D0AFC-6E22-4806-89EB-997379BCAC14}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B1D0AFC-6E22-4806-89EB-997379BCAC14}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
