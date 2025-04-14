@@ -4,7 +4,7 @@ namespace Wsla
 {
     public class Constants
     {
-        public static NetworkVersion ApiVersion { get; } = new NetworkVersion(0, 0, 1);
+        public static NetworkVersion ApiVersion { get; } = new(0, 0, 1);
 
         public const ushort RelayRealtimePort = 4527;
 
@@ -17,19 +17,21 @@ namespace Wsla
 
         public static class RestRoutes
         {
-            public const string RegisterRelay = "register-relay";
-            public const string ListRegions = "list-regions";
+            public const string Root = "api/";
 
-            public const string ListRooms = "list-rooms";
+            public const string RegisterRelay = Root + "register-relay";
+            public const string ListRegions = Root + "list-regions";
 
-            public const string FindRoom = "find-room";
+            public const string ListRooms = Root + "list-rooms";
 
-            public const string CreateRoom = "create-room";
-            public const string RemoveRoom = "remove-room";
+            public const string FindRoom = Root + "find-room";
 
-            public const string RequestMatch = "request-match";
-            public const string UpdateMatch = "update-match";
-            public const string CancelMatch = "cancel-match";
+            public const string CreateRoom = Root + "create-room";
+            public const string RemoveRoom = Root + "remove-room";
+
+            public const string RequestMatch = Root + "request-match";
+            public const string UpdateMatch = Root + "update-match";
+            public const string CancelMatch = Root + "cancel-match";
         }
 
         public const string WslaContentType = "application/x-wsla";

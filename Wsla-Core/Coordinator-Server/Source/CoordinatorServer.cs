@@ -66,8 +66,6 @@ namespace Wsla.Server
                     options.InputFormatters.Add(new WslaSerializationFormatters.Input());
                 });
 
-                builder.Services.AddControllers();
-
                 Application = builder.Build();
 
                 Application.MapControllers();
