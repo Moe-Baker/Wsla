@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 
 using System;
 using System.Collections.Generic;
@@ -62,10 +63,6 @@ namespace Wsla.Server
             {
                 var builder = WebApplication.CreateBuilder(args);
 
-#if DEBUG
-                builder.Environment.WebRootFileProvider = new PhysicalFileProvider($"{Directory.GetCurrentDirectory()}/../Control-Panel/bin/Publish/wwwroot");
-#endif
-
                 builder.Services.AddControllers(options =>
                 {
                     options.OutputFormatters.Add(new WslaSerializationFormatters.Output());
@@ -74,6 +71,12 @@ namespace Wsla.Server
 
                 Application = builder.Build();
 
+                if (Application.Environment.IsDevelopment())
+                {
+                    Application.UseWebAssemblyDebugging();
+                }
+
+                Application.UseBlazorFrameworkFiles();
                 Application.UseStaticFiles(new StaticFileOptions()
                 {
                     ServeUnknownFileTypes = true,
@@ -447,7 +450,7 @@ namespace Wsla.Server
 
             CoordinatorServer.Matchmaking.Browser.ListRegions(list);
 
-            return Accept(list);
+            return Ok(list);
         }
 
         [HttpPost(Constants.RestRoutes.CreateRoom)]
@@ -463,7 +466,7 @@ namespace Wsla.Server
 
             var info = response.Value.GetConnectionInfo();
 
-            return Accept(info);
+            return Ok(info);
         }
 
         [HttpPost(Constants.RestRoutes.ListRooms)]
@@ -476,7 +479,7 @@ namespace Wsla.Server
 
             CoordinatorServer.Matchmaking.Browser.ListRooms(applicationID, request.Regions, list);
 
-            return Accept(list);
+            return Ok(list);
         }
 
         [HttpPost(Constants.RestRoutes.FindRoom)]
@@ -491,7 +494,7 @@ namespace Wsla.Server
                 {
                     var info = room.GetConnectionInfo();
 
-                    return Accept(info);
+                    return Ok(info);
                 }
             }
 
@@ -515,6 +518,7 @@ namespace Wsla.Server
 
         static void RecordInput<[NetworkSerializationMarker] T>(Func<T, ActionResult> function) { }
         static void RecordInput<[NetworkSerializationMarker] T>(Func<T, Task<ActionResult>> function) { }
-        AcceptedResult Accept<[NetworkSerializationMarker] T>(T response) => Accepted(response);
+
+        OkObjectResult Ok<[NetworkSerializationMarker] T>(T response) => base.Ok(response);
     }
 }

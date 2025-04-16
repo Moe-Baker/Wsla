@@ -1,0 +1,31 @@
+﻿@page "/regions"
+@inject HttpClient Http
+
+<PageTitle>Regions</PageTitle>
+
+<h1>Weather</h1>
+
+<p>This component demonstrates fetching data from the server.</p>
+
+@if (list == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        @foreach (var region in list)
+        {
+            <MudText>@region</MudText>
+        }
+    </table>
+}
+
+@code {
+    private List<ServerRegion> list;
+
+    protected override async Task OnInitializedAsync()
+    {
+        list = await Http.GetFromJsonAsync<List<ServerRegion>>(Constants.RestRoutes.ListRegions);
+    }
+}

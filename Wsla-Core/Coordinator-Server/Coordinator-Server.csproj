@@ -6,19 +6,23 @@
 		<ImplicitUsings>disable</ImplicitUsings>
 		<Nullable>disable</Nullable>
 		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>
+		<CompressionEnabled>false</CompressionEnabled>
 	</PropertyGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Shared-Administration\Shared-Administration.csproj" />
 		<ProjectReference Include="..\Shared-Server\Shared-Server.csproj" />
 
 		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
 			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
 			<OutputItemType>Analyzer</OutputItemType>
 		</ProjectReference>
+
+		<ProjectReference Include="..\Control-Panel\Control-Panel.csproj" PrivateAssets="all"/>
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.4" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="wwwroot\" />
 		<Folder Include="Schema\" />
 
 		<None Update="Configuration.json">
