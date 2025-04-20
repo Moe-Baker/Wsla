@@ -10,7 +10,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Shared-Administration\Shared-Administration.csproj" />
 		<ProjectReference Include="..\Shared-Server\Shared-Server.csproj" />
 
 		<ProjectReference Include="../Network-Generator/Network-Generator.csproj">
@@ -18,7 +17,9 @@
 			<OutputItemType>Analyzer</OutputItemType>
 		</ProjectReference>
 
-		<ProjectReference Include="..\Control-Panel\Control-Panel.csproj" PrivateAssets="all"/>
+		<ProjectReference Include="..\Control-Panel\Control-Panel.csproj" PrivateAssets="all" />
+
+		<ProjectReference Include="..\Shared-Web\Shared-Web.csproj" />
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.4" />
 	</ItemGroup>
 

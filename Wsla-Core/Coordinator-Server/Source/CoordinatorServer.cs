@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -75,6 +77,8 @@ namespace Wsla.Server
                 {
                     Application.UseWebAssemblyDebugging();
                 }
+
+                Application.UseMiddleware<MyMiddleWare>();
 
                 Application.UseBlazorFrameworkFiles();
                 Application.UseStaticFiles(new StaticFileOptions()
@@ -436,6 +440,23 @@ namespace Wsla.Server
 
                 return server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
             }
+        }
+    }
+
+    public class MyMiddleWare
+    {
+        RequestDelegate Next;
+
+        public Task Invoke(HttpContext context)
+        {
+            NetworkLog.Error($"Hit Middle Ware {context.Request.Path}");
+
+            return Next(context);
+        }
+
+        public MyMiddleWare(RequestDelegate Next)
+        {
+            this.Next = Next;
         }
     }
 
