@@ -1,11 +1,9 @@
-﻿@page "/regions"
+﻿@page "/servers"
 @inject HttpClient Http
 
-<PageTitle>Regions</PageTitle>
+<PageTitle>Servers</PageTitle>
 
-<h1>Weather</h1>
-
-<p>This component demonstrates fetching data from the server.</p>
+<h1>Servers</h1>
 
 @if (list == null)
 {
@@ -13,10 +11,12 @@
 }
 else
 {
+    <p>Registered (@list.Count) Relay Servers</p>
+
     <table class="table">
         @foreach (var relay in list)
         {
-            <MudText>@relay.Info.Address - @relay.Info.Region</MudText>
+            <RelayServerEntryUI Server=relay></RelayServerEntryUI>
         }
     </table>
 }
