@@ -23,6 +23,8 @@ namespace Wsla.Server
             NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
         }
 
+        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(Info);
+
         public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
         {
             lock (Rooms)

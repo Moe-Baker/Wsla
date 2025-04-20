@@ -1,14 +1,11 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -65,18 +62,19 @@ namespace Wsla.Server
             {
                 var builder = WebApplication.CreateBuilder(args);
 
-                builder.Services.AddControllers(options =>
+                builder.Services.ConfigureHttpJsonOptions(options =>
                 {
-                    options.OutputFormatters.Add(new WslaSerializationFormatters.Output());
-                    options.InputFormatters.Add(new WslaSerializationFormatters.Input());
+                    SharedServerAPI.ConfigureJsonOptions(options.SerializerOptions);
                 });
+
+                builder.Services
+                    .AddControllers(WslaSerializationFormatters.Register)
+                    .AddJsonOptions(options => SharedServerAPI.ConfigureJsonOptions(options.JsonSerializerOptions));
 
                 Application = builder.Build();
 
                 if (Application.Environment.IsDevelopment())
-                {
                     Application.UseWebAssemblyDebugging();
-                }
 
                 Application.UseMiddleware<MyMiddleWare>();
 
@@ -206,6 +204,22 @@ namespace Wsla.Server
 
                     room = default;
                     return false;
+                }
+
+                public static List<RelayServerRegistration> ListRelays()
+                {
+                    lock (Servers)
+                    {
+                        var list = new List<RelayServerRegistration>(Servers.Count);
+
+                        foreach (var server in Servers)
+                        {
+                            var info = server.GetRegistration();
+                            list.Add(info);
+                        }
+
+                        return list;
+                    }
                 }
 
                 public static void ListRegions(List<ServerRegion> list)
@@ -470,6 +484,14 @@ namespace Wsla.Server
             var list = new List<ServerRegion>();
 
             CoordinatorServer.Matchmaking.Browser.ListRegions(list);
+
+            return Ok(list);
+        }
+
+        [HttpGet(Constants.RestRoutes.ListRelays)]
+        public ActionResult ListRelays()
+        {
+            var list = CoordinatorServer.Matchmaking.Browser.ListRelays();
 
             return Ok(list);
         }

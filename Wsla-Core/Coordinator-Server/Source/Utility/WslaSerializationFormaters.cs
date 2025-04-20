@@ -1,5 +1,6 @@
 ﻿using LiteNetLib.Utils;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
 
 using System;
@@ -107,6 +108,12 @@ namespace Wsla.Server
                     Reset = (x) => x.Position = 0
                 };
             }
+        }
+
+        public static void Register(MvcOptions options)
+        {
+            options.OutputFormatters.Add(new WslaSerializationFormatters.Output());
+            options.InputFormatters.Add(new WslaSerializationFormatters.Input());
         }
     }
 }

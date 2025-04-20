@@ -32,6 +32,8 @@ namespace Wsla
             public const string RequestMatch = Root + "request-match";
             public const string UpdateMatch = Root + "update-match";
             public const string CancelMatch = Root + "cancel-match";
+
+            public const string ListRelays = Root + "list-relays";
         }
 
         public const string WslaContentType = "application/x-wsla";

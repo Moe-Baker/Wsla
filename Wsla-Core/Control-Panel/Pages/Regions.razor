@@ -14,18 +14,18 @@
 else
 {
     <table class="table">
-        @foreach (var region in list)
+        @foreach (var relay in list)
         {
-            <MudText>@region</MudText>
+            <MudText>@relay.Info.Address - @relay.Info.Region</MudText>
         }
     </table>
 }
 
 @code {
-    private List<ServerRegion> list;
+    private List<RelayServerRegistration> list;
 
     protected override async Task OnInitializedAsync()
     {
-        list = await Http.GetFromJsonAsync<List<ServerRegion>>(Constants.RestRoutes.ListRegions);
+        list = await Http.GetFromJsonAsync<List<RelayServerRegistration>>(Constants.RestRoutes.ListRelays, options: SharedServerAPI.JsonOptions);
     }
 }

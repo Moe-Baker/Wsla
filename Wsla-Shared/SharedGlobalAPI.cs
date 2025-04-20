@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using System;
 
 namespace Wsla
 {
-    public static class SharedExtensions
+    public static class SharedGlobalAPI
     {
         public static async void Forget(this Task task)
         {
