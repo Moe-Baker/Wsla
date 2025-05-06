@@ -26,7 +26,7 @@ namespace Wsla.Unity
 
         [field: SerializeField]
         public NetworkEntity[] Locals { get; private set; }
-        public bool TryGetLocal(NetworkEntityResource resource, out NetworkEntity entity)
+        public bool TryGetLocal(NetworkResourceID resource, out NetworkEntity entity)
         {
             var index = resource.Value;
 

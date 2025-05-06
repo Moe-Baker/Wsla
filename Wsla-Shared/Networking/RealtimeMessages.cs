@@ -95,13 +95,13 @@ namespace Wsla
     public struct SpawnPrefabEntityRequest
     {
         public NetworkEntityID SpawnToken;
-        public NetworkEntityResource Resource;
+        public NetworkResourceID Resource;
 
         public NetworkEntityAuthorityMode Authority;
 
         public NetworkSceneVersion Scene;
 
-        public SpawnPrefabEntityRequest(NetworkEntityID SpawnToken, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkSceneVersion Scene)
+        public SpawnPrefabEntityRequest(NetworkEntityID SpawnToken, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkSceneVersion Scene)
         {
             this.SpawnToken = SpawnToken;
 
@@ -153,7 +153,7 @@ namespace Wsla
     public struct SpawnPrefabEntityCommand : IAutoNetworkSerialization
     {
         public NetworkEntityID ID;
-        public NetworkEntityResource Resource;
+        public NetworkResourceID Resource;
 
         public NetworkEntityAuthorityMode Authority;
         public NetworkClientID Owner;
@@ -168,7 +168,7 @@ namespace Wsla
                 context.Select(ref Owner);
         }
 
-        public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
+        public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
         {
             this.ID = ID;
             this.Resource = Resource;

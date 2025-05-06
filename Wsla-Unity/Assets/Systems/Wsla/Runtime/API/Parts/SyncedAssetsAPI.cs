@@ -24,10 +24,10 @@ namespace Wsla.Unity
         [field: SerializeField]
         public ScriptableObject[] Collection { get; private set; }
 
-        Dictionary<ScriptableObject, NetworkEntityResource> Dictionary;
+        Dictionary<ScriptableObject, NetworkResourceID> Dictionary;
 
-        public bool TryGet(ScriptableObject asset, out NetworkEntityResource id) => Dictionary.TryGetValue(asset, out id);
-        public bool TryGet(NetworkEntityResource id, out ScriptableObject asset)
+        public bool TryGet(ScriptableObject asset, out NetworkResourceID id) => Dictionary.TryGetValue(asset, out id);
+        public bool TryGet(NetworkResourceID id, out ScriptableObject asset)
         {
             var index = id.Value;
 
@@ -49,13 +49,13 @@ namespace Wsla.Unity
             Collect();
 #endif
 
-            Dictionary = new Dictionary<ScriptableObject, NetworkEntityResource>(Collection.Length);
+            Dictionary = new Dictionary<ScriptableObject, NetworkResourceID>(Collection.Length);
 
             for (ushort i = 0; i < Collection.Length; i++)
             {
                 var asset = Collection[i];
 
-                var id = new NetworkEntityResource(i);
+                var id = new NetworkResourceID(i);
 
                 if (Dictionary.TryAdd(asset, id) is false)
                     throw new InvalidOperationException($"Duplicate Asset ({asset}) Found in SyncedAssets");

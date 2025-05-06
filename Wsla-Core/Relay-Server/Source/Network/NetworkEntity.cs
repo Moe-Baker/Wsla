@@ -11,7 +11,7 @@ namespace Wsla.Server
     {
         public NetworkEntityID ID { get; }
         public NetworkEntityOrigin Origin { get; }
-        public NetworkEntityResource Resource { get; }
+        public NetworkResourceID Resource { get; }
 
         #region Owner
         public NetworkClient Owner { get; private set; }
@@ -51,7 +51,7 @@ namespace Wsla.Server
         public override string ToString() => $"(ID: {ID})";
 
         readonly Room Room;
-        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
+        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
         {
             this.Room = Room;
             this.ID = ID;

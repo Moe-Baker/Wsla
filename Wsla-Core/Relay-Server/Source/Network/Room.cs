@@ -1096,7 +1096,7 @@ namespace Wsla.Server
 
                 for (byte i = 0; i < count; i++)
                 {
-                    var resource = new NetworkEntityResource(i);
+                    var resource = new NetworkResourceID(i);
                     var authority = NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(reader);
                     var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, sender, authority);
 

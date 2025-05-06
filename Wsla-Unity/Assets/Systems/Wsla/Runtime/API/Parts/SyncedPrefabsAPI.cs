@@ -24,10 +24,10 @@ namespace Wsla.Unity
         [field: SerializeField, PrefabOnly]
         public GameObject[] Collection { get; private set; }
 
-        Dictionary<GameObject, NetworkEntityResource> Dictionary;
+        Dictionary<GameObject, NetworkResourceID> Dictionary;
 
-        public bool TryGet(GameObject prefab, out NetworkEntityResource id) => Dictionary.TryGetValue(prefab, out id);
-        public bool TryGet(NetworkEntityResource id, out GameObject prefab)
+        public bool TryGet(GameObject prefab, out NetworkResourceID id) => Dictionary.TryGetValue(prefab, out id);
+        public bool TryGet(NetworkResourceID id, out GameObject prefab)
         {
             var index = id.Value;
 
@@ -47,13 +47,13 @@ namespace Wsla.Unity
 
             Collect();
 
-            Dictionary = new Dictionary<GameObject, NetworkEntityResource>(Collection.Length);
+            Dictionary = new Dictionary<GameObject, NetworkResourceID>(Collection.Length);
 
             for (ushort i = 0; i < Collection.Length; i++)
             {
                 var prefab = Collection[i];
 
-                var id = new NetworkEntityResource(i);
+                var id = new NetworkResourceID(i);
 
                 if (Dictionary.TryAdd(prefab, id) is false)
                     throw new InvalidOperationException($"Duplicate Prefab ({prefab}) Found in SyncedAssets");

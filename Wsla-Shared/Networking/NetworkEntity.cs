@@ -46,7 +46,7 @@ namespace Wsla
 
     [Serializable]
     [NetworkBlittable]
-    public struct NetworkEntityResource : IEquatable<NetworkEntityResource>
+    public struct NetworkResourceID : IEquatable<NetworkResourceID>
     {
         public ushort Value { get; }
 
@@ -54,12 +54,12 @@ namespace Wsla
 
         public override bool Equals(object obj)
         {
-            if (obj is NetworkEntityResource other)
+            if (obj is NetworkResourceID other)
                 return Equals(other);
 
             return false;
         }
-        public bool Equals(NetworkEntityResource other)
+        public bool Equals(NetworkResourceID other)
         {
             return Value == other.Value;
         }
@@ -68,22 +68,22 @@ namespace Wsla
 
         public override string ToString() => Value.ToString();
 
-        public NetworkEntityResource(ushort value)
+        public NetworkResourceID(ushort value)
         {
             this.Value = value;
         }
 
-        public static NetworkEntityResource None { get; } = new NetworkEntityResource(MaxValue);
+        public static NetworkResourceID None { get; } = new NetworkResourceID(MaxValue);
 
-        public static bool operator ==(NetworkEntityResource left, NetworkEntityResource right) => left.Equals(right);
-        public static bool operator !=(NetworkEntityResource left, NetworkEntityResource right) => !left.Equals(right);
+        public static bool operator ==(NetworkResourceID left, NetworkResourceID right) => left.Equals(right);
+        public static bool operator !=(NetworkResourceID left, NetworkResourceID right) => !left.Equals(right);
     }
 
     public struct NetworkEntityDefinition : IAutoNetworkSerialization
     {
         public NetworkEntityID ID;
         public NetworkEntityOrigin Origin;
-        public NetworkEntityResource Resource;
+        public NetworkResourceID Resource;
 
         public NetworkEntityAuthorityMode Authority;
 
@@ -105,7 +105,7 @@ namespace Wsla
                 context.Select(ref TransferToken);
         }
 
-        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkEntityResource Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkEntityTransferToken TransferToken)
+        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkEntityTransferToken TransferToken)
         {
             this.ID = ID;
             this.Origin = Origin;

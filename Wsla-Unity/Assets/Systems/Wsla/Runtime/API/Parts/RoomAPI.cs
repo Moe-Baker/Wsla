@@ -761,14 +761,14 @@ namespace Wsla.Unity
 
                 return InstantiatePrefab(prefab, resource);
             }
-            public NetworkEntity InstantiatePrefab(NetworkEntityResource resource)
+            public NetworkEntity InstantiatePrefab(NetworkResourceID resource)
             {
                 if (Room.API.SyncedPrefabs.TryGet(resource, out var prefab) is false)
                     throw new ArgumentOutOfRangeException($"resource {resource} not Registered as Sync Prefab");
 
                 return InstantiatePrefab(prefab, resource);
             }
-            NetworkEntity InstantiatePrefab(GameObject prefab, NetworkEntityResource resource)
+            NetworkEntity InstantiatePrefab(GameObject prefab, NetworkResourceID resource)
             {
                 var gameObject = GameObject.Instantiate(prefab).GetComponent<NetworkEntity>();
 
@@ -962,7 +962,7 @@ namespace Wsla.Unity
                         throw new NotImplementedException();
                 }
             }
-            NetworkEntity FindInScene(NetworkEntityResource resource)
+            NetworkEntity FindInScene(NetworkResourceID resource)
             {
                 if (Room.Scene.Component.TryGetLocal(resource, out var entity) is false)
                     throw new ArgumentException($"No Resource {resource} found in Scene {Room.Scene.Component}");
@@ -1336,7 +1336,7 @@ namespace Wsla.Unity
                     var entity = component.Locals[i];
 
                     var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
-                    var resource = new NetworkEntityResource(i);
+                    var resource = new NetworkResourceID(i);
                     var authority = component.Locals[i].Authority;
                     var ownerID = Room.Clients.Master.ID;
 
@@ -1411,7 +1411,7 @@ namespace Wsla.Unity
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;
 
-        public SpawnOptions SetResource(NetworkEntityResource resource)
+        public SpawnOptions SetResource(NetworkResourceID resource)
         {
             var instance = Room.Entities.InstantiatePrefab(resource);
             SetInstance(instance);

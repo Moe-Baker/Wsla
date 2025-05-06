@@ -21,7 +21,7 @@ namespace Wsla.Unity
         {
             if (API.SyncedAssets.TryGet(value, out var id) is false)
             {
-                id = NetworkEntityResource.None;
+                id = NetworkResourceID.None;
                 NetworkLog.Error($"No Synced Asset [{value}] Registered to Network API Synced Assets, Will Serialize as Null");
             }
 
@@ -29,9 +29,9 @@ namespace Wsla.Unity
         }
         public override void Read(ref T value, ref BinarySource stream)
         {
-            var id = NetworkSerializer.ReadValue<NetworkEntityResource>(ref stream);
+            var id = NetworkSerializer.ReadValue<NetworkResourceID>(ref stream);
 
-            if (id == NetworkEntityResource.None)
+            if (id == NetworkResourceID.None)
             {
                 value = null;
                 return;
