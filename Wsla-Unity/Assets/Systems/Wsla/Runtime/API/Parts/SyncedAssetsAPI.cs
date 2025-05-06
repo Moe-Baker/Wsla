@@ -101,6 +101,7 @@ namespace Wsla.Unity
                     this.Property = Property;
 
                     text = Property.displayName;
+                    this.BindProperty(Property);
 
                     //Auto
                     {
