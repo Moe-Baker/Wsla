@@ -16,28 +16,28 @@ using UnityEditor.UIElements;
 namespace Wsla.Unity
 {
     [Serializable]
-    public class SyncedPrefabsAPI : NetworkAPI.Property
+    public class SyncedAssetsAPI : NetworkAPI.Property
     {
         [field: SerializeField]
         public bool Auto { get; private set; } = true;
 
-        [field: SerializeField, PrefabOnly]
-        public GameObject[] Collection { get; private set; }
+        [field: SerializeField]
+        public ScriptableObject[] Collection { get; private set; }
 
-        Dictionary<GameObject, NetworkEntityResource> Dictionary;
+        Dictionary<ScriptableObject, NetworkEntityResource> Dictionary;
 
-        public bool TryGet(GameObject prefab, out NetworkEntityResource id) => Dictionary.TryGetValue(prefab, out id);
-        public bool TryGet(NetworkEntityResource id, out GameObject prefab)
+        public bool TryGet(ScriptableObject asset, out NetworkEntityResource id) => Dictionary.TryGetValue(asset, out id);
+        public bool TryGet(NetworkEntityResource id, out ScriptableObject asset)
         {
             var index = id.Value;
 
             if (index >= Collection.Length || index < 0)
             {
-                prefab = default;
+                asset = default;
                 return false;
             }
 
-            prefab = Collection[index];
+            asset = Collection[index];
             return true;
         }
 
@@ -45,18 +45,20 @@ namespace Wsla.Unity
         {
             base.Set(value);
 
+#if UNITY_EDITOR
             Collect();
+#endif
 
-            Dictionary = new Dictionary<GameObject, NetworkEntityResource>(Collection.Length);
+            Dictionary = new Dictionary<ScriptableObject, NetworkEntityResource>(Collection.Length);
 
             for (ushort i = 0; i < Collection.Length; i++)
             {
-                var prefab = Collection[i];
+                var asset = Collection[i];
 
                 var id = new NetworkEntityResource(i);
 
-                if (Dictionary.TryAdd(prefab, id) is false)
-                    throw new InvalidOperationException($"Duplicate Prefab ({prefab}) Found in SyncedAssets");
+                if (Dictionary.TryAdd(asset, id) is false)
+                    throw new InvalidOperationException($"Duplicate Asset ({asset}) Found in SyncedAssets");
             }
         }
 
@@ -70,14 +72,14 @@ namespace Wsla.Unity
         {
             if (Auto is false) return;
 
-            Collection = AssetDatabase.FindAssets("t:Prefab")
+            Collection = AssetDatabase.FindAssets("t:ScriptableObject")
                 .Select(AssetDatabase.GUIDToAssetPath)
-                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
-                .Where(x => x.TryGetComponent<NetworkEntity>(out _))
+                .Select(AssetDatabase.LoadAssetAtPath<ScriptableObject>)
+                .Where(x => x is ISyncedAsset asset && asset.IncludeInSync)
                 .ToArray();
         }
 
-        [CustomPropertyDrawer(typeof(SyncedPrefabsAPI))]
+        [CustomPropertyDrawer(typeof(SyncedAssetsAPI))]
         class Drawer : PropertyDrawer
         {
             public override VisualElement CreatePropertyGUI(SerializedProperty property)

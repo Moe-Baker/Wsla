@@ -73,6 +73,8 @@ namespace Wsla
             this.Value = value;
         }
 
+        public static NetworkEntityResource None { get; } = new NetworkEntityResource(MaxValue);
+
         public static bool operator ==(NetworkEntityResource left, NetworkEntityResource right) => left.Equals(right);
         public static bool operator !=(NetworkEntityResource left, NetworkEntityResource right) => !left.Equals(right);
     }

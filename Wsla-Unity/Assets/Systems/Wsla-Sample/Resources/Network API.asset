@@ -30,5 +30,14 @@ MonoBehaviour:
     - C1
     - C2
   <SyncedPrefabs>k__BackingField:
+    <Auto>k__BackingField: 1
     <Collection>k__BackingField:
     - {fileID: 9032691475832905782, guid: 2d0fe9588da7c0a429bf9b6d3a985ec5, type: 3}
+  <SyncedAssets>k__BackingField:
+    <Auto>k__BackingField: 1
+    <Collection>k__BackingField:
+    - {fileID: 11400000, guid: 2b34d2e3b40770f46bdb235d088d9360, type: 2}
+    - {fileID: 11400000, guid: abae399a089aa0a42a90e856c887d548, type: 2}
+    - {fileID: 11400000, guid: bbe508f10335f9043954445cf1963870, type: 2}
+    - {fileID: 11400000, guid: cb1b50513cb644448936a5c2ab4a5ad8, type: 2}
+    - {fileID: 11400000, guid: 6ed63e79bb16dfe45abd79f2b8df556d, type: 2}

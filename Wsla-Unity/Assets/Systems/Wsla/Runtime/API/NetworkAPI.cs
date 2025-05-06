@@ -8,7 +8,7 @@ using UnityEngine;
 namespace Wsla.Unity
 {
     [CreateAssetMenu(menuName = Path + "Network API")]
-    public partial class NetworkAPI : ScriptableManager<NetworkAPI>
+    public partial class NetworkAPI : ScriptableManager<NetworkAPI>, IPreCache
     {
         public const string Path = "Wsla/";
 
@@ -44,6 +44,9 @@ namespace Wsla.Unity
         public SyncedPrefabsAPI SyncedPrefabs { get; private set; }
 
         [field: SerializeField]
+        public SyncedAssetsAPI SyncedAssets { get; private set; }
+
+        [field: SerializeField]
         public RoomAPI Room { get; private set; }
 
         [Serializable]
@@ -74,7 +77,14 @@ namespace Wsla.Unity
             Tick.Set(this);
             Channels.Set(this);
             SyncedPrefabs.Set(this);
+            SyncedAssets.Set(this);
             Room.Set(this);
+        }
+
+        public void PreCache()
+        {
+            SyncedPrefabs.PreCache();
+            SyncedAssets.PreCache();
         }
 
         public bool IsPrepared { get; private set; }
