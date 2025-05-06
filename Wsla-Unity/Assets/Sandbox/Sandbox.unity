@@ -470,6 +470,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e21d68c8e702d144fa58577b428e212b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  SampleSyncData: {fileID: 11400000, guid: 2b34d2e3b40770f46bdb235d088d9360, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

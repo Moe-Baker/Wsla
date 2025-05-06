@@ -7,11 +7,6 @@ namespace Wsla.Serialization
 {
     public static class NetworkSerializer
     {
-        public static class Source
-        {
-
-        }
-
         public static void WriteValue<[NetworkSerializationMarker] TValue>(in TValue value, ref BinarySource stream)
         {
             var resolver = NetworkSerializationResolver.Retrieve<TValue>();

@@ -19,14 +19,22 @@ namespace Wsla.Unity
 
         public override void Write(in T value, ref BinarySource stream)
         {
+            if (value == null)
+            {
+                NetworkSerializer.WriteValue(NetworkResourceID.None, ref stream);
+                return;
+            }
+
             if (API.SyncedAssets.TryGet(value, out var id) is false)
             {
-                id = NetworkResourceID.None;
                 NetworkLog.Error($"No Synced Asset [{value}] Registered to Network API Synced Assets, Will Serialize as Null");
+                NetworkSerializer.WriteValue(NetworkResourceID.None, ref stream);
+                return;
             }
 
             NetworkSerializer.WriteValue(in id, ref stream);
         }
+
         public override void Read(ref T value, ref BinarySource stream)
         {
             var id = NetworkSerializer.ReadValue<NetworkResourceID>(ref stream);

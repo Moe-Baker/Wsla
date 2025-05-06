@@ -64,6 +64,9 @@ namespace Wsla.Generator
             public INamedTypeSymbol BehaviourContract;
             public INamedTypeSymbol BehaviourResolver;
 
+            public INamedTypeSymbol ISyncedAsset;
+            public INamedTypeSymbol SyncedAssetResolver;
+
             (string, INamedTypeSymbol) GetComparableFields() => (AssemblyName, MarkerAttribute);
 
             public override bool Equals(object obj)
@@ -123,6 +126,9 @@ namespace Wsla.Generator
 
                     BehaviourContract = compilation.GetTypeByMetadataName(NetworkSyncMembersGenerator.Constants.INetworkBehaviour),
                     BehaviourResolver = compilation.GetGenericTypeByMetadataName(NetworkSyncMembersGenerator.Constants.NetworkBehaviourSerializationResolver, 1),
+
+                    ISyncedAsset = compilation.GetTypeByMetadataName(NetworkSyncMembersGenerator.Constants.ISyncedAsset),
+                    SyncedAssetResolver = compilation.GetGenericTypeByMetadataName(NetworkSyncMembersGenerator.Constants.SyncedAssetSerializationResolver, 1),
                 };
 
                 return data;
@@ -330,6 +336,9 @@ namespace Wsla.Generator
                     return true;
 
                 if (ResolveBehaviour(context, compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveSyncedAsset(context, compilation, usage, resolvers))
                     return true;
 
                 return false;
@@ -561,6 +570,19 @@ namespace Wsla.Generator
                     return false;
 
                 resolvers[usage] = compilation.BehaviourResolver.Construct(usage);
+
+                return true;
+            }
+
+            static bool ResolveSyncedAsset(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                if (compilation.ISyncedAsset is null || compilation.SyncedAssetResolver is null)
+                    return false;
+
+                if (usage.ImplementsInterface(compilation.ISyncedAsset) is false)
+                    return false;
+
+                resolvers[usage] = compilation.SyncedAssetResolver.Construct(usage);
 
                 return true;
             }

@@ -546,6 +546,9 @@ namespace Wsla.Generator
             public static readonly string RpcInfo = $"{Namespace}.{nameof(RpcInfo)}";
 
             public static readonly string NetworkBehaviourSerializationResolver = $"{Namespace}.{nameof(NetworkBehaviourSerializationResolver)}";
+
+            public static readonly string ISyncedAsset = $"{Namespace}.{nameof(ISyncedAsset)}";
+            public static readonly string SyncedAssetSerializationResolver = $"{Namespace}.{nameof(SyncedAssetSerializationResolver)}";
         }
 
         public class DiagnosticCodes : GlobalNetworkGenerator.DiagnosticCodes { }
