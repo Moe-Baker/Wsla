@@ -64,7 +64,9 @@ namespace Wsla.Unity
 
         internal void PreCache()
         {
+#if UNITY_EDITOR
             Collect();
+#endif
         }
 
 #if UNITY_EDITOR

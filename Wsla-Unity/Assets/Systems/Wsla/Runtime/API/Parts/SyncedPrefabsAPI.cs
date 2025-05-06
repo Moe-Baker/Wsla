@@ -45,7 +45,9 @@ namespace Wsla.Unity
         {
             base.Set(value);
 
+#if UNITY_EDITOR
             Collect();
+#endif
 
             Dictionary = new Dictionary<GameObject, NetworkResourceID>(Collection.Length);
 
@@ -62,7 +64,9 @@ namespace Wsla.Unity
 
         internal void PreCache()
         {
+#if UNITY_EDITOR
             Collect();
+#endif
         }
 
 #if UNITY_EDITOR
