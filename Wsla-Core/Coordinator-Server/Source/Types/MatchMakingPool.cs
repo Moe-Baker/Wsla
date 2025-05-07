@@ -292,8 +292,9 @@ namespace Wsla.Server
             var Scene = GetOldestTicket().Scene;
             var Privacy = Pool.Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
             var Lock = Pool.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
+            var Shutdown = Pool.Configuration.ShutdownPolicy;
 
-            return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock);
+            return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock, Shutdown);
         }
 
         public void AcceptAll(RoomConnectionInfo info)

@@ -575,6 +575,13 @@
                       }
                     ]
                   }
+                },
+                "ShutdownPolicy": {
+                  "description": "Policy for Setting when the Created Room will Shutdown",
+                  "enum": [
+                    "OnMasterDisconnect",
+                    "OnAllDisconnect"
+                  ]
                 }
               },
               "required": [

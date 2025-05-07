@@ -145,6 +145,7 @@ namespace Wsla
         public FixedString<FS20> Password;
         public RoomPrivacy Privacy;
         public RoomLockPolicy Lock;
+        public RoomShutdownPolicy Shutdown;
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -154,9 +155,10 @@ namespace Wsla
             context.Select(ref Password);
             context.Select(ref Privacy);
             context.Select(ref Lock);
+            context.Select(ref Shutdown);
         }
 
-        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password, RoomPrivacy Privacy, RoomLockPolicy Lock)
+        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password, RoomPrivacy Privacy, RoomLockPolicy Lock, RoomShutdownPolicy Shutdown)
         {
             this.Name = Name;
             this.Capacity = Capacity;
@@ -164,6 +166,7 @@ namespace Wsla
             this.Password = Password;
             this.Privacy = Privacy;
             this.Lock = Lock;
+            this.Shutdown = Shutdown;
         }
     }
 
@@ -232,5 +235,18 @@ namespace Wsla
         /// Room will lock after it fills
         /// </summary>
         AfterFill,
+    }
+
+    public enum RoomShutdownPolicy
+    {
+        /// <summary>
+        /// Shutdown the room after the master client disconnect, basically disallowing host-migration
+        /// </summary>
+        OnMasterDisconnect = 0,
+
+        /// <summary>
+        /// Shutdown the room after all clients disconnecting, enabling master client changing ~(host migration)
+        /// </summary>
+        OnAllDisconnect = 1
     }
 }

@@ -76,6 +76,9 @@ namespace Wsla.Server
         [Description("Rules for Match Making")]
         public MatchMakingRule[] Rules;
 
+        [Description("Policy for Setting when the Created Room will Shutdown")]
+        public RoomShutdownPolicy ShutdownPolicy;
+
         public MatchMakingRuleNumerator<MatchMakingRule> IterateRules() => new MatchMakingRuleNumerator<MatchMakingRule>(Rules);
         public MatchMakingRuleNumerator<T> IterateRules<T>() where T : class, IMatchMakingRule => new MatchMakingRuleNumerator<T>(Rules);
     }

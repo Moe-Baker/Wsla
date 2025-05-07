@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -39,10 +40,9 @@ namespace Wsla
             public static void Write<T>(string file)
             {
                 var schema = Create<T>();
-
                 var json = schema.ToString();
 
-                var directory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+                var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).Parent.Parent.Parent.FullName;
 
                 File.WriteAllText(Path.Join(directory, file), json);
             }
@@ -128,6 +128,7 @@ namespace Wsla
 
             JsonOptions.Converters.Add(new JsonStringEnumConverter<ServerRegion>());
             JsonOptions.Converters.Add(new MatchMakingValueJsonConverter());
+            JsonOptions.Converters.Add(new JsonStringEnumConverter<RoomShutdownPolicy>());
         }
     }
 

@@ -70,6 +70,8 @@ namespace Wsla.Server
                 }
             }
 
+            public RoomShutdownPolicy ShutdownPolicy { get; }
+
             public RoomStateInfo ReadState() => new RoomStateInfo(Name, Capacity, Occupancy);
 
             readonly Room Room;
@@ -77,17 +79,16 @@ namespace Wsla.Server
             {
                 this.Room = Room;
 
-                //Assign Fields
-                {
-                    Name = parameters.Name;
-                    Capacity = parameters.Capacity;
-                    Password = parameters.Password;
+                Name = parameters.Name;
+                Capacity = parameters.Capacity;
+                Password = parameters.Password;
 
-                    Privacy = parameters.Privacy;
+                Privacy = parameters.Privacy;
 
-                    IsLocked = false;
-                    LockPolicy = parameters.Lock;
-                }
+                IsLocked = false;
+                LockPolicy = parameters.Lock;
+
+                ShutdownPolicy = parameters.Shutdown;
             }
         }
 
@@ -499,88 +500,93 @@ namespace Wsla.Server
                 if (Collection.Count is 0) //Last Client, Shutdown Room
                 {
                     Room.Stop();
+                    return;
                 }
-                else
+
+                if (client.IsMaster && Room.Properties.ShutdownPolicy is RoomShutdownPolicy.OnMasterDisconnect)
                 {
-                    //Free Client ID
-                    IDGenerator.Return(client.ID);
+                    Room.Stop();
+                    return;
+                }
 
-                    //Free Entity Spawn Tokens
-                    foreach (var token in client.SpawnTokens)
-                        Room.Entities.IDGenerator.Return(token);
+                //Free Client ID
+                IDGenerator.Return(client.ID);
 
-                    var isMaster = (client == Master);
+                //Free Entity Spawn Tokens
+                foreach (var token in client.SpawnTokens)
+                    Room.Entities.IDGenerator.Return(token);
 
-                    //Replace Master Client
-                    if (isMaster) ReplaceMaster();
+                var isMaster = (client == Master);
 
-                    //Replicate
+                //Replace Master Client
+                if (isMaster) ReplaceMaster();
+
+                //Replicate
+                {
+                    var writer = Room.Pools.SinglePackerWriter.Take();
+
+                    var message = new ClientDisconnectMessage(client.ID, isMaster ? Master.ID : null);
+                    NetworkSerializer.WriteHeader(in message, writer);
+
+                    foreach (var entity in client.Entities)
                     {
-                        var writer = Room.Pools.SinglePackerWriter.Take();
-
-                        var message = new ClientDisconnectMessage(client.ID, isMaster ? Master.ID : null);
-                        NetworkSerializer.WriteHeader(in message, writer);
-
-                        foreach (var entity in client.Entities)
+                        switch (entity.Authority)
                         {
-                            switch (entity.Authority)
-                            {
-                                //Transfer to the new Master Client
-                                case NetworkEntityAuthorityMode.Authoritative:
-                                    Room.Entities.Transfer(entity, Master);
-                                    break;
-
-                                //Despawn Locally, Remote Clients Despawn Locally as Well
-                                case NetworkEntityAuthorityMode.Explicit:
-                                    Room.Entities.Despawn(entity);
-                                    break;
-
-                                //Serialize their ID's and Despawn Explicitly on Remote Clients
-                                case NetworkEntityAuthorityMode.Transferable:
-                                {
-                                    NetworkSerializer.WriteValue(entity.ID, writer);
-
-                                    switch (entity.Origin)
-                                    {
-                                        //Despawn all Prefabs Entities
-                                        case NetworkEntityOrigin.Prefab:
-                                        {
-                                            Room.Entities.Despawn(entity);
-                                            NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Despawn, writer);
-                                        }
-                                        break;
-
-                                        //Transfer all Scene Entities back to the Master Client
-                                        case NetworkEntityOrigin.Scene:
-                                        {
-                                            Room.Entities.Transfer(entity, Master);
-                                            NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Transfer, writer);
-                                        }
-                                        break;
-
-                                        default: throw new NotImplementedException();
-                                    }
-                                }
+                            //Transfer to the new Master Client
+                            case NetworkEntityAuthorityMode.Authoritative:
+                                Room.Entities.Transfer(entity, Master);
                                 break;
 
-                                default: throw new NotImplementedException();
+                            //Despawn Locally, Remote Clients Despawn Locally as Well
+                            case NetworkEntityAuthorityMode.Explicit:
+                                Room.Entities.Despawn(entity);
+                                break;
+
+                            //Serialize their ID's and Despawn Explicitly on Remote Clients
+                            case NetworkEntityAuthorityMode.Transferable:
+                            {
+                                NetworkSerializer.WriteValue(entity.ID, writer);
+
+                                switch (entity.Origin)
+                                {
+                                    //Despawn all Prefabs Entities
+                                    case NetworkEntityOrigin.Prefab:
+                                    {
+                                        Room.Entities.Despawn(entity);
+                                        NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Despawn, writer);
+                                    }
+                                    break;
+
+                                    //Transfer all Scene Entities back to the Master Client
+                                    case NetworkEntityOrigin.Scene:
+                                    {
+                                        Room.Entities.Transfer(entity, Master);
+                                        NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Transfer, writer);
+                                    }
+                                    break;
+
+                                    default: throw new NotImplementedException();
+                                }
                             }
+                            break;
+
+                            default: throw new NotImplementedException();
                         }
-
-                        Transport.BroadcastWriter(writer, except: client);
                     }
 
-                    client.Dispose();
+                    Transport.BroadcastWriter(writer, except: client);
+                }
 
-                    //Submit Matchmaker Change
+                client.Dispose();
+
+                //Submit Matchmaker Change
+                {
+                    var change = new UpdateRoomParameters()
                     {
-                        var change = new UpdateRoomParameters()
-                        {
-                            Occupancy = Room.Properties.Occupancy,
-                        };
+                        Occupancy = Room.Properties.Occupancy,
+                    };
 
-                        RelayServer.Matchmaking.Updates.Add(Room.RoomID, change);
-                    }
+                    RelayServer.Matchmaking.Updates.Add(Room.RoomID, change);
                 }
             }
 

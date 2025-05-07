@@ -57,8 +57,9 @@ public class MainMenu : MonoBehaviour
         var Password = new FixedString<FS20>();
         var Privacy = RoomPrivacy.Public;
         var Lock = RoomLockPolicy.AfterFill;
+        var Shutdown = RoomShutdownPolicy.OnMasterDisconnect;
 
-        return new CreateRoomParameters(Name, Capacity, Scene, Password, Privacy, Lock);
+        return new CreateRoomParameters(Name, Capacity, Scene, Password, Privacy, Lock, Shutdown);
     }
 
     async void PerformOperation(Func<UniTask> operation)
