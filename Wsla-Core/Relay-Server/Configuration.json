@@ -1,13 +1,13 @@
 {
   "$schema": "./Schema/Configuration.json",
 
-  "Coordinator Hostname": "10.0.0.10",
+  "CoordinatorHostname": "10.0.0.10",
 
-  "Realtime Thread Allowance": 14,
+  "RealtimeThreadAllowance": 14,
 
-  "Realtime Fixed Time": 5,
+  "RealtimeFixedTime": 5,
 
   "Region": "EU",
 
-  "Public Hostname": "10.0.0.10"
+  "PublicHostname": "10.0.0.10"
 }

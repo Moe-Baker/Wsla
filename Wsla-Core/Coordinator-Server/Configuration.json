@@ -16,6 +16,7 @@
           "Duration": 10,
           "Backfill": false,
           "Balanced": false,
+          "ShutdownPolicy": "OnAllDisconnect",
           "Rules":
           [
             {

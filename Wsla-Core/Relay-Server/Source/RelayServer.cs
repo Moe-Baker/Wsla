@@ -98,24 +98,21 @@ namespace Wsla.Server
 
             public class Data
             {
-                [JsonRequired, JsonPropertyName("Coordinator Hostname")]
+                [JsonRequired]
                 [Description("Allows Both Host Names & IPs")]
                 public string CoordinatorHostname;
 
-                [JsonPropertyName("Realtime Thread Allowance")]
                 [Description("Thread Count to Use for Realtime Rooms, Defaults to Assign System's Thread Count")]
                 public int? RealtimeThreadAllowance;
 
-                [JsonPropertyName("Realtime Fixed Time")]
                 [Description("The Timestep Duration for Realtime Rooms, Defaults to 10")]
                 public ushort? RealtimeFixedTime;
                 public const ushort DefaultRealtimeFixedTime = 10;
 
-                [JsonRequired, JsonPropertyName("Region")]
+                [JsonRequired]
                 [Description("The Region to List This Server in")]
                 public ServerRegion Region;
 
-                [JsonPropertyName("Public Hostname")]
                 [Description($"The Public Host Name for This Machine, Defaults to Automatically Fetching The Machine's Public IPv4 Address")]
                 public string PublicHostname;
             }
