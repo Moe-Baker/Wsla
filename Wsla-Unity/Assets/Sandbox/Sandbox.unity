@@ -471,6 +471,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   SampleSyncData: {fileID: 11400000, guid: 2b34d2e3b40770f46bdb235d088d9360, type: 2}
+  Data1:
+    A: 0
+    B: 0
+    C: 0
+    D: 0
+    E: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

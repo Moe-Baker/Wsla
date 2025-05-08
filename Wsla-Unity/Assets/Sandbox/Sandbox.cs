@@ -31,4 +31,12 @@ public class Sandbox : MonoBehaviour
 
         return ButtonFieldOperation.None;
     });
+
+    [DrawChildren]
+    public Data Data1;
+    [Serializable]
+    public class Data
+    {
+        public int A, B, C, D, E;
+    }
 }
