@@ -1,5 +1,7 @@
 ﻿@page "/servers"
+
 @inject HttpClient Http
+@inject NavigationManager Navigation
 
 <PageTitle>Servers</PageTitle>
 
@@ -11,21 +13,31 @@
 }
 else
 {
-    <p>Registered (@list.Count) Relay Servers</p>
+    <p>(@list.Count) Relay Servers Registered</p>
 
-    <table class="table">
+    <ul class="table">
         @foreach (var relay in list)
         {
-            <RelayServerEntryUI Server=relay></RelayServerEntryUI>
+            <li>
+                <MudText>@relay.Info.Address - @relay.Info.Region (@relay.Occupancy)</MudText>
+                <MudButton OnClick="() => NavigateTo(relay)">List Rooms</MudButton>
+            </li>
         }
-    </table>
+    </ul>
 }
 
 @code {
-    private List<RelayServerRegistration> list;
+    List<RelayServerRegistration> list;
 
     protected override async Task OnInitializedAsync()
     {
-        list = await Http.GetFromJsonAsync<List<RelayServerRegistration>>(Constants.RestRoutes.ListRelays, options: SharedServerAPI.JsonOptions);
+        list = await Http.GetFromJsonAsync<List<RelayServerRegistration>>(Constants.RestRoutes.Administration.ListRelays, options: SharedServerAPI.JsonOptions);
+    }
+
+    public void NavigateTo(RelayServerRegistration registration)
+    {
+        Console.WriteLine(Navigation.BaseUri);
+
+        Navigation.NavigateTo($"{Navigation.BaseUri}rooms/{registration.Info.Address}");
     }
 }

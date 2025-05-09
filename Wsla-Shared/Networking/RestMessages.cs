@@ -100,13 +100,13 @@ namespace Wsla
         }
     }
 
-    public struct ListRoomsRequest
+    public struct QueryRoomsRequest
     {
         public FixedString<FS20> Application;
 
         public SparseArray<ServerRegion> Regions;
 
-        public ListRoomsRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
+        public QueryRoomsRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
         {
             this.Application = ApplicationName;
             this.Regions = Regions;

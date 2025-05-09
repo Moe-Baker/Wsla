@@ -12,7 +12,7 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<WslaError>> UpdateRegions()
         {
-            var response = await API.REST.GET<List<ServerRegion>>(Constants.RestRoutes.ListRegions);
+            var response = await API.REST.GET<List<ServerRegion>>(Constants.RestRoutes.Service.ListRegions);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -31,7 +31,7 @@ namespace Wsla.Unity
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(CreateRoomRequest request)
         {
-            var response = await API.REST.POST<CreateRoomRequest, RoomConnectionInfo>(Constants.RestRoutes.CreateRoom, request);
+            var response = await API.REST.POST<CreateRoomRequest, RoomConnectionInfo>(Constants.RestRoutes.Service.CreateRoom, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -48,7 +48,7 @@ namespace Wsla.Unity
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(FindRoomRequest request)
         {
-            var response = await API.REST.POST<FindRoomRequest, RoomConnectionInfo>(Constants.RestRoutes.FindRoom, request);
+            var response = await API.REST.POST<FindRoomRequest, RoomConnectionInfo>(Constants.RestRoutes.Service.FindRoom, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);
@@ -60,9 +60,9 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(SparseArray<ServerRegion> regions)
         {
-            var request = new ListRoomsRequest(API.ApplicationID.Value, regions);
+            var request = new QueryRoomsRequest(API.ApplicationID.Value, regions);
 
-            var response = await API.REST.POST<ListRoomsRequest, List<RoomListEntryInfo>>(Constants.RestRoutes.ListRooms, request);
+            var response = await API.REST.POST<QueryRoomsRequest, List<RoomListEntryInfo>>(Constants.RestRoutes.Service.QueryRooms, request);
 
             if (response.IsError)
                 return WslaError.From(response.Error);

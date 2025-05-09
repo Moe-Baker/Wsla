@@ -39,6 +39,8 @@ namespace Wsla.Server
             return vacancy;
         }
 
+        public RelayRoomRegistration GetRegistration() => new RelayRoomRegistration(Name, Capacity, Occupancy);
+
         public MatchMakingPool Pool { get; private set; }
         public void SetPool(MatchMakingPool value)
         {

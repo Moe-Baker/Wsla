@@ -23,7 +23,7 @@ namespace Wsla.Server
             NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
         }
 
-        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(Info);
+        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(Info, Occupancy);
 
         public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
         {
@@ -73,7 +73,7 @@ namespace Wsla.Server
             }
         }
 
-        public void ListRooms(ApplicationID application, List<RoomListEntryInfo> list)
+        public void QueryRooms(ApplicationID application, List<RoomListEntryInfo> list)
         {
             lock (Rooms)
             {
@@ -94,6 +94,20 @@ namespace Wsla.Server
                     var entry = new RoomListEntryInfo(name, capacity, occupancy, connection);
 
                     list.Add(entry);
+                }
+            }
+        }
+
+        public void ListRooms(List<RelayRoomRegistration> list)
+        {
+            lock (Rooms)
+            {
+                foreach (var (id, room) in Rooms)
+                {
+                    list.EnsureCapacity(Rooms.Count);
+
+                    var registeration = room.GetRegistration();
+                    list.Add(registeration);
                 }
             }
         }

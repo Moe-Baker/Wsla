@@ -19,21 +19,27 @@ namespace Wsla
         {
             public const string Root = "api/";
 
-            public const string RegisterRelay = Root + "register-relay";
-            public const string ListRegions = Root + "list-regions";
+            public static class Service
+            {
+                public const string Root = RestRoutes.Root + "service/";
 
-            public const string ListRooms = Root + "list-rooms";
+                public const string ListRegions = Root + "list-regions";
 
-            public const string FindRoom = Root + "find-room";
+                public const string QueryRooms = Root + "query-rooms";
+                public const string FindRoom = Root + "find-room";
+                public const string CreateRoom = Root + "create-room";
+                public const string RemoveRoom = Root + "remove-room";
+            }
 
-            public const string CreateRoom = Root + "create-room";
-            public const string RemoveRoom = Root + "remove-room";
+            public static class Administration
+            {
+                public const string Root = RestRoutes.Root + "admin/";
 
-            public const string RequestMatch = Root + "request-match";
-            public const string UpdateMatch = Root + "update-match";
-            public const string CancelMatch = Root + "cancel-match";
+                public const string RegisterRelay = Root + "register-relay";
+                public const string ListRelays = Root + "list-relays";
 
-            public const string ListRelays = Root + "list-relays";
+                public const string ListRooms = Root + "list-rooms";
+            }
         }
 
         public const string WslaContentType = "application/x-wsla";

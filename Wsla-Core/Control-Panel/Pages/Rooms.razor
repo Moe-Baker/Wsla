@@ -1,0 +1,39 @@
+﻿@page "/rooms/{Address}"
+@using System.Net
+@inject HttpClient Http
+
+<PageTitle>Rooms</PageTitle>
+
+<h1>Rooms</h1>
+
+@if (list == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <p>(@list.Count) Rooms Registered</p>
+
+    <table class="table">
+        @foreach (var room in list)
+        {
+            <MudText>@room.Info.Name (@room.Info.Occupancy/@room.Info.Capacity)</MudText>
+        }
+    </table>
+}
+
+@code {
+    [Parameter]
+    public string Address { get; set; }
+
+    List<RelayRoomRegistration> list;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine($"HERE {Address}");
+
+        var response = await Http.PostAsJsonAsync(Constants.RestRoutes.Administration.ListRooms, IPAddress.Parse(Address), options: SharedServerAPI.JsonOptions);
+
+        list = await response.Content.ReadFromJsonAsync<List<RelayRoomRegistration>>(options: SharedServerAPI.JsonOptions);
+    }
+}

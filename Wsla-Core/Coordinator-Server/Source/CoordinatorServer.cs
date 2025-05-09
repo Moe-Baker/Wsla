@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -235,7 +236,8 @@ namespace Wsla.Server
                         }
                     }
                 }
-                public static void ListRooms(ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
+
+                public static void QueryRooms(ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
                 {
                     lock (Servers)
                     {
@@ -244,9 +246,27 @@ namespace Wsla.Server
                             if (regions.Contains(server.Region) is false)
                                 continue;
 
-                            server.ListRooms(application, list);
+                            server.QueryRooms(application, list);
                         }
                     }
+                }
+
+                public static List<RelayRoomRegistration> ListRooms(IPAddress address)
+                {
+                    var list = new List<RelayRoomRegistration>();
+
+                    lock (Servers)
+                    {
+                        foreach (var server in Servers)
+                        {
+                            if (server.Address.Equals(address) is false)
+                                continue;
+
+                            server.ListRooms(list);
+                        }
+                    }
+
+                    return list;
                 }
 
                 public static bool TryReadTag(MessagingConnection connection, out RelayServer server)
@@ -474,94 +494,113 @@ namespace Wsla.Server
         }
     }
 
-    [Route("/")]
-    [ApiController]
-    public class CoordinatorHttpEndpoints : ControllerBase
+    namespace Endpoints
     {
-        [HttpGet(Constants.RestRoutes.ListRegions)]
-        public ActionResult ListRegions()
+        public abstract class Base : ControllerBase
         {
-            var list = new List<ServerRegion>();
+            public void RecordInput<[NetworkSerializationMarker] T>(Func<T, ActionResult> function) { }
+            public void RecordInput<[NetworkSerializationMarker] T>(Func<T, Task<ActionResult>> function) { }
 
-            CoordinatorServer.Matchmaking.Browser.ListRegions(list);
-
-            return Ok(list);
+            public OkObjectResult Ok<[NetworkSerializationMarker] T>(T response) => base.Ok(response);
         }
 
-        [HttpGet(Constants.RestRoutes.ListRelays)]
-        public ActionResult ListRelays()
+        [Route("/")]
+        [ApiController]
+        public class CoordinatorService : Base
         {
-            var list = CoordinatorServer.Matchmaking.Browser.ListRelays();
-
-            return Ok(list);
-        }
-
-        [HttpPost(Constants.RestRoutes.CreateRoom)]
-        public async Task<ActionResult> CreateRoom(CreateRoomRequest message)
-        {
-            if (CoordinatorServer.Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
-                return BadRequest();
-
-            var response = await CoordinatorServer.Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
-
-            if (response.IsError)
-                return BadRequest();
-
-            var info = response.Value.GetConnectionInfo();
-
-            return Ok(info);
-        }
-
-        [HttpPost(Constants.RestRoutes.ListRooms)]
-        public ActionResult ListRooms(ListRoomsRequest request)
-        {
-            if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
-                return BadRequest();
-
-            var list = new List<RoomListEntryInfo>();
-
-            CoordinatorServer.Matchmaking.Browser.ListRooms(applicationID, request.Regions, list);
-
-            return Ok(list);
-        }
-
-        [HttpPost(Constants.RestRoutes.FindRoom)]
-        public async Task<ActionResult> FindRoom(FindRoomRequest request)
-        {
-            if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
-                return BadRequest();
-
-            //Try Find Existing Room
+            [HttpGet(Constants.RestRoutes.Service.ListRegions)]
+            public ActionResult ListRegions()
             {
-                if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
+                var list = new List<ServerRegion>();
+
+                CoordinatorServer.Matchmaking.Browser.ListRegions(list);
+
+                return Ok(list);
+            }
+
+            [HttpPost(Constants.RestRoutes.Service.CreateRoom)]
+            public async Task<ActionResult> CreateRoom(CreateRoomRequest message)
+            {
+                if (CoordinatorServer.Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
+                    return BadRequest();
+
+                var response = await CoordinatorServer.Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
+
+                if (response.IsError)
+                    return BadRequest();
+
+                var info = response.Value.GetConnectionInfo();
+
+                return Ok(info);
+            }
+
+            [HttpPost(Constants.RestRoutes.Service.QueryRooms)]
+            public ActionResult QueryRooms(QueryRoomsRequest request)
+            {
+                if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
+                    return BadRequest();
+
+                var list = new List<RoomListEntryInfo>();
+
+                CoordinatorServer.Matchmaking.Browser.QueryRooms(applicationID, request.Regions, list);
+
+                return Ok(list);
+            }
+
+            [HttpPost(Constants.RestRoutes.Service.FindRoom)]
+            public async Task<ActionResult> FindRoom(FindRoomRequest request)
+            {
+                if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
+                    return BadRequest();
+
+                //Try Find Existing Room
                 {
-                    var info = room.GetConnectionInfo();
+                    if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
+                    {
+                        var info = room.GetConnectionInfo();
 
-                    return Ok(info);
+                        return Ok(info);
+                    }
                 }
+
+                //Try Create Room
+                if (request.CreateRoom.HasValue)
+                {
+                    var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
+
+                    return await CreateRoom(create);
+                }
+
+                return NoContent();
             }
 
-            //Try Create Room
-            if (request.CreateRoom.HasValue)
+            public CoordinatorService()
             {
-                var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
+                RecordInput<CreateRoomRequest>(CreateRoom);
+                RecordInput<QueryRoomsRequest>(QueryRooms);
+                RecordInput<FindRoomRequest>(FindRoom);
+            }
+        }
 
-                return await CreateRoom(create);
+        [Route("/")]
+        [ApiController]
+        public class CoordinatorAdministration : Base
+        {
+            [HttpGet(Constants.RestRoutes.Administration.ListRelays)]
+            public ActionResult ListRelays()
+            {
+                var list = CoordinatorServer.Matchmaking.Browser.ListRelays();
+
+                return Ok(list);
             }
 
-            return NoContent();
+            [HttpPost(Constants.RestRoutes.Administration.ListRooms)]
+            public ActionResult ListRooms([FromBody] IPAddress address)
+            {
+                var list = CoordinatorServer.Matchmaking.Browser.ListRooms(address);
+
+                return Ok(list);
+            }
         }
-
-        public CoordinatorHttpEndpoints()
-        {
-            RecordInput<CreateRoomRequest>(CreateRoom);
-            RecordInput<ListRoomsRequest>(ListRooms);
-            RecordInput<FindRoomRequest>(FindRoom);
-        }
-
-        static void RecordInput<[NetworkSerializationMarker] T>(Func<T, ActionResult> function) { }
-        static void RecordInput<[NetworkSerializationMarker] T>(Func<T, Task<ActionResult>> function) { }
-
-        OkObjectResult Ok<[NetworkSerializationMarker] T>(T response) => base.Ok(response);
     }
 }

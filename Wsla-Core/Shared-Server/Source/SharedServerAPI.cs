@@ -10,6 +10,11 @@ namespace Wsla
         {
             options.IncludeFields = true;
             options.Converters.Add(new IPAddressJsonConverter());
+
+            options.Converters.Add(new FixedStringJsonConverter<FixedString<FS20>>());
+            options.Converters.Add(new FixedStringJsonConverter<FixedString<FS40>>());
+            options.Converters.Add(new FixedStringJsonConverter<FixedString<FS60>>());
+            options.Converters.Add(new FixedStringJsonConverter<FixedString<FS80>>());
         }
 
         static SharedServerAPI()

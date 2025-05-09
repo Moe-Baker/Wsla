@@ -18,4 +18,8 @@
 	  <ProjectReference Include="..\Shared-Web\Shared-Web.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Components\" />
+	</ItemGroup>
+
 </Project>
