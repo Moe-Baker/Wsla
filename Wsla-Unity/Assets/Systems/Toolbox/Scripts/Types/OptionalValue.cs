@@ -1,9 +1,11 @@
 using System;
 
 using UnityEngine;
+using UnityEngine.UIElements;
 
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.UIElements;
 #endif
 
 namespace Toolbox
@@ -51,9 +53,9 @@ namespace Toolbox
     public enum OptionalValueStyle
     {
         /// <summary>
-        /// The default way to draw an optional value
+        /// Draws the optional value in a foldout
         /// </summary>
-        Default,
+        Foldout,
 
         /// <summary>
         /// Draws the optional value in a single line
@@ -66,7 +68,18 @@ namespace Toolbox
     [CustomPropertyDrawer(typeof(OptionalValueStyleAttribute), true)]
     class OptionalValueDrawer : PropertyDrawer
     {
-        public float ToggleSize => EditorGUIUtility.singleLineHeight;
+        public override VisualElement CreatePropertyGUI(SerializedProperty property)
+        {
+            GetStyle(out var style);
+
+            return style switch
+            {
+                OptionalValueStyle.Foldout => new FoldoutStyle(property),
+                OptionalValueStyle.Inline => new InlineStyle(property),
+
+                _ => throw new NotImplementedException()
+            };
+        }
 
         void GetStyle(out OptionalValueStyle style)
         {
@@ -76,151 +89,89 @@ namespace Toolbox
                 return;
             }
 
-            style = OptionalValueStyle.Default;
+            style = OptionalValueStyle.Foldout;
         }
 
-        void GetPropertyMembers(SerializedProperty property, out SerializedProperty enabled, out SerializedProperty value)
+        class FoldoutStyle : Foldout
         {
-            enabled = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Enabled));
-            value = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Value));
-        }
+            Toggle Enabled;
+            PropertyField Value;
 
-        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
-        {
-            GetStyle(out var style);
-
-            var height = 0f;
-
-            switch (style)
+            public FoldoutStyle(SerializedProperty property)
             {
-                case OptionalValueStyle.Default:
+                this.text = property.displayName;
+                this.BindProperty(property);
+
+                //Enabled
                 {
-                    //Foldout
-                    height += EditorGUIUtility.singleLineHeight;
+                    var member = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Enabled));
+                    Enabled = new Toggle(member.displayName);
 
-                    //Children
-                    if (property.isExpanded)
-                    {
-                        //Space
-                        height += EditorGUIUtility.standardVerticalSpacing;
+                    Enabled.BindProperty(member);
 
-                        //Toggle
-                        height += EditorGUIUtility.singleLineHeight;
-
-                        //Value
-                        {
-                            GetPropertyMembers(property, out var enabled, out var value);
-
-                            if (enabled.boolValue)
-                            {
-                                height += EditorGUIUtility.standardVerticalSpacing;
-                                height += EditorGUI.GetPropertyHeight(value, true);
-                            }
-                        }
-                    }
+                    Add(Enabled);
                 }
-                break;
 
-                case OptionalValueStyle.Inline:
+                //Value
                 {
-                    height += EditorGUIUtility.singleLineHeight;
+                    var member = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Value));
+                    Value = new PropertyField(member);
+
+                    Add(Value);
                 }
-                break;
 
-                default: throw new NotImplementedException();
+                Enabled.RegisterValueChangedCallback(x => UpdateState());
+                UpdateState();
             }
 
-            return height;
-        }
-
-        public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
-        {
-            rect = rect.ZeroIndent();
-
-            EditorGUI.BeginProperty(rect, label, property);
-
-            GetStyle(out var style);
-
-            switch (style)
+            void UpdateState()
             {
-                case OptionalValueStyle.Default:
-                    DrawDefault(rect, property, label);
-                    break;
-
-                case OptionalValueStyle.Inline:
-                    DrawInline(rect, property, label);
-                    break;
-
-                default: throw new NotImplementedException();
-            }
-
-            EditorGUI.EndProperty();
-        }
-
-        void DrawDefault(Rect rect, SerializedProperty property, GUIContent label)
-        {
-            //Foldout
-            {
-                rect = rect.SliceVertical(EditorGUIUtility.singleLineHeight, out var area);
-                property.isExpanded = EditorGUI.Foldout(area, property.isExpanded, label, true);
-            }
-
-            if (property.isExpanded == false)
-                return;
-
-            rect = rect.SliceFoldoutIndent().SliceVertical(EditorGUIUtility.standardVerticalSpacing);
-
-            GetPropertyMembers(property, out var enabled, out var value);
-
-            //Toggle
-            {
-                var content = new GUIContent("Enabled");
-
-                rect = rect.SliceVertical(EditorGUIUtility.singleLineHeight, out var area);
-
-                enabled.boolValue = EditorGUI.Toggle(area, content, enabled.boolValue);
-            }
-
-            if (enabled.boolValue == false)
-                return;
-
-            rect = rect.SliceVertical(EditorGUIUtility.standardVerticalSpacing);
-
-            //Value
-            {
-                EditorGUI.PropertyField(rect, value, true);
+                Value.style.display = Enabled.value ? DisplayStyle.Flex : DisplayStyle.None;
             }
         }
-        void DrawInline(Rect rect, SerializedProperty property, GUIContent label)
+
+        class InlineStyle : VisualElement
         {
-            GetPropertyMembers(property, out var enabled, out var value);
+            Toggle Enabled;
+            PropertyField Value;
 
-            //Toggle
+            public InlineStyle(SerializedProperty property)
             {
-                rect = rect.SliceHorizontal(ToggleSize, out var area);
-                area.SliceVertical(ToggleSize, out area);
+                style.flexDirection = FlexDirection.Row;
 
-                enabled.boolValue = EditorGUI.Toggle(area, enabled.boolValue);
+                //Enabled
+                {
+                    var member = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Enabled));
+                    Enabled = new Toggle();
+
+                    Enabled.BindProperty(member);
+
+                    Enabled.style.paddingRight = 2.5f;
+
+                    Add(Enabled);
+                }
+
+                //Value
+                {
+                    var member = property.FindBackingFieldRelative(nameof(IOptionalValue<int>.Value));
+                    Value = new PropertyField(member, property.displayName);
+
+                    Add(Value);
+                }
+
+                Enabled.RegisterValueChangedCallback(x => UpdateState());
+                UpdateState();
             }
 
-            rect = rect.SliceHorizontal(EditorGUIUtility.standardVerticalSpacing);
-
-            //Label
+            void UpdateState()
             {
-                rect = EditorGUI.PrefixLabel(rect, label);
-            }
+                var field = Value.GetValue<VisualElement>("m_ChildField");
+                if (field == null)
+                    return;
 
-            //Slice back the toggle size
-            rect = rect.SliceHorizontal(-ToggleSize + -EditorGUIUtility.standardVerticalSpacing);
+                var input = field.GetValue<VisualElement>("m_VisualInput");
 
-            //Value
-            if (enabled.boolValue)
-            {
-                EditorGUI.PropertyField(rect, value, GUIContent.none, true);
-            }
-            else
-            {
-                EditorGUI.LabelField(rect, "None");
+                input.visible = Enabled.value;
             }
         }
     }
