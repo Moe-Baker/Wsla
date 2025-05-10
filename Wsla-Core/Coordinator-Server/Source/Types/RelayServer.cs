@@ -7,6 +7,8 @@ namespace Wsla.Server
 {
     public class RelayServer : IDisposable
     {
+        public Guid ID { get; }
+
         public RelayServerInfo Info { get; }
 
         public MessagingPeer MessagingPeer { get; }
@@ -23,7 +25,7 @@ namespace Wsla.Server
             NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
         }
 
-        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(Info, Occupancy);
+        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(ID, Info, Occupancy);
 
         public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
         {
@@ -102,12 +104,12 @@ namespace Wsla.Server
         {
             lock (Rooms)
             {
+                list.EnsureCapacity(Rooms.Count);
+
                 foreach (var (id, room) in Rooms)
                 {
-                    list.EnsureCapacity(Rooms.Count);
-
-                    var registeration = room.GetRegistration();
-                    list.Add(registeration);
+                    var registration = room.GetRegistration();
+                    list.Add(registration);
                 }
             }
         }
@@ -147,6 +149,8 @@ namespace Wsla.Server
 
         public RelayServer(RelayServerInfo Info, MessagingPeer MessagingPeer)
         {
+            ID = Guid.NewGuid();
+
             this.Info = Info;
             this.MessagingPeer = MessagingPeer;
 

@@ -2,12 +2,15 @@
 {
     public struct RelayServerRegistration
     {
+        public Guid ID;
+
         public RelayServerInfo Info;
 
         public int Occupancy;
 
-        public RelayServerRegistration(RelayServerInfo Info, int Occupancy)
+        public RelayServerRegistration(Guid ID, RelayServerInfo Info, int Occupancy)
         {
+            this.ID = ID;
             this.Info = Info;
             this.Occupancy = Occupancy;
         }

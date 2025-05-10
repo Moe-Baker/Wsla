@@ -251,7 +251,7 @@ namespace Wsla.Server
                     }
                 }
 
-                public static List<RelayRoomRegistration> ListRooms(IPAddress address)
+                public static List<RelayRoomRegistration> ListRooms(Guid id)
                 {
                     var list = new List<RelayRoomRegistration>();
 
@@ -259,7 +259,7 @@ namespace Wsla.Server
                     {
                         foreach (var server in Servers)
                         {
-                            if (server.Address.Equals(address) is false)
+                            if (server.ID != id)
                                 continue;
 
                             server.ListRooms(list);
@@ -595,9 +595,9 @@ namespace Wsla.Server
             }
 
             [HttpPost(Constants.RestRoutes.Administration.ListRooms)]
-            public ActionResult ListRooms([FromBody] IPAddress address)
+            public ActionResult ListRooms([FromBody] Guid id)
             {
-                var list = CoordinatorServer.Matchmaking.Browser.ListRooms(address);
+                var list = CoordinatorServer.Matchmaking.Browser.ListRooms(id);
 
                 return Ok(list);
             }
