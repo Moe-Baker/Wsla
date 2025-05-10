@@ -68,7 +68,7 @@ namespace Wsla
 
     public struct RegisterRelayRequest : IAutoNetworkSerialization
     {
-        public RelayServerInfo Info;
+        public RelayServerRegistrationInfo Info;
 
         public List<RoomMatchmakerEntryData> Rooms;
 
@@ -78,7 +78,7 @@ namespace Wsla
             context.Select(ref Rooms);
         }
 
-        public RegisterRelayRequest(RelayServerInfo Info, List<RoomMatchmakerEntryData> Rooms)
+        public RegisterRelayRequest(RelayServerRegistrationInfo Info, List<RoomMatchmakerEntryData> Rooms)
         {
             this.Info = Info;
             this.Rooms = Rooms;

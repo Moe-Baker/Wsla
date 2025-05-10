@@ -1,14 +1,14 @@
 ﻿namespace Wsla
 {
-    public struct RelayServerRegistration
+    public struct RelayServerAdminInfo
     {
         public Guid ID;
 
-        public RelayServerInfo Info;
+        public RelayServerRegistrationInfo Info;
 
         public int Occupancy;
 
-        public RelayServerRegistration(Guid ID, RelayServerInfo Info, int Occupancy)
+        public RelayServerAdminInfo(Guid ID, RelayServerRegistrationInfo Info, int Occupancy)
         {
             this.ID = ID;
             this.Info = Info;
@@ -16,15 +16,15 @@
         }
     }
 
-    public struct RelayRoomRegistration
+    public struct RelayRoomAdminInfo
     {
         public RoomStateInfo Info;
 
-        public RelayRoomRegistration(FixedString<FS20> Name, byte Capacity, byte Occupancy)
+        public RelayRoomAdminInfo(FixedString<FS20> Name, byte Capacity, byte Occupancy)
         {
             Info = new RoomStateInfo(Name, Capacity, Occupancy);
         }
-        public RelayRoomRegistration(RoomStateInfo Info)
+        public RelayRoomAdminInfo(RoomStateInfo Info)
         {
             this.Info = Info;
         }

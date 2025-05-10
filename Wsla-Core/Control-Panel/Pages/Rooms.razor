@@ -27,12 +27,12 @@ else
     [Parameter]
     public Guid ID { get; set; }
 
-    List<RelayRoomRegistration> list;
+    List<RelayRoomAdminInfo> list;
 
     protected override async Task OnInitializedAsync()
     {
         var response = await Http.PostAsJsonAsync(Constants.RestRoutes.Administration.ListRooms, ID, options: SharedServerAPI.JsonOptions);
 
-        list = await response.Content.ReadFromJsonAsync<List<RelayRoomRegistration>>(options: SharedServerAPI.JsonOptions);
+        list = await response.Content.ReadFromJsonAsync<List<RelayRoomAdminInfo>>(options: SharedServerAPI.JsonOptions);
     }
 }

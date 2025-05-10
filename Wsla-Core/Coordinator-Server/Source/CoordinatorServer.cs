@@ -207,11 +207,11 @@ namespace Wsla.Server
                     return false;
                 }
 
-                public static List<RelayServerRegistration> ListRelays()
+                public static List<RelayServerAdminInfo> ListRelays()
                 {
                     lock (Servers)
                     {
-                        var list = new List<RelayServerRegistration>(Servers.Count);
+                        var list = new List<RelayServerAdminInfo>(Servers.Count);
 
                         foreach (var server in Servers)
                         {
@@ -251,9 +251,9 @@ namespace Wsla.Server
                     }
                 }
 
-                public static List<RelayRoomRegistration> ListRooms(Guid id)
+                public static List<RelayRoomAdminInfo> ListRooms(Guid id)
                 {
-                    var list = new List<RelayRoomRegistration>();
+                    var list = new List<RelayRoomAdminInfo>();
 
                     lock (Servers)
                     {

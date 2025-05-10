@@ -5,7 +5,7 @@ using Wsla.Serialization;
 
 namespace Wsla
 {
-    public struct RelayServerInfo : IEquatable<RelayServerInfo>, IAutoNetworkSerialization
+    public struct RelayServerRegistrationInfo : IEquatable<RelayServerRegistrationInfo>, IAutoNetworkSerialization
     {
         public ServerRegion Region;
         public IPAddress Address;
@@ -14,12 +14,12 @@ namespace Wsla
 
         public override bool Equals(object obj)
         {
-            if (obj is RelayServerInfo other)
+            if (obj is RelayServerRegistrationInfo other)
                 return Equals(other);
 
             return false;
         }
-        public bool Equals(RelayServerInfo other) => (Region == other.Region) && (Address.Equals(other.Address));
+        public bool Equals(RelayServerRegistrationInfo other) => (Region == other.Region) && (Address.Equals(other.Address));
 
         public void Select(ref AutoSerializationContext context)
         {
@@ -29,10 +29,10 @@ namespace Wsla
 
         public override int GetHashCode() => (Region, Address).GetHashCode();
 
-        public static bool operator ==(RelayServerInfo left, RelayServerInfo right) => left.Equals(right);
-        public static bool operator !=(RelayServerInfo left, RelayServerInfo right) => !left.Equals(right);
+        public static bool operator ==(RelayServerRegistrationInfo left, RelayServerRegistrationInfo right) => left.Equals(right);
+        public static bool operator !=(RelayServerRegistrationInfo left, RelayServerRegistrationInfo right) => !left.Equals(right);
 
-        public RelayServerInfo(ServerRegion Region, IPAddress Address)
+        public RelayServerRegistrationInfo(ServerRegion Region, IPAddress Address)
         {
             this.Region = Region;
             this.Address = Address;

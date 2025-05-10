@@ -27,14 +27,14 @@ else
 }
 
 @code {
-    List<RelayServerRegistration> list;
+    List<RelayServerAdminInfo> list;
 
     protected override async Task OnInitializedAsync()
     {
-        list = await Http.GetFromJsonAsync<List<RelayServerRegistration>>(Constants.RestRoutes.Administration.ListRelays, options: SharedServerAPI.JsonOptions);
+        list = await Http.GetFromJsonAsync<List<RelayServerAdminInfo>>(Constants.RestRoutes.Administration.ListRelays, options: SharedServerAPI.JsonOptions);
     }
 
-    public void NavigateTo(RelayServerRegistration registration)
+    public void NavigateTo(RelayServerAdminInfo registration)
     {
         Console.WriteLine(Navigation.BaseUri);
 

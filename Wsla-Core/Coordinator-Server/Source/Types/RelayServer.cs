@@ -9,7 +9,7 @@ namespace Wsla.Server
     {
         public Guid ID { get; }
 
-        public RelayServerInfo Info { get; }
+        public RelayServerRegistrationInfo Info { get; }
 
         public MessagingPeer MessagingPeer { get; }
 
@@ -25,7 +25,7 @@ namespace Wsla.Server
             NetworkLog.Trace($"Relay {this} Occupancy Changed to {value}");
         }
 
-        public RelayServerRegistration GetRegistration() => new RelayServerRegistration(ID, Info, Occupancy);
+        public RelayServerAdminInfo GetRegistration() => new RelayServerAdminInfo(ID, Info, Occupancy);
 
         public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
         {
@@ -100,7 +100,7 @@ namespace Wsla.Server
             }
         }
 
-        public void ListRooms(List<RelayRoomRegistration> list)
+        public void ListRooms(List<RelayRoomAdminInfo> list)
         {
             lock (Rooms)
             {
@@ -147,7 +147,7 @@ namespace Wsla.Server
 
         public override string ToString() => Info.ToString();
 
-        public RelayServer(RelayServerInfo Info, MessagingPeer MessagingPeer)
+        public RelayServer(RelayServerRegistrationInfo Info, MessagingPeer MessagingPeer)
         {
             ID = Guid.NewGuid();
 

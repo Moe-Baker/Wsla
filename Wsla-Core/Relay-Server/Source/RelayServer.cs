@@ -354,7 +354,7 @@ namespace Wsla.Server
 
             public static void RegisterRelay()
             {
-                var info = new RelayServerInfo(Configuration.Region, Configuration.PublicAddress);
+                var info = new RelayServerRegistrationInfo(Configuration.Region, Configuration.PublicAddress);
 
                 var rooms = new List<RoomMatchmakerEntryData>();
                 ListRooms(rooms);
