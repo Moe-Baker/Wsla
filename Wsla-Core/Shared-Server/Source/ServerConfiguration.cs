@@ -42,7 +42,7 @@ namespace Wsla
                 var schema = Create<T>();
                 var json = schema.ToString();
 
-                var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).Parent.Parent.Parent.FullName;
+                var directory = Directory.GetCurrentDirectory();
 
                 File.WriteAllText(Path.Join(directory, file), json);
             }

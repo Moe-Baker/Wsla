@@ -22,6 +22,8 @@ namespace Wsla.Server
 
             NetworkLog.UseConsole();
 
+            NetworkLog.Info($"Working Directory: {System.IO.Directory.GetCurrentDirectory()}");
+
             await LoadConfig();
 
             //Initialize

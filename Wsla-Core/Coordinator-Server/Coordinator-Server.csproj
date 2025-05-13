@@ -25,6 +25,9 @@
 
 	<ItemGroup>
 		<Folder Include="Schema\" />
+		<Content Update="Schema\Configuration.json">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
 
 		<None Update="Configuration.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
