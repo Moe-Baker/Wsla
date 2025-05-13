@@ -18,7 +18,7 @@ else
     <table class="table">
         @foreach (var room in list)
         {
-            <MudText>@room.Info.Name (@room.Info.Occupancy/@room.Info.Capacity)</MudText>
+            <MudText>@room.State.Name (@room.State.Occupancy/@room.State.Capacity)</MudText>
         }
     </table>
 }

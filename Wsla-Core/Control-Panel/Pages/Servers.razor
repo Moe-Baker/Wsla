@@ -19,7 +19,7 @@ else
         @foreach (var relay in list)
         {
             <li>
-                <MudText>@relay.Info.Address - @relay.Info.Region (@relay.Occupancy)</MudText>
+                <MudText>@relay.Registeration.Address - @relay.Registeration.Region (@relay.Occupancy)</MudText>
                 <MudButton OnClick="() => NavigateTo(relay)">List Rooms</MudButton>
             </li>
         }

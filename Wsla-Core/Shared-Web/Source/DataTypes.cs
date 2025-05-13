@@ -4,29 +4,29 @@
     {
         public Guid ID;
 
-        public RelayServerRegistrationInfo Info;
+        public RelayServerRegistrationInfo Registeration;
 
         public int Occupancy;
 
         public RelayServerAdminInfo(Guid ID, RelayServerRegistrationInfo Info, int Occupancy)
         {
             this.ID = ID;
-            this.Info = Info;
+            this.Registeration = Info;
             this.Occupancy = Occupancy;
         }
     }
 
     public struct RelayRoomAdminInfo
     {
-        public RoomStateInfo Info;
+        public RoomStateInfo State;
 
         public RelayRoomAdminInfo(FixedString<FS20> Name, byte Capacity, byte Occupancy)
         {
-            Info = new RoomStateInfo(Name, Capacity, Occupancy);
+            State = new RoomStateInfo(Name, Capacity, Occupancy);
         }
         public RelayRoomAdminInfo(RoomStateInfo Info)
         {
-            this.Info = Info;
+            this.State = Info;
         }
     }
 }
