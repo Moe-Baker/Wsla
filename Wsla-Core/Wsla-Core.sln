@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Control-Panel", "Control-Pa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared-Web", "Shared-Web\Shared-Web.csproj", "{012791AE-68F4-EE76-AC9F-B3B7FFE8F778}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unity-Client", "Unity-Client\Unity-Client.csproj", "{7D89481B-54AE-4AE1-94B1-E39893148452}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,10 @@ Global
 		{012791AE-68F4-EE76-AC9F-B3B7FFE8F778}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{012791AE-68F4-EE76-AC9F-B3B7FFE8F778}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{012791AE-68F4-EE76-AC9F-B3B7FFE8F778}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D89481B-54AE-4AE1-94B1-E39893148452}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D89481B-54AE-4AE1-94B1-E39893148452}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D89481B-54AE-4AE1-94B1-E39893148452}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D89481B-54AE-4AE1-94B1-E39893148452}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
