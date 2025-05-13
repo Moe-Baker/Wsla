@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Relay-Server": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)"
+    }
+  }
+}
