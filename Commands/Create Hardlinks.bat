@@ -34,19 +34,19 @@ cd "%~dp0"
 cd ..
 
 rmdir "%cd%\Wsla-Core\Shared-Global\Source"
-mklink /D "%cd%\Wsla-Core\Shared-Global\Source" "%cd%\Wsla-Shared"
+mklink /D "%cd%\Wsla-Core\Shared-Global\Source" "..\..\Wsla-Shared"
 echo:
 
 rmdir "%cd%\Wsla-Unity\Assets\Systems\Wsla\Shared"
-mklink /D "%cd%\Wsla-Unity\Assets\Systems\Wsla\Shared" "%cd%\Wsla-Shared"
+mklink /D "%cd%\Wsla-Unity\Assets\Systems\Wsla\Shared" "..\..\..\..\Wsla-Shared"
 echo:
 
 rmdir "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Runtime"
-mklink /D "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Runtime" "%cd%\Wsla-Unity\Assets\Systems\Wsla\Runtime"
+mklink /D "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Runtime" "..\..\..\Wsla-Unity\Assets\Systems\Wsla\Runtime"
 echo:
 
 rmdir "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Sample"
-mklink /D "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Sample" "%cd%\Wsla-Unity\Assets\Systems\Wsla-Sample"
+mklink /D "%cd%\Wsla-Core\Unity-Client\Source\Wsla-Sample" "..\..\..\Wsla-Unity\Assets\Systems\Wsla-Sample"
 echo:
 
 Pause
