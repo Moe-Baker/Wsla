@@ -59,9 +59,21 @@ namespace Wsla.Unity
     public class NetworkTickTimer
     {
         public int Slice { get; }
+        public NetworkTickID ID { get; private set; }
 
         int Counter;
-        NetworkTickID ID;
+
+        internal void SetTick(NetworkTickID value)
+        {
+            ID = value;
+        }
+
+        internal void IncrementTick(TimeSpan duration) => IncrementTick(ID, duration);
+        internal void IncrementTick(NetworkTickID start, TimeSpan duration)
+        {
+            var steps = (int)Math.Round(duration.TotalSeconds / Timestep);
+            SetTick(start + steps);
+        }
 
         public double Timestep => API.Tick.FixedTimeStep * Slice;
 
@@ -161,6 +173,7 @@ namespace Wsla.Unity
             this.Value = value;
         }
 
+        public static NetworkTickID Zero = new(0);
         public static NetworkTickID Min = new(uint.MinValue);
         public static NetworkTickID Max = new(uint.MaxValue);
 

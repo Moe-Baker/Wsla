@@ -41,13 +41,32 @@ namespace Wsla.Unity
         }
 
         public event TransferOwnerDelegate OnTransferOwner;
-        public delegate void TransferOwnerDelegate(NetworkClient owner);
-        internal void TransferOwner(NetworkClient target)
-        {
-            AssignOwner(target);
+        public delegate void TransferOwnerDelegate(ChangePairData<NetworkClient> owner);
 
-            OnTransferOwner?.Invoke(target);
+        public event OwnershipSetDelegate OnGainedOwnership;
+        public event OwnershipSetDelegate OnLostOwnership;
+        public delegate void OwnershipSetDelegate();
+
+        internal void TransferOwner(NetworkClient current)
+        {
+            var previous = Owner;
+
+            AssignOwner(current);
+
+            var change = new ChangePairData<NetworkClient>(previous, current);
+            OnTransferOwner?.Invoke(change);
+
+            //Gain/Lost Ownership Events
+            {
+                if (previous.IsLocal)
+                    OnLostOwnership?.Invoke();
+
+                if (current.IsLocal)
+                    OnGainedOwnership?.Invoke();
+            }
         }
+
+        public void TakeOwnership() => Room.Entities.TakeOwnership(this);
 
         [field: SerializeField]
         public NetworkEntityAuthorityMode Authority { get; internal set; }

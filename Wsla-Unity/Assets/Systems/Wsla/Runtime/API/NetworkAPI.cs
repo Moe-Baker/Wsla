@@ -24,6 +24,9 @@ namespace Wsla.Unity
         public GameVersionProperty GameVersion { get; private set; }
 
         [field: SerializeField]
+        public SerializedTimeSpan Timeout { get; private set; } = SerializedTimeSpan.FromSeconds(5);
+
+        [field: SerializeField]
         public RestAPI REST { get; private set; }
 
         [field: SerializeField]
