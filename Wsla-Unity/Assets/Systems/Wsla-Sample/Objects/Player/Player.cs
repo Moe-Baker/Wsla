@@ -40,6 +40,8 @@ public partial class Player : NetworkBehaviour
 
     void SpawnCallback()
     {
+        Network.Entity.OnLostOwnership += LostOwnershipCallback;
+
         if (Network.IsLocal)
         {
             RPCs.Colorize.Invoke(UnityEngine.Random.ColorHSV())
@@ -48,6 +50,11 @@ public partial class Player : NetworkBehaviour
         }
 
         NetworkLog.Info($"Player {Network.Entity.ID} Spawned");
+    }
+
+    void LostOwnershipCallback()
+    {
+        Velocity = Vector3.zero;
     }
 
     void Update()

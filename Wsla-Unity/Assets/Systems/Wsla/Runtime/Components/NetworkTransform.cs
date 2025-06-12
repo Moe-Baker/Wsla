@@ -8,8 +8,11 @@ using Wsla.Serialization;
 
 namespace Wsla.Unity
 {
+    [DefaultExecutionOrder(ExecutionOrder)]
     public partial class NetworkTransform : NetworkBehaviour
     {
+        public const int ExecutionOrder = 100_000;
+
         [field: SerializeField]
         public TickSliceRate TickSlice { get; private set; } = new(1);
 
@@ -150,6 +153,8 @@ namespace Wsla.Unity
             public Quaternion Rotation { get; }
             public Vector3 Scale { get; }
 
+            public override string ToString() => $"(Position: {Position} | Rotation: {Rotation.eulerAngles} | Scale: {Scale})";
+
             public CoordinatesData(Vector3 Position, Quaternion Rotation, Vector3 Scale)
             {
                 this.Position = Position;
@@ -274,7 +279,7 @@ namespace Wsla.Unity
 
             public bool Stopped { get; }
 
-            public bool IsNone => Current is ChangeFlags.None && Difference is ChangeFlags.None;
+            public bool IsNone => (Current is ChangeFlags.None) && (Difference is ChangeFlags.None);
 
             public ChangeData(ChangeFlags value) : this(value, value) { }
             public ChangeData(ChangeFlags Current, ChangeFlags Difference)
@@ -282,7 +287,7 @@ namespace Wsla.Unity
                 this.Current = Current;
                 this.Difference = Difference;
 
-                Stopped = Current == ChangeFlags.None && Difference != ChangeFlags.None;
+                Stopped = (Current is ChangeFlags.None) && (Difference is not ChangeFlags.None);
             }
 
             public static ChangeData Calculate(ChangeFlags previous, ChangeFlags current)
@@ -425,63 +430,83 @@ namespace Wsla.Unity
 
         void SpawnCallback()
         {
+            Network.Entity.OnTransferOwner += TransferOwnerCallback;
+
+            TransferOwnerCallback(ChangePairData.FromCurrent(Network.Owner));
+        }
+
+        void TransferOwnerCallback(ChangePairData<NetworkClient> owner)
+        {
             MotionDetector.Init();
             SnapshotInterpolation.Init();
 
-            if (Network.Entity.IsLocal)
+            if (owner.Previous != null && owner.Previous.IsLocal)
             {
+                TickTimer.Stop();
+                TickTimer.OnTick -= TickCallback;
+            }
+
+            if (owner.Current != null && owner.Current.IsLocal)
+            {
+                TickTimer.SetTick(NetworkTickID.Zero);
+
                 TickTimer.Start();
                 TickTimer.OnTick += TickCallback;
+
+                var changes = Mask.Value | ChangeFlags.Stop | ChangeFlags.Teleport;
+                var motion = new MotionData(changes, Coordinates.Read());
+                WritePayload(TickTimer.ID, motion);
             }
         }
+
         void DespawnCallback()
         {
             if (TickTimer != null)
             {
                 TickTimer.Stop();
                 TickTimer.OnTick -= TickCallback;
+                TickTimer = null;
             }
         }
 
         void TickCallback(NetworkTickInfo info)
         {
-            if (Network.Entity.IsRemote)
-                return;
-
             var motion = MotionDetector.Detect();
 
             if (motion.Change.IsNone)
                 return;
 
-            //Replicate
-            {
-                var stream = RPCs.Replicate.GetSourceStream();
-                var source = BinarySource.From(stream);
+            var tick = info.GetTick();
 
-                var tick = info.GetTick();
-                WritePayload(ref source, tick, motion);
-
-                var binary = stream.PeekAllocatedMemory();
-
-                var invocation = RPCs.Replicate.Invoke(binary)
-                    .SetIgnoreLocal();
-
-                if (motion.Change.Stopped)
-                {
-                    invocation = invocation
-                        .SetBufferMode()
-                        .SetDelivery(RemoteSyncDelivery.ReliableUnordered);
-                }
-                else
-                {
-                    invocation = invocation
-                        .SetDelivery(RemoteSyncDelivery.Unreliable);
-                }
-
-                invocation.Broadcast();
-            }
+            WritePayload(tick, in motion);
         }
 
+        void WritePayload(NetworkTickID tick, in MotionData motion)
+        {
+            var stream = RPCs.Replicate.GetSourceStream();
+            var source = BinarySource.From(stream);
+
+            WritePayload(ref source, tick, motion);
+
+            var binary = stream.PeekAllocatedMemory();
+
+            var invocation = RPCs.Replicate.Invoke(binary)
+                .SetIgnoreLocal();
+
+            if (motion.Change.Stopped)
+            {
+                invocation = invocation
+                    .SetBufferMode()
+                    .SetDelivery(RemoteSyncDelivery.ReliableUnordered);
+            }
+            else
+            {
+                invocation = invocation
+                    .SetDelivery(RemoteSyncDelivery.Unreliable);
+            }
+
+            invocation.Broadcast();
+        }
         void WritePayload(ref BinarySource stream, NetworkTickID tick, MotionData motion)
         {
             NetworkSerializer.WriteValue(tick, ref stream);
@@ -557,7 +582,6 @@ namespace Wsla.Unity
                 }
             }
         }
-
         SnapshotData ReadPayload(ref BinarySource stream, CoordinatesData origin)
         {
             NetworkSerializer.ReadValue(ref stream, out NetworkTickID tick);
@@ -651,18 +675,17 @@ namespace Wsla.Unity
         [RPC]
         void Replicate(ref BinarySource source, RpcInfo info)
         {
+            if (info.TryGetSender(out var sender) && sender != Network.Owner)
+                return;
+
             var origin = SnapshotInterpolation.GetOrigin();
 
             var snapshot = ReadPayload(ref source, origin);
 
             if (info.IsBuffered)
-            {
                 Coordinates.Write(snapshot.Value);
-            }
             else
-            {
                 SnapshotInterpolation.Submit(snapshot);
-            }
         }
 
         public NetworkTransform()

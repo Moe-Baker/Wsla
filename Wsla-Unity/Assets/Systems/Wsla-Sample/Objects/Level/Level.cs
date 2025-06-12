@@ -119,6 +119,8 @@ public partial class Level : NetworkBehaviour
 
     public void SpawnPlayer()
     {
+        return;
+
         var ticket = Network.Room.Entities.Spawn()
             .SetPrefab(PlayerPrefab)
             .SetAuthority(NetworkEntityAuthorityMode.Explicit)
