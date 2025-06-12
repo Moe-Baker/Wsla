@@ -143,7 +143,7 @@ namespace Wsla.Unity
         }
 
         [CustomEditor(typeof(NetworkScene))]
-        public class Inspector : Editor
+        class Inspector : Editor
         {
             public override void OnInspectorGUI()
             {

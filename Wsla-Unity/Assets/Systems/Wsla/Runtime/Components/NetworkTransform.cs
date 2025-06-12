@@ -423,6 +423,7 @@ namespace Wsla.Unity
             base.Set(reference);
 
             TickTimer = new NetworkTickTimer(TickSlice);
+            TickTimer.OnTick += TickCallback;
 
             Network.OnSpawn += SpawnCallback;
             Network.OnDespawn += DespawnCallback;
@@ -430,43 +431,45 @@ namespace Wsla.Unity
 
         void SpawnCallback()
         {
-            Network.Entity.OnTransferOwner += TransferOwnerCallback;
-
-            TransferOwnerCallback(ChangePairData.FromCurrent(Network.Owner));
-        }
-
-        void TransferOwnerCallback(ChangePairData<NetworkClient> owner)
-        {
-            MotionDetector.Init();
-            SnapshotInterpolation.Init();
-
-            if (owner.Previous != null && owner.Previous.IsLocal)
+            if (Network.IsLocal)
             {
-                TickTimer.Stop();
-                TickTimer.OnTick -= TickCallback;
-            }
-
-            if (owner.Current != null && owner.Current.IsLocal)
-            {
-                TickTimer.SetTick(NetworkTickID.Zero);
-
+                MotionDetector.Init();
                 TickTimer.Start();
-                TickTimer.OnTick += TickCallback;
-
-                var changes = Mask.Value | ChangeFlags.Stop | ChangeFlags.Teleport;
-                var motion = new MotionData(changes, Coordinates.Read());
-                WritePayload(TickTimer.ID, motion);
             }
-        }
+            else
+            {
+                SnapshotInterpolation.Init();
+            }
 
+            Network.Entity.OnLostOwnership += LostOwnershipCallback;
+            Network.Entity.OnGainedOwnership += GainedOwnershipCallback;
+        }
         void DespawnCallback()
         {
-            if (TickTimer != null)
+            TickTimer.Stop();
+        }
+
+        void GainedOwnershipCallback()
+        {
+            MotionDetector.Init();
+
+            //Setup Tick Timer
             {
-                TickTimer.Stop();
-                TickTimer.OnTick -= TickCallback;
-                TickTimer = null;
+                TickTimer.SetTick(NetworkTickID.Zero + 1);
+                TickTimer.Start();
             }
+
+            //Replicate Current State
+            {
+                var changes = Mask.Value | ChangeFlags.Stop | ChangeFlags.Teleport;
+                var motion = new MotionData(changes, Coordinates.Read());
+                WritePayload(TickTimer.ID - 1, motion);
+            }
+        }
+        void LostOwnershipCallback()
+        {
+            SnapshotInterpolation.Init();
+            TickTimer.Stop();
         }
 
         void TickCallback(NetworkTickInfo info)

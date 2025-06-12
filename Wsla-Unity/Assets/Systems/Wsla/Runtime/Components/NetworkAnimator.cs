@@ -6,10 +6,12 @@ using Wsla.Serialization;
 using System.Linq;
 using System.Collections.Generic;
 using Toolbox;
+using UnityEngine.UIElements;
 
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.Animations;
+using UnityEditor.UIElements;
 #endif
 
 namespace Wsla.Unity
@@ -40,6 +42,10 @@ namespace Wsla.Unity
                 public bool Value { get; internal set; }
 
                 public bool Dirty { get; internal set; }
+                public void MarkDirty()
+                {
+                    Dirty = true;
+                }
 
                 NetworkAnimator Animator;
                 public void Init(NetworkAnimator Animator)
@@ -96,6 +102,10 @@ namespace Wsla.Unity
                 public int Value { get; internal set; }
 
                 public bool Dirty { get; internal set; }
+                public void MarkDirty()
+                {
+                    Dirty = true;
+                }
 
                 NetworkAnimator Animator;
                 public void Init(NetworkAnimator Animator)
@@ -158,6 +168,10 @@ namespace Wsla.Unity
                 public float Value { get; internal set; }
 
                 public bool Dirty { get; internal set; }
+                public void MarkDirty()
+                {
+                    Dirty = true;
+                }
 
                 NetworkAnimator Animator;
                 public void Init(NetworkAnimator Animator)
@@ -215,6 +229,10 @@ namespace Wsla.Unity
                 public int Hash { get; internal set; }
 
                 public bool Dirty { get; internal set; }
+                public void MarkDirty()
+                {
+                    Dirty = true;
+                }
 
                 public bool Value => Dirty;
 
@@ -242,6 +260,19 @@ namespace Wsla.Unity
             }
 
             public bool Dirty { get; private set; }
+            public void MarkDirty()
+            {
+                Dirty = true;
+
+                for (int i = 0; i < Bools.Length; i++)
+                    Bools[i].MarkDirty();
+
+                for (int i = 0; i < Integers.Length; i++)
+                    Integers[i].MarkDirty();
+
+                for (int i = 0; i < Floats.Length; i++)
+                    Floats[i].MarkDirty();
+            }
 
             public int Count => Bools.Length + Integers.Length + Floats.Length + Triggers.Length;
 
@@ -250,7 +281,9 @@ namespace Wsla.Unity
                 string Name { get; }
                 int Hash { get; }
                 T Value { get; }
+
                 bool Dirty { get; }
+                void MarkDirty();
 
                 void Init(NetworkAnimator Animator);
             }
@@ -430,7 +463,7 @@ namespace Wsla.Unity
                 ReadFloatsState(ref stream, ref mask);
 
                 //Triggers
-                ReadTriggersState(ref mask);
+                ApplyTriggersInvocation(ref mask);
             }
 
             void WriteBoolsState(ref BitStream stream, ref BitStream mask)
@@ -502,7 +535,7 @@ namespace Wsla.Unity
                 }
             }
 
-            void ReadTriggersState(ref BitStream mask)
+            void ApplyTriggersInvocation(ref BitStream mask)
             {
                 for (int i = 0; i < Triggers.Length; i++)
                 {
@@ -546,6 +579,10 @@ namespace Wsla.Unity
                 internal float Weight;
 
                 internal bool Dirty;
+                public void MarkDirty()
+                {
+                    Dirty = true;
+                }
 
                 //8 bits in 0-1 range = 0.005 Precision
                 const int Bits = 8;
@@ -592,6 +629,13 @@ namespace Wsla.Unity
             public int Count => Collection.Length;
 
             internal bool Dirty { get; private set; }
+            public void MarkDirty()
+            {
+                Dirty = true;
+
+                for (int i = 0; i < Collection.Length; i++)
+                    Collection[i].MarkDirty();
+            }
 
 #if UNITY_EDITOR
             internal void Refresh(AnimatorController controller)
@@ -663,6 +707,11 @@ namespace Wsla.Unity
         }
 
         bool Dirty => Parameters.Dirty | Layers.Dirty;
+        public void MarkDirty()
+        {
+            Parameters.MarkDirty();
+            Layers.MarkDirty();
+        }
 
         NetworkTickTimer TickTimer;
 
@@ -697,6 +746,7 @@ namespace Wsla.Unity
             base.Set(reference);
 
             TickTimer = new NetworkTickTimer(TickSlice);
+            TickTimer.OnTick += TickCallback;
 
             Parameters.Init();
             Layers.Init();
@@ -707,46 +757,71 @@ namespace Wsla.Unity
 
         void SpawnCallback()
         {
-            TickTimer.Start();
-            TickTimer.OnTick += TickCallback;
+            if (Network.IsLocal)
+            {
+                TickTimer.Start();
+            }
+
+            Network.Entity.OnGainedOwnership += GainedOwnershipCallback;
+            Network.Entity.OnLostOwnership += LostOwnershipCallback;
         }
         void DespawnCallback()
         {
             TickTimer.Stop();
-            TickTimer.OnTick -= TickCallback;
+        }
+
+        void GainedOwnershipCallback()
+        {
+            //Setup Tick Timer
+            {
+                TickTimer.SetTick(NetworkTickID.Zero + 1);
+                TickTimer.Start();
+            }
+
+            //Replicate Current State
+            {
+                MarkDirty();
+                WritePayload();
+            }
+        }
+        void LostOwnershipCallback()
+        {
+            TickTimer.Stop();
         }
 
         void TickCallback(NetworkTickInfo info)
         {
-            if (Network.Entity.IsRemote)
-                return;
-
             if (Dirty is false)
                 return;
 
-            //Replicate
-            {
-                var stream = RPCs.Replicate.GetSourceStream();
-                var source = BinarySource.From(stream);
+            WritePayload();
+        }
 
-                var changes = CollectDirtyMask(ref source);
+        void WritePayload()
+        {
+            var stream = RPCs.Replicate.GetSourceStream();
+            var source = BinarySource.From(stream);
 
-                changes.Reset();
+            var changes = CollectDirtyMask(ref source);
 
-                Parameters.WriteState(ref source, ref changes);
-                Layers.WriteState(ref source, ref changes);
+            changes.Reset();
 
-                var binary = stream.PeekAllocatedMemory();
+            Parameters.WriteState(ref source, ref changes);
+            Layers.WriteState(ref source, ref changes);
 
-                RPCs.Replicate.Invoke(binary)
-                    .SetIgnoreLocal()
-                    .Broadcast();
-            }
+            var binary = stream.PeekAllocatedMemory();
+
+            RPCs.Replicate.Invoke(binary)
+                .SetIgnoreLocal()
+                .Broadcast();
         }
 
         [RPC]
         void Replicate(ref BinarySource source, RpcInfo info)
         {
+            if (info.TryGetSender(out var sender) && sender != Network.Owner)
+                return;
+
             var changes = AllocateChangesMask(ref source);
 
             Parameters.ReadState(ref source, ref changes);
@@ -852,15 +927,35 @@ namespace Wsla.Unity
         [CustomEditor(typeof(NetworkAnimator))]
         class Inspector : Editor
         {
-            public override void OnInspectorGUI()
+            public override VisualElement CreateInspectorGUI()
             {
-                base.OnInspectorGUI();
+                return new Element(this);
+            }
 
-                EditorGUILayout.Space();
-
-                if (GUILayout.Button("Refresh"))
+            class Element : VisualElement
+            {
+                public Element(Editor editor)
                 {
-                    (target as NetworkAnimator).Refresh();
+                    //Inspector
+                    {
+                        InspectorElement.FillDefaultInspector(this, editor.serializedObject, editor);
+                    }
+
+                    //Refresh
+                    {
+                        var element = new Button(OnClick)
+                        {
+                            text = "Refresh"
+                        };
+
+                        void OnClick()
+                        {
+                            foreach (NetworkAnimator target in editor.serializedObject.targetObjects)
+                                target.Refresh();
+                        }
+
+                        Add(element);
+                    }
                 }
             }
         }
