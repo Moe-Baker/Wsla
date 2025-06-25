@@ -351,7 +351,38 @@ namespace Wsla.Serialization
         }
     }
 
-    #region Tuple
+    public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
+        where T : struct
+    {
+        public override void Write(in Nullable<T> value, ref BinarySource stream)
+        {
+            if (value.HasValue)
+            {
+                NetworkSerializer.Helper.Nullability.Write(false, ref stream);
+
+                NetworkSerializer.WriteValue(value.Value, ref stream);
+            }
+            else
+            {
+                NetworkSerializer.Helper.Nullability.Write(true, ref stream);
+            }
+        }
+        public override void Read(ref Nullable<T> value, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Read(ref stream))
+            {
+                value = default;
+            }
+            else
+            {
+                var reference = value.GetValueOrDefault();
+                NetworkSerializer.ReadValue(ref reference, ref stream);
+                value = new Nullable<T>(reference);
+            }
+        }
+    }
+
+    #region Tuples
     public class TupleSerializationResolver : NetworkSerializationResolver<ValueTuple>
     {
         public override void Write(in ValueTuple value, ref BinarySource stream) { }
@@ -504,37 +535,7 @@ namespace Wsla.Serialization
     }
     #endregion
 
-    public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
-        where T : struct
-    {
-        public override void Write(in Nullable<T> value, ref BinarySource stream)
-        {
-            if (value.HasValue)
-            {
-                NetworkSerializer.Helper.Nullability.Write(false, ref stream);
-
-                NetworkSerializer.WriteValue(value.Value, ref stream);
-            }
-            else
-            {
-                NetworkSerializer.Helper.Nullability.Write(true, ref stream);
-            }
-        }
-        public override void Read(ref Nullable<T> value, ref BinarySource stream)
-        {
-            if (NetworkSerializer.Helper.Nullability.Read(ref stream))
-            {
-                value = default;
-            }
-            else
-            {
-                var reference = value.GetValueOrDefault();
-                NetworkSerializer.ReadValue(ref reference, ref stream);
-                value = new Nullable<T>(reference);
-            }
-        }
-    }
-
+    #region Collections
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
     {
         public override void Write(in TValue[] array, ref BinarySource stream)
@@ -640,7 +641,7 @@ namespace Wsla.Serialization
             {
                 if (i >= list.Count)
                 {
-                    NetworkSerializer.ReadValue(ref stream, out TValue item);
+                    var item = NetworkSerializer.ReadValue<TValue>(ref stream);
                     list.Add(item);
                 }
                 else
@@ -661,6 +662,136 @@ namespace Wsla.Serialization
                 list = new List<TValue>(length);
             else if (length > list.Capacity)
                 list.Capacity = length;
+        }
+    }
+
+    public class HashSetNetworkSerializationResolver<TValue> : NetworkSerializationResolver<HashSet<TValue>>
+    {
+        public override void Write(in HashSet<TValue> list, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Write(list?.Count, ref stream))
+                return;
+
+            foreach (var item in list)
+                NetworkSerializer.WriteValue(item, ref stream);
+        }
+
+        public override void Read(ref HashSet<TValue> set, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            {
+                set = default;
+                return;
+            }
+
+            EnsureCapacity(ref set, length);
+
+            for (int i = 0; i < length; i++)
+            {
+                var item = NetworkSerializer.ReadValue<TValue>(ref stream);
+                set.Add(item);
+            }
+        }
+
+        void EnsureCapacity(ref HashSet<TValue> list, int length)
+        {
+            if (list is null)
+            {
+                list = new HashSet<TValue>(length);
+            }
+            else
+            {
+                list.Clear();
+                list.EnsureCapacity(length);
+            }
+        }
+    }
+
+    public class QueueNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Queue<TValue>>
+    {
+        public override void Write(in Queue<TValue> list, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Write(list?.Count, ref stream))
+                return;
+
+            foreach (var item in list)
+                NetworkSerializer.WriteValue(item, ref stream);
+        }
+
+        public override void Read(ref Queue<TValue> set, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            {
+                set = default;
+                return;
+            }
+
+            EnsureCapacity(ref set, length);
+
+            for (int i = 0; i < length; i++)
+            {
+                var item = NetworkSerializer.ReadValue<TValue>(ref stream);
+                set.Enqueue(item);
+            }
+        }
+
+        void EnsureCapacity(ref Queue<TValue> list, int length)
+        {
+            if (list is null)
+            {
+                list = new Queue<TValue>(length);
+            }
+            else
+            {
+                list.Clear();
+
+                //No ensure capacity method available
+            }
+        }
+    }
+
+    public class StackNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Stack<TValue>>
+    {
+        public override void Write(in Stack<TValue> list, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Write(list?.Count, ref stream))
+                return;
+
+            foreach (var item in list)
+                NetworkSerializer.WriteValue(item, ref stream);
+        }
+
+        public override void Read(ref Stack<TValue> set, ref BinarySource stream)
+        {
+            if (NetworkSerializer.Helper.Nullability.Length.Read(ref stream, out var length))
+            {
+                set = default;
+                return;
+            }
+
+            var cache = new TValue[length]; //Must cache because Stack is LIFO and no Insert or Reverse methods are available for the stack collection type
+
+            for (int i = 0; i < length; i++) //Read all elements
+                cache[i] = NetworkSerializer.ReadValue<TValue>(ref stream);
+
+            EnsureCapacity(ref set, length);
+
+            for (int i = cache.Length - 1; i >= 0; i--) //Push in reverse order
+                set.Push(cache[i]);
+        }
+
+        void EnsureCapacity(ref Stack<TValue> list, int length)
+        {
+            if (list is null)
+            {
+                list = new Stack<TValue>(length);
+            }
+            else
+            {
+                list.Clear();
+
+                //No ensure capacity method available
+            }
         }
     }
 
@@ -686,15 +817,7 @@ namespace Wsla.Serialization
                 return;
             }
 
-            if (collection is null)
-            {
-                collection = new Dictionary<TKey, TValue>(length);
-            }
-            else
-            {
-                collection.Clear();
-                collection.EnsureCapacity(length);
-            }
+            EnsureCapacity(ref collection, length);
 
             for (int i = 0; i < length; i++)
             {
@@ -704,7 +827,21 @@ namespace Wsla.Serialization
                 collection.Add(key, value);
             }
         }
+
+        void EnsureCapacity(ref Dictionary<TKey, TValue> collection, int length)
+        {
+            if (collection is null)
+            {
+                collection = new Dictionary<TKey, TValue>(length);
+            }
+            else
+            {
+                collection.Clear();
+                collection.EnsureCapacity(length);
+            }
+        }
     }
+    #endregion
 
     #region Manual
     public class ManualNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>

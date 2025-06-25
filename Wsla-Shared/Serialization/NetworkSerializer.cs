@@ -224,6 +224,24 @@ namespace Wsla.Serialization
                         }
                     }
 
+                    public static bool Write(int? count, ref BinarySource stream)
+                    {
+                        ushort length;
+
+                        if (count == null)
+                        {
+                            length = 0;
+                            NetworkSerializer.WriteValue(in length, ref stream);
+                            return true;
+                        }
+                        else
+                        {
+                            length = (ushort)(count + 1);
+                            NetworkSerializer.WriteValue(in length, ref stream);
+                            return false;
+                        }
+                    }
+
                     /// <summary>
                     /// Reads both the nullability and length of the collection
                     /// </summary>

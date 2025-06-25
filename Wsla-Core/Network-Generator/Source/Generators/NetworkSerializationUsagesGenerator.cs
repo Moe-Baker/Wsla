@@ -44,6 +44,15 @@ namespace Wsla.Generator
             public INamedTypeSymbol DictionaryResolver;
             public INamedTypeSymbol DictionaryType;
 
+            public INamedTypeSymbol HashSetResolver;
+            public INamedTypeSymbol HashSetType;
+
+            public INamedTypeSymbol QueueResolver;
+            public INamedTypeSymbol QueueType;
+
+            public INamedTypeSymbol StackResolver;
+            public INamedTypeSymbol StackType;
+
             public INamedTypeSymbol ArraySegmentResolver;
             public INamedTypeSymbol ArraySegmentType;
 
@@ -97,6 +106,15 @@ namespace Wsla.Generator
 
                     DictionaryResolver = compilation.GetGenericTypeByMetadataName(Constants.DictionaryNetworkSerializationResolver, 2),
                     DictionaryType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.Dictionary", 2),
+
+                    HashSetResolver = compilation.GetGenericTypeByMetadataName(Constants.HashSetNetworkSerializationResolver, 1),
+                    HashSetType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.HashSet", 1),
+
+                    QueueResolver = compilation.GetGenericTypeByMetadataName(Constants.QueueNetworkSerializationResolver, 1),
+                    QueueType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.Queue", 1),
+
+                    StackResolver = compilation.GetGenericTypeByMetadataName(Constants.StackNetworkSerializationResolver, 1),
+                    StackType = compilation.GetGenericTypeByMetadataName("System.Collections.Generic.Stack", 1),
 
                     ManualResolver = compilation.GetGenericTypeByMetadataName(Constants.ManualNetworkSerializationResolver, 1),
                     ManualContract = compilation.GetTypeByMetadataName(Constants.IManualNetworkSerialization),
@@ -274,6 +292,9 @@ namespace Wsla.Generator
             public static readonly string ArraySegmentNetworkSerializationResolver = $"{Namespace}.{nameof(ArraySegmentNetworkSerializationResolver)}";
             public static readonly string ListNetworkSerializationResolver = $"{Namespace}.{nameof(ListNetworkSerializationResolver)}";
             public static readonly string DictionaryNetworkSerializationResolver = $"{Namespace}.{nameof(DictionaryNetworkSerializationResolver)}";
+            public static readonly string HashSetNetworkSerializationResolver = $"{Namespace}.{nameof(HashSetNetworkSerializationResolver)}";
+            public static readonly string QueueNetworkSerializationResolver = $"{Namespace}.{nameof(QueueNetworkSerializationResolver)}";
+            public static readonly string StackNetworkSerializationResolver = $"{Namespace}.{nameof(StackNetworkSerializationResolver)}";
 
             public static readonly string ManualNetworkSerializationResolver = $"{Namespace}.{nameof(ManualNetworkSerializationResolver)}";
             public static readonly string IManualNetworkSerialization = $"{Namespace}.{nameof(IManualNetworkSerialization)}";
@@ -324,6 +345,15 @@ namespace Wsla.Generator
                     return true;
 
                 if (ResolveDictionary(context, compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveHashSet(context, compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveQueue(context, compilation, usage, resolvers))
+                    return true;
+
+                if (ResolveStack(context, compilation, usage, resolvers))
                     return true;
 
                 if (ResolveEnum(context, compilation, usage, resolvers))
@@ -396,65 +426,45 @@ namespace Wsla.Generator
             }
             static bool ResolveArraySegment(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
-                var segment = usage as INamedTypeSymbol;
-                if (segment is null)
-                    return false;
-
-                if (segment.IsGenericType is false)
-                    return false;
-
-                if (CodeUtility.SymbolEquality.Equals(segment.ConstructedFrom, compilation.ArraySegmentType) is false)
-                    return false;
-
-                var element = segment.TypeArguments[0];
-
-                resolvers[usage] = compilation.ArraySegmentResolver.Construct(element);
-
-                Resolve(context, compilation, element, resolvers);
-
-                return true;
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.ArraySegmentType, compilation.ArraySegmentResolver);
             }
             static bool ResolveList(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
-                var list = usage as INamedTypeSymbol;
-
-                if (list is null)
-                    return false;
-
-                if (list.IsGenericType is false)
-                    return false;
-
-                if (CodeUtility.SymbolEquality.Equals(list.ConstructedFrom, compilation.ListType) is false)
-                    return false;
-
-                var element = list.TypeArguments[0];
-
-                resolvers[usage] = compilation.ListResolver.Construct(element);
-
-                Resolve(context, compilation, element, resolvers);
-
-                return true;
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.ListType, compilation.ListResolver);
             }
             static bool ResolveDictionary(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
-                var dictionary = usage as INamedTypeSymbol;
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.DictionaryType, compilation.DictionaryResolver);
+            }
+            static bool ResolveHashSet(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.HashSetType, compilation.HashSetResolver);
+            }
+            static bool ResolveQueue(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.QueueType, compilation.QueueResolver);
+            }
+            static bool ResolveStack(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
+            {
+                return ResolveGenericCollection(context, compilation, usage, resolvers, compilation.StackType, compilation.StackResolver);
+            }
+            static bool ResolveGenericCollection(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers, INamedTypeSymbol collectionType, INamedTypeSymbol resolverType)
+            {
+                var collection = usage as INamedTypeSymbol;
 
-                if (dictionary is null)
+                if (collection is null)
                     return false;
 
-                if (dictionary.IsGenericType is false)
+                if (collection.IsGenericType is false)
                     return false;
 
-                if (CodeUtility.SymbolEquality.Equals(dictionary.ConstructedFrom, compilation.DictionaryType) is false)
+                if (CodeUtility.SymbolEquality.Equals(collection.ConstructedFrom, collectionType) is false)
                     return false;
 
-                var key = dictionary.TypeArguments[0];
-                var value = dictionary.TypeArguments[1];
+                resolvers[usage] = resolverType.Construct(collection.TypeArguments, collection.TypeArgumentNullableAnnotations);
 
-                resolvers[usage] = compilation.DictionaryResolver.Construct(key, value);
-
-                Resolve(context, compilation, key, resolvers);
-                Resolve(context, compilation, value, resolvers);
+                foreach (var argument in collection.TypeArguments)
+                    Resolve(context, compilation, argument, resolvers);
 
                 return true;
             }
@@ -468,7 +478,6 @@ namespace Wsla.Generator
 
                 return true;
             }
-
             static bool ResolveAuto(SourceProductionContext context, CompilationData compilation, ITypeSymbol usage, Dictionary<ITypeSymbol, INamedTypeSymbol> resolvers)
             {
                 if (usage.ImplementsInterface(compilation.AutoContract) is false)
