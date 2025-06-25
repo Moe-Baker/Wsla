@@ -69,6 +69,22 @@ namespace Wsla.Generator
                     "Usage",
                     DiagnosticSeverity.Error,
                     true);
+
+            public static readonly DiagnosticDescriptor NoResolverCondition
+                = new DiagnosticDescriptor("WSLA9",
+                    "No Resolver Condition Attribute Assigned",
+                    "Source Generated Resolvers Require at Least One Condition Attribute",
+                    "Usage",
+                    DiagnosticSeverity.Error,
+                    true);
+
+            public static readonly DiagnosticDescriptor NoResolverBuilder
+                = new DiagnosticDescriptor("WSLA10",
+                    "No Builder Attribute Assigned",
+                    "Source Generated Resolvers Require a Single Builder Attribute",
+                    "Usage",
+                    DiagnosticSeverity.Error,
+                    true);
         }
 
         public class Constants

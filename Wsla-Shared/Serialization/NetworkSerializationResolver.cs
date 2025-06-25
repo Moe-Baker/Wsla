@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Wsla.Serialization
 {
-    public static class NetworkSerializationResolver
+    public class NetworkSerializationResolver
     {
         public static void Register<TValue, TResolver>()
             where TResolver : NetworkSerializationResolver<TValue>, new()
@@ -155,20 +155,51 @@ namespace Wsla.Serialization
 
             Register<NetworkSyncMemberID, BlittableNetworkSerializationResolver<NetworkSyncMemberID>>();
 
-            Register(new FixedStringNetworkSerializationResolver<FixedString<FS20>>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString<FS40>>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString<FS60>>());
-            Register(new FixedStringNetworkSerializationResolver<FixedString<FS80>>());
-
-            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB20>>());
-            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB40>>());
-            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB80>>());
-            Register(new FixedBinaryNetworkSerializationResolver<FixedBinary<FB160>>());
+            Register<ValueTuple, TupleSerializationResolver>();
 
             Registration.LoadAll();
         }
+
+        public class SourceGenerator : Attribute
+        {
+            public abstract class Condition : Attribute
+            {
+                public class ImplementsInterface : Condition
+                {
+                    public ImplementsInterface(Type type) { }
+                }
+
+                public class ConstructedFrom : Condition
+                {
+                    public ConstructedFrom(Type type) { }
+                }
+
+                public class DecoratedBy : Condition
+                {
+                    public DecoratedBy(Type type) { }
+                }
+
+                public class IsArray : Condition { }
+
+                public class IsEnum : Condition { }
+            }
+
+            public abstract class Builder : Attribute
+            {
+                public class FromSourceType : Builder { }
+
+                public class FromSourceArguments : Builder { }
+
+                public class FromArrayType : Builder { }
+            }
+
+            public abstract class Options : Attribute
+            {
+                public class ResolveGenericArguments : Attribute { }
+            }
+        }
     }
-    public abstract class NetworkSerializationResolver<TValue>
+    public abstract class NetworkSerializationResolver<TValue> : NetworkSerializationResolver
     {
         public abstract void Write(in TValue value, ref BinarySource stream);
         public abstract void Read(ref TValue value, ref BinarySource stream);
@@ -217,8 +248,6 @@ namespace Wsla.Serialization
             value = new TimeSpan(ticks);
         }
     }
-
-    //Derived Resolvers
 
     public class StringNetworkSerializationResolver : NetworkSerializationResolver<string>
     {
@@ -277,6 +306,9 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.IsEnum]
+    [SourceGenerator.Builder.FromSourceType]
     public unsafe class EnumNetworkSerializationResolver<TEnum> : NetworkSerializationResolver<TEnum>
         where TEnum : unmanaged, Enum
     {
@@ -351,6 +383,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(Nullable<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
         where T : struct
     {
@@ -388,6 +424,11 @@ namespace Wsla.Serialization
         public override void Write(in ValueTuple value, ref BinarySource stream) { }
         public override void Read(ref ValueTuple value, ref BinarySource stream) { }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1> : NetworkSerializationResolver<ValueTuple<T1>>
     {
         public override void Write(in ValueTuple<T1> value, ref BinarySource stream)
@@ -399,6 +440,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item1, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2> : NetworkSerializationResolver<ValueTuple<T1, T2>>
     {
         public override void Write(in ValueTuple<T1, T2> value, ref BinarySource stream)
@@ -412,6 +458,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item2, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3> : NetworkSerializationResolver<ValueTuple<T1, T2, T3>>
     {
         public override void Write(in ValueTuple<T1, T2, T3> value, ref BinarySource stream)
@@ -427,6 +478,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item3, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4> value, ref BinarySource stream)
@@ -444,6 +500,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item4, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5> value, ref BinarySource stream)
@@ -463,6 +524,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item5, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6> value, ref BinarySource stream)
@@ -484,6 +550,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item6, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, ref BinarySource stream)
@@ -507,6 +578,11 @@ namespace Wsla.Serialization
             NetworkSerializer.ReadValue(ref value.Item7, ref stream);
         }
     }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,,,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7, TRest> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest>>
         where TRest : struct
     {
@@ -536,6 +612,9 @@ namespace Wsla.Serialization
     #endregion
 
     #region Collections
+    [SourceGenerator]
+    [SourceGenerator.Condition.IsArray]
+    [SourceGenerator.Builder.FromArrayType]
     public class ArrayNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue[]>
     {
         public override void Write(in TValue[] array, ref BinarySource stream)
@@ -573,6 +652,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(ArraySegment<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class ArraySegmentNetworkSerializationResolver<TValue> : NetworkSerializationResolver<ArraySegment<TValue>>
     {
         public override void Write(in ArraySegment<TValue> segment, ref BinarySource stream)
@@ -616,6 +699,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(List<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class ListNetworkSerializationResolver<TValue> : NetworkSerializationResolver<List<TValue>>
     {
         public override void Write(in List<TValue> list, ref BinarySource stream)
@@ -665,6 +752,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(HashSet<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class HashSetNetworkSerializationResolver<TValue> : NetworkSerializationResolver<HashSet<TValue>>
     {
         public override void Write(in HashSet<TValue> list, ref BinarySource stream)
@@ -707,6 +798,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(Queue<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class QueueNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Queue<TValue>>
     {
         public override void Write(in Queue<TValue> list, ref BinarySource stream)
@@ -750,6 +845,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(Stack<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class StackNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Stack<TValue>>
     {
         public override void Write(in Stack<TValue> list, ref BinarySource stream)
@@ -795,6 +894,10 @@ namespace Wsla.Serialization
         }
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(Dictionary<,>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    [SourceGenerator.Options.ResolveGenericArguments]
     public class DictionaryNetworkSerializationResolver<TKey, TValue> : NetworkSerializationResolver<Dictionary<TKey, TValue>>
     {
         public override void Write(in Dictionary<TKey, TValue> collection, ref BinarySource stream)
@@ -844,6 +947,9 @@ namespace Wsla.Serialization
     #endregion
 
     #region Manual
+    [SourceGenerator]
+    [SourceGenerator.Condition.ImplementsInterface(typeof(IManualNetworkSerialization))]
+    [SourceGenerator.Builder.FromSourceType]
     public class ManualNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : IManualNetworkSerialization, new()
     {
@@ -882,6 +988,9 @@ namespace Wsla.Serialization
     #endregion
 
     #region Auto
+    [SourceGenerator]
+    [SourceGenerator.Condition.ImplementsInterface(typeof(IAutoNetworkSerialization))]
+    [SourceGenerator.Builder.FromSourceType]
     public class AutoNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : IAutoNetworkSerialization, new()
     {
@@ -963,6 +1072,9 @@ namespace Wsla.Serialization
     #endregion
 
     #region Blittable
+    [SourceGenerator]
+    [SourceGenerator.Condition.DecoratedBy.DecoratedBy(typeof(NetworkBlittableAttribute))]
+    [SourceGenerator.Builder.FromSourceType]
     public unsafe class BlittableNetworkSerializationResolver<TValue> : NetworkSerializationResolver<TValue>
         where TValue : unmanaged
     {

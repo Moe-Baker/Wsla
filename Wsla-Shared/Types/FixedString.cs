@@ -348,6 +348,9 @@ namespace Wsla
         Span<char> IFixedStringStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Characters[0], Capacity);
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ImplementsInterface(typeof(IFixedString))]
+    [SourceGenerator.Builder.FromSourceType]
     public unsafe class FixedStringNetworkSerializationResolver<TString> : NetworkSerializationResolver<TString>
         where TString : IFixedString, new()
     {

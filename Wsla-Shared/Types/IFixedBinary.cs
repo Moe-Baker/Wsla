@@ -122,6 +122,9 @@ namespace Wsla
         Span<byte> IFixedBinaryStorage.GetSpan() => MemoryMarshal.CreateSpan(ref Buffer[0], Capacity);
     }
 
+    [SourceGenerator]
+    [SourceGenerator.Condition.ImplementsInterface(typeof(IFixedBinary))]
+    [SourceGenerator.Builder.FromSourceType]
     public unsafe class FixedBinaryNetworkSerializationResolver<TBinary> : NetworkSerializationResolver<TBinary>
         where TBinary : IFixedBinary, new()
     {

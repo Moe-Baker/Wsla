@@ -12,7 +12,7 @@ namespace Wsla.Generator
     {
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            var compilation = context.CompilationProvider.Select(CompilationData.Create);
+            var compilation = context.CompilationProvider.Select(WaypointsData.Create);
 
             var isUnity = context.ParseOptionsProvider.Select(CheckIfUnityProject);
 
@@ -21,12 +21,12 @@ namespace Wsla.Generator
             context.RegisterSourceOutput(compilation.Combine(behaviours), GenerateSourceCode);
         }
 
-        public struct CompilationData : IEquatable<CompilationData>
+        public struct WaypointsData : IEquatable<WaypointsData>
         {
             public string AssemblyName;
             public INamespaceSymbol GlobalNamespace;
 
-            public NetworkSerializationUsagesGenerator.CompilationData SerializationCompilation;
+            public NetworkSerializationUsagesGenerator.WaypointsData SerializationWaypoints;
 
             public INamedTypeSymbol RpcInfo;
 
@@ -45,24 +45,23 @@ namespace Wsla.Generator
 
             public override bool Equals(object obj)
             {
-                if (obj is CompilationData other)
+                if (obj is WaypointsData other)
                     return Equals(other);
 
                 return false;
             }
-            public bool Equals(CompilationData other) => GetComparableFields() == other.GetComparableFields();
+            public bool Equals(WaypointsData other) => GetComparableFields() == other.GetComparableFields();
 
             public override int GetHashCode() => GetComparableFields().GetHashCode();
 
-            public static CompilationData Create(Compilation compilation, CancellationToken cancellation)
+            public static WaypointsData Create(Compilation compilation, CancellationToken cancellation)
             {
-                var data = new CompilationData()
+                var data = new WaypointsData()
                 {
                     AssemblyName = compilation.Assembly.Name,
                     GlobalNamespace = compilation.Assembly.GlobalNamespace,
 
-                    SerializationCompilation = NetworkSerializationUsagesGenerator.CompilationData.Create(compilation, cancellation),
-
+                    SerializationWaypoints = NetworkSerializationUsagesGenerator.WaypointsData.Create(compilation, cancellation),
 
                     RpcInfo = compilation.GetTypeByMetadataName(Constants.RpcInfo),
 
@@ -105,9 +104,9 @@ namespace Wsla.Generator
         {
             public List<INamedTypeSymbol> List { get; }
 
-            CompilationData Compilation;
+            WaypointsData Compilation;
 
-            void Collect(CompilationData Compilation)
+            void Collect(WaypointsData Compilation)
             {
                 this.Compilation = Compilation;
 
@@ -134,7 +133,7 @@ namespace Wsla.Generator
                 List = new List<INamedTypeSymbol>(capacity);
             }
 
-            public static NetworkBehaviourCollector Collect((CompilationData compilation, bool isUnity) data, CancellationToken token)
+            public static NetworkBehaviourCollector Collect((WaypointsData compilation, bool isUnity) data, CancellationToken token)
             {
                 if (data.isUnity is false)
                     return new NetworkBehaviourCollector();
@@ -147,7 +146,7 @@ namespace Wsla.Generator
             }
         }
 
-        void GenerateSourceCode(SourceProductionContext context, (CompilationData Compilation, NetworkBehaviourCollector Behaviours) data)
+        void GenerateSourceCode(SourceProductionContext context, (WaypointsData Compilation, NetworkBehaviourCollector Behaviours) data)
         {
             try
             {
@@ -160,7 +159,7 @@ namespace Wsla.Generator
 
                 context.AddSource("SyncMembersInterfaceImplementations.g.cs", builder.ToString());
 
-                NetworkSerializationUsagesGenerator.WriteUsages(context, "SyncMembers", cache.SerializedTypes, data.Compilation.SerializationCompilation);
+                NetworkSerializationUsagesGenerator.WriteUsages(context, "SyncMembers", data.Compilation.SerializationWaypoints, cache.SerializedTypes);
             }
             catch (Exception)
             {
@@ -195,7 +194,7 @@ namespace Wsla.Generator
             }
         }
 
-        void WriteBehaviour(SourceProductionContext context, CompilationData compilation, INamedTypeSymbol behaviour, CodeStringBuilder builder, ObjectCache cache)
+        void WriteBehaviour(SourceProductionContext context, WaypointsData compilation, INamedTypeSymbol behaviour, CodeStringBuilder builder, ObjectCache cache)
         {
             var hierarchy = cache.Hierarchy;
 
