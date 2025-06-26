@@ -285,9 +285,40 @@ namespace Wsla.Generator
                 if (cache.ContainsKey(usage))
                     return;
 
+                IterateGenericParameters(usage, cache);
+
                 foreach (var resolver in Waypoints.Resolvers)
                     if (resolver.Resolve(in this, usage, cache))
                         return;
+            }
+            void IterateGenericParameters(ITypeSymbol usage, ResolversCache cache)
+            {
+                var type = usage as INamedTypeSymbol;
+                if (type is null)
+                    return;
+
+                if (type.BaseType != null)
+                    IterateGenericParameters(usage.BaseType, cache);
+
+                if (type.IsGenericType is false)
+                    return;
+
+                var arguments = type.TypeArguments;
+                var parameters = type.TypeParameters;
+
+                for (int i = 0; i < arguments.Length; i++)
+                {
+                    var argument = arguments[i];
+                    var parameter = parameters[i];
+
+                    if (argument.TypeKind is TypeKind.TypeParameter)
+                        continue;
+
+                    if (CodeUtility.HasAttribute(parameter, Waypoints.MarkerAttribute) is false)
+                        continue;
+
+                    Resolve(argument, cache);
+                }
             }
 
             public ResolutionData(SourceProductionContext Context, WaypointsData Waypoints)
@@ -349,6 +380,12 @@ namespace Wsla.Generator
 
             public bool ValidateConfiguration(out Diagnostic diagnostic)
             {
+                if (ResolverType.DeclaredAccessibility != Accessibility.Public)
+                {
+                    diagnostic = DiagnosticCodes.NotPublicResolver.Create(ResolverType);
+                    return false;
+                }
+
                 if (Conditions.Count is 0)
                 {
                     diagnostic = DiagnosticCodes.NoResolverCondition.Create(ResolverType);

@@ -85,6 +85,14 @@ namespace Wsla.Generator
                     "Usage",
                     DiagnosticSeverity.Error,
                     true);
+
+            public static readonly DiagnosticDescriptor NotPublicResolver
+                = new DiagnosticDescriptor("WSLA11",
+                    "Resolver Must be Public",
+                    "Source Generated Resolvers Must be Public",
+                    "Usage",
+                    DiagnosticSeverity.Error,
+                    true);
         }
 
         public class Constants
