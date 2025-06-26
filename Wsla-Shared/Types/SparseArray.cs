@@ -75,13 +75,13 @@ namespace Wsla
     /// </summary>
     /// <typeparam name="T"></typeparam>
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct SparseArray<[NetworkSerializationMarker] T> : IManualNetworkSerialization, ISpannable<T>, IAssignableSpannable<T>
+    public unsafe struct SparseArray<[NetworkSerializationMarker] T> : ISpannable<T>, IAssignableSpannable<T>
     {
         //Field order important, never change
         //Item[0, 1, 2] must always be the first fields in this struct and in the same order
 
         T Item0, Item1, Item2;
-        T[] Items;
+        internal T[] Items;
 
         public T this[int index]
         {
@@ -163,32 +163,6 @@ namespace Wsla
                 destination.Add(source[i]);
 
             return destination;
-        }
-        #endregion
-
-        #region Network Serialization
-        public void Write(ref BinarySource stream)
-        {
-            NetworkSerializer.WriteValue(Length, ref stream);
-
-            var span = GetUsedSpan();
-
-            for (int i = 0; i < Length; i++)
-                NetworkSerializer.WriteValue(in span[i], ref stream);
-        }
-        public void Read(ref BinarySource stream)
-        {
-            Length = NetworkSerializer.ReadValue<byte>(ref stream);
-
-            //Prepare Container
-            if (SparseArray.CheckAllocated(Length))
-            {
-                if (Items?.Length != Length)
-                    Items = new T[Length];
-            }
-
-            for (int i = 0; i < Length; i++)
-                this[i] = NetworkSerializer.ReadValue<T>(ref stream);
         }
         #endregion
 
@@ -282,5 +256,33 @@ namespace Wsla
 
         public static implicit operator ReadOnlySpan<T>(SparseArray<T> array) => array.GetUsedSpan();
         public static implicit operator Span<T>(SparseArray<T> array) => array.GetUsedSpan();
+    }
+
+    [SourceGenerator]
+    [SourceGenerator.Condition.ConstructedFrom(typeof(SparseArray<>))]
+    [SourceGenerator.Builder.FromSourceArguments]
+    public class SparseArrayNetworkResolver<T> : NetworkSerializationResolver<SparseArray<T>>
+    {
+        public override void Write(in SparseArray<T> value, ref BinarySource stream)
+        {
+            NetworkSerializer.WriteValue(value.Length, ref stream);
+
+            var span = value.GetUsedSpan();
+
+            for (int i = 0; i < value.Length; i++)
+                NetworkSerializer.WriteValue(in span[i], ref stream);
+        }
+        public override void Read(ref SparseArray<T> value, ref BinarySource stream)
+        {
+            var length = NetworkSerializer.ReadValue<byte>(ref stream);
+            value.SetLength(length);
+
+            //Prepare Container
+            if (SparseArray.CheckAllocated(length) && value.Items?.Length != length)
+                value.Items = new T[length];
+
+            for (int i = 0; i < length; i++)
+                value[i] = NetworkSerializer.ReadValue<T>(ref stream);
+        }
     }
 }
