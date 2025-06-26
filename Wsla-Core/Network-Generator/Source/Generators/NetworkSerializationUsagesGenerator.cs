@@ -203,10 +203,12 @@ namespace Wsla.Generator
                 public struct OptionsData
                 {
                     public INamedTypeSymbol ResolveGenericArguments;
+                    public INamedTypeSymbol ResolutionOrder;
 
                     public OptionsData(Compilation compilation)
                     {
-                        ResolveGenericArguments = compilation.GetTypeByMetadataName(ResolverTemplate.SourceGenerator.Options.ResolveGenericArguments);
+                        ResolveGenericArguments = compilation.GetTypeByMetadataName(ResolverTemplate.SourceGenerator.Option.ResolveGenericArguments.SelfID);
+                        ResolutionOrder = compilation.GetTypeByMetadataName(ResolverTemplate.SourceGenerator.Option.ResolutionOrder.SelfID);
                     }
                 }
 
@@ -236,7 +238,7 @@ namespace Wsla.Generator
 
             class ResolverCollector : SymbolVisitor
             {
-                public List<ResolverTemplate> Resolvers { get; }
+                List<ResolverTemplate> Resolvers;
 
                 public override void VisitNamespace(INamespaceSymbol symbol)
                 {
@@ -253,7 +255,7 @@ namespace Wsla.Generator
                 }
 
                 WaypointsData Waypoints;
-                public ResolverCollector(WaypointsData Waypoints)
+                ResolverCollector(WaypointsData Waypoints)
                 {
                     this.Waypoints = Waypoints;
 
@@ -265,6 +267,8 @@ namespace Wsla.Generator
                     var collector = new ResolverCollector(waypoints);
 
                     collector.VisitNamespace(compilation.GlobalNamespace);
+
+                    collector.Resolvers.Sort((x, y) => x.ResolutionOrder.CompareTo(y.ResolutionOrder));
 
                     return collector.Resolvers;
                 }
@@ -335,19 +339,13 @@ namespace Wsla.Generator
         {
             public static readonly string SelfID = $"{Constants.Namespace}.NetworkSerializationResolver";
 
-            public INamedTypeSymbol ResolverType { get; }
-            public List<SourceGenerator.Condition> Conditions { get; }
-            public SourceGenerator.Builder Builder { get; }
+            public readonly INamedTypeSymbol ResolverType;
 
-            public OptionsFlag Options { get; }
-            [Flags]
-            public enum OptionsFlag
-            {
-                None = 0,
+            public List<SourceGenerator.Condition> Conditions;
+            public SourceGenerator.Builder Builder;
 
-                ResolveGenericArguments = 1 << 0,
-            }
-            public bool ResolveGenericArguments => Options.HasFlag(OptionsFlag.ResolveGenericArguments);
+            public bool ResolveGenericArguments;
+            public int ResolutionOrder;
 
             public bool ValidateConfiguration(out Diagnostic diagnostic)
             {
@@ -589,28 +587,73 @@ namespace Wsla.Generator
                     }
                 }
 
-                public abstract class Options
+                public abstract class Option
                 {
-                    public static readonly string BaseID = $"{SourceGenerator.SelfID}+{nameof(Options)}";
+                    public static readonly string BaseID = $"{SourceGenerator.SelfID}+{nameof(Option)}";
 
-                    public static readonly string ResolveGenericArguments = $"{BaseID}+{nameof(OptionsFlag.ResolveGenericArguments)}";
+                    public abstract void Apply(ResolverTemplate template);
 
-                    public static OptionsFlag Compute(AttributeData attribute, WaypointsData waypoints)
+                    public class ResolveGenericArguments : Option
+                    {
+                        public const string Name = nameof(ResolveGenericArguments);
+                        public static readonly string SelfID = $"{Option.BaseID}+{Name}";
+
+                        public override void Apply(ResolverTemplate template)
+                        {
+                            template.ResolveGenericArguments = true;
+                        }
+
+                        public ResolveGenericArguments(AttributeData data) { }
+                    }
+                    public class ResolutionOrder : Option
+                    {
+                        public const string Name = nameof(ResolutionOrder);
+                        public static readonly string SelfID = $"{Option.BaseID}+{Name}";
+
+                        public int Order { get; }
+
+                        public override void Apply(ResolverTemplate template)
+                        {
+                            template.ResolutionOrder = Order;
+                        }
+
+                        public ResolutionOrder(AttributeData data)
+                        {
+                            Order = (int)data.ConstructorArguments[0].Value;
+                        }
+                    }
+
+                    public static bool TryGet(AttributeData attribute, WaypointsData waypoints, out Option option)
                     {
                         if (CodeUtility.CompareSymbols(attribute.AttributeClass, waypoints.SourceGenerators.Options.ResolveGenericArguments))
-                            return OptionsFlag.ResolveGenericArguments;
+                        {
+                            option = new ResolveGenericArguments(attribute);
+                            return true;
+                        }
 
-                        return OptionsFlag.None;
+                        if (CodeUtility.CompareSymbols(attribute.AttributeClass, waypoints.SourceGenerators.Options.ResolutionOrder))
+                        {
+                            option = new ResolutionOrder(attribute);
+                            return true;
+                        }
+
+                        option = default;
+                        return false;
                     }
                 }
             }
 
-            public ResolverTemplate(INamedTypeSymbol ResolverType, List<SourceGenerator.Condition> Conditions, SourceGenerator.Builder Builder, OptionsFlag Options)
+            public ResolverTemplate(INamedTypeSymbol ResolverType)
             {
                 this.ResolverType = ResolverType;
-                this.Conditions = Conditions;
-                this.Builder = Builder;
-                this.Options = Options;
+
+                Conditions = new List<SourceGenerator.Condition>();
+
+                //Apply Options Defaults
+                {
+                    ResolutionOrder = 0;
+                    ResolveGenericArguments = false;
+                }
             }
 
             public static bool TryCreate(INamedTypeSymbol type, WaypointsData waypoints, out ResolverTemplate template)
@@ -621,9 +664,7 @@ namespace Wsla.Generator
                     return false;
                 }
 
-                var Conditions = new List<SourceGenerator.Condition>();
-                var Builder = default(SourceGenerator.Builder);
-                var Options = OptionsFlag.None;
+                template = new ResolverTemplate(type);
 
                 var attributes = type.GetAttributes();
 
@@ -631,17 +672,20 @@ namespace Wsla.Generator
                 {
                     if (SourceGenerator.Condition.TryGet(attribute, waypoints, out var condition))
                     {
-                        Conditions.Add(condition);
+                        template.Conditions.Add(condition);
                         continue;
                     }
 
-                    if (Builder is null && SourceGenerator.Builder.TryGet(attribute, waypoints, out Builder))
+                    if (template.Builder is null && SourceGenerator.Builder.TryGet(attribute, waypoints, out template.Builder))
                         continue;
 
-                    Options |= SourceGenerator.Options.Compute(attribute, waypoints);
+                    if (SourceGenerator.Option.TryGet(attribute, waypoints, out var option))
+                    {
+                        option.Apply(template);
+                        continue;
+                    }
                 }
 
-                template = new ResolverTemplate(type, Conditions, Builder, Options);
                 return true;
             }
         }

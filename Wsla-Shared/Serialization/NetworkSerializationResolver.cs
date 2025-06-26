@@ -160,42 +160,147 @@ namespace Wsla.Serialization
             Registration.LoadAll();
         }
 
+        /// <summary>
+        /// Mark a resolver to be source generated based on <see cref="NetworkSerializationMarkerAttribute"/> usages,
+        /// requires at least a single condition and a builder
+        /// </summary>
+        [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
         public class SourceGenerator : Attribute
         {
+            /// <summary>
+            /// <inheritdoc cref="SourceGenerator"/>
+            /// </summary>
+            public SourceGenerator() { }
+
+            /// <summary>
+            /// Conditions to match against resolver, can apply multiple, all will need to pass for resolver to be used
+            /// </summary>
+            [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
             public abstract class Condition : Attribute
             {
+                /// <summary>
+                /// Source type implements interface
+                /// </summary>
                 public class ImplementsInterface : Condition
                 {
+                    /// <summary>
+                    /// <inheritdoc cref="ImplementsInterface"/>
+                    /// </summary>
                     public ImplementsInterface(Type type) { }
                 }
 
+                /// <summary>
+                /// Source type constructed from an unbound generic; ie <![CDATA[[Dictionary<,>  | List<> | Tuple<,,,,>]]]>
+                /// </summary>
                 public class ConstructedFrom : Condition
                 {
+                    /// <summary>
+                    /// <inheritdoc cref="ConstructedFrom"/>
+                    /// </summary>
                     public ConstructedFrom(Type type) { }
                 }
 
+                /// <summary>
+                /// Source type decorated by an attribute
+                /// </summary>
                 public class DecoratedBy : Condition
                 {
+                    /// <summary>
+                    /// <inheritdoc cref="DecoratedBy"/>
+                    /// </summary>
                     public DecoratedBy(Type type) { }
                 }
 
-                public class IsArray : Condition { }
+                /// <summary>
+                /// Source type is an array
+                /// </summary>
+                public class IsArray : Condition
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="IsArray"/>
+                    /// </summary>
+                    public IsArray() { }
+                }
 
-                public class IsEnum : Condition { }
+                /// <summary>
+                /// Source type is an enum
+                /// </summary>
+                public class IsEnum : Condition
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="IsEnum"/>
+                    /// </summary>
+                    public IsEnum() { }
+                }
             }
 
+            /// <summary>
+            /// Builder used to supply generic arguments to resolver, can only have one
+            /// </summary>
+            [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
             public abstract class Builder : Attribute
             {
-                public class FromSourceType : Builder { }
+                /// <summary>
+                /// Supply arguments as the source type <![CDATA[(int --> resolver<int>)]]>
+                /// </summary>
+                public class FromSourceType : Builder
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="FromSourceType"/>
+                    /// </summary>
+                    public FromSourceType() { }
+                }
 
-                public class FromSourceArguments : Builder { }
+                /// <summary>
+                /// Supply arguments from the source type's arguments <![CDATA[(data<int> --> resolver<int>)]]>
+                /// </summary>
+                public class FromSourceArguments : Builder
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="FromSourceArguments"/>
+                    /// </summary>
+                    public FromSourceArguments() { }
+                }
 
-                public class FromArrayType : Builder { }
+                /// <summary>
+                /// Supply arguments as an array's element type <![CDATA[(int[] --> resolver<int>)]]>
+                /// </summary>
+                public class FromArrayType : Builder
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="FromArrayType"/>
+                    /// </summary>
+                    public FromArrayType() { }
+                }
             }
 
-            public abstract class Options : Attribute
+            /// <summary>
+            /// Misc options to supply to the source generator
+            /// </summary>
+            [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+            public abstract class Option : Attribute
             {
-                public class ResolveGenericArguments : Attribute { }
+                /// <summary>
+                /// Also resolve resolver's generic arguments ie <![CDATA[resolver<Data1, Data2> will also then resolve Data1 & Data2 and try to generate resolvers for them]]>
+                /// </summary>
+                public class ResolveGenericArguments : Attribute
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="ResolveGenericArguments"/>
+                    /// </summary>
+                    public ResolveGenericArguments() { }
+                }
+
+                /// <summary>
+                /// Specify resolution order, lower order resolvers will be checked first
+                /// </summary>
+                public class ResolutionOrder : Attribute
+                {
+                    /// <summary>
+                    /// <inheritdoc cref="ResolutionOrder"/>
+                    /// </summary>
+                    public ResolutionOrder(int order) { }
+                }
             }
         }
     }
@@ -306,22 +411,6 @@ namespace Wsla.Serialization
         }
     }
 
-    [SourceGenerator]
-    [SourceGenerator.Condition.IsEnum]
-    [SourceGenerator.Builder.FromSourceType]
-    public unsafe class EnumNetworkSerializationResolver<TEnum> : NetworkSerializationResolver<TEnum>
-        where TEnum : unmanaged, Enum
-    {
-        public override void Write(in TEnum value, ref BinarySource stream)
-        {
-            NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
-        }
-        public override void Read(ref TEnum value, ref BinarySource stream)
-        {
-            NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
-        }
-    }
-
     public class IPAddressNetworkSerializationResolver : NetworkSerializationResolver<IPAddress>
     {
         const int V4Size = 4;
@@ -384,9 +473,25 @@ namespace Wsla.Serialization
     }
 
     [SourceGenerator]
+    [SourceGenerator.Condition.IsEnum]
+    [SourceGenerator.Builder.FromSourceType]
+    public unsafe class EnumNetworkSerializationResolver<TEnum> : NetworkSerializationResolver<TEnum>
+        where TEnum : unmanaged, Enum
+    {
+        public override void Write(in TEnum value, ref BinarySource stream)
+        {
+            NetworkSerializer.Helper.Blittable.Write(in value, ref stream);
+        }
+        public override void Read(ref TEnum value, ref BinarySource stream)
+        {
+            NetworkSerializer.Helper.Blittable.Read(ref value, ref stream);
+        }
+    }
+
+    [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(Nullable<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class NullableNetworkSerializationResolver<T> : NetworkSerializationResolver<Nullable<T>>
         where T : struct
     {
@@ -428,7 +533,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1> : NetworkSerializationResolver<ValueTuple<T1>>
     {
         public override void Write(in ValueTuple<T1> value, ref BinarySource stream)
@@ -444,7 +549,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2> : NetworkSerializationResolver<ValueTuple<T1, T2>>
     {
         public override void Write(in ValueTuple<T1, T2> value, ref BinarySource stream)
@@ -462,7 +567,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3> : NetworkSerializationResolver<ValueTuple<T1, T2, T3>>
     {
         public override void Write(in ValueTuple<T1, T2, T3> value, ref BinarySource stream)
@@ -482,7 +587,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4> value, ref BinarySource stream)
@@ -504,7 +609,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5> value, ref BinarySource stream)
@@ -528,7 +633,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6> value, ref BinarySource stream)
@@ -554,7 +659,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
         public override void Write(in ValueTuple<T1, T2, T3, T4, T5, T6, T7> value, ref BinarySource stream)
@@ -582,7 +687,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ValueTuple<,,,,,,,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class TupleSerializationResolver<T1, T2, T3, T4, T5, T6, T7, TRest> : NetworkSerializationResolver<ValueTuple<T1, T2, T3, T4, T5, T6, T7, TRest>>
         where TRest : struct
     {
@@ -655,7 +760,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(ArraySegment<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class ArraySegmentNetworkSerializationResolver<TValue> : NetworkSerializationResolver<ArraySegment<TValue>>
     {
         public override void Write(in ArraySegment<TValue> segment, ref BinarySource stream)
@@ -702,7 +807,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(List<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class ListNetworkSerializationResolver<TValue> : NetworkSerializationResolver<List<TValue>>
     {
         public override void Write(in List<TValue> list, ref BinarySource stream)
@@ -755,7 +860,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(HashSet<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class HashSetNetworkSerializationResolver<TValue> : NetworkSerializationResolver<HashSet<TValue>>
     {
         public override void Write(in HashSet<TValue> list, ref BinarySource stream)
@@ -801,7 +906,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(Queue<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class QueueNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Queue<TValue>>
     {
         public override void Write(in Queue<TValue> list, ref BinarySource stream)
@@ -848,7 +953,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(Stack<>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class StackNetworkSerializationResolver<TValue> : NetworkSerializationResolver<Stack<TValue>>
     {
         public override void Write(in Stack<TValue> list, ref BinarySource stream)
@@ -897,7 +1002,7 @@ namespace Wsla.Serialization
     [SourceGenerator]
     [SourceGenerator.Condition.ConstructedFrom(typeof(Dictionary<,>))]
     [SourceGenerator.Builder.FromSourceArguments]
-    [SourceGenerator.Options.ResolveGenericArguments]
+    [SourceGenerator.Option.ResolveGenericArguments]
     public class DictionaryNetworkSerializationResolver<TKey, TValue> : NetworkSerializationResolver<Dictionary<TKey, TValue>>
     {
         public override void Write(in Dictionary<TKey, TValue> collection, ref BinarySource stream)
