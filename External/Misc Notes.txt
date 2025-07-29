@@ -1,0 +1,34 @@
+Wsla problems:
+
+Spawing objects on OnNetworkSpawn
+recycling netpackets
+
+who's gonna spawn distributable items?
+who ever spawns them has got to assign owners
+make them only applicable to scene items?
+---------------------------------------------
+
+Possible objects authority:
+1. transferable scene item - spawned with scene
+2. requestable scene item - spawned with scene
+3. authoritative scene item - spawned with scene
+
+1. explicit prefab - spawned by local client
+2. transferable prefab - spawned by local client
+3. requestable prefab - spawned by local client
+4. authoritative prefab - spawned by master
+
+scene objects are never explicit
+authoritative objects are always controlled by the master client
+
+transferable scene objects will get assigned a random owner
+transferable prefabs will get assigned their sender as the owner
+transferable prefabs will transfer to a different client when their owner disconnects & they have an appropriate lifetime
+authority can never be changed once set
+----------------------------------------------------------------
+
+Possible objects lifetimes:
+scene objects always have a scene lifetime
+prefabs have (client, scene, persistent) lifetimes
+explicit prefabs will always despawn when their owner disconnects
+lifetime can never be changed once set
