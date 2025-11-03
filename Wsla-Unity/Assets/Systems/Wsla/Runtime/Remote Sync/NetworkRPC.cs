@@ -101,7 +101,7 @@ namespace Wsla.Unity
         public INetworkStream GetSourceStream() => SourceWriterPool.Take();
         public BinarySource GetBinarySource()
         {
-            var stream = SourceWriterPool.Take();
+            var stream = GetSourceStream();
             return BinarySource.From(stream);
         }
 

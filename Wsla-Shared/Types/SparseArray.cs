@@ -250,6 +250,10 @@ namespace Wsla
             Item0 = Item1 = Item2 = default;
         }
 
+        public SparseArray(T Item0) : this(1, Item0) { }
+        public SparseArray(T Item0, T Item1) : this(2, Item0, Item1) { }
+        public SparseArray(T Item0, T Item1, T Item2) : this(3, Item0, Item1, Item2) { }
+
         public static implicit operator SparseArray<T>(T Item0) => SparseArray.From(Item0);
         public static implicit operator SparseArray<T>((T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2);
         public static implicit operator SparseArray<T>((T, T, T) tuple) => SparseArray.From(tuple.Item1, tuple.Item2, tuple.Item3);

@@ -117,12 +117,16 @@ public class MainMenu : MonoBehaviour
     }
     async UniTask FindMatchAction()
     {
-        var parameters = MatchMakingParameters.New()
+        var parameters = MatchMakingParameters.New(3)
             .Add("Level", Level)
             .Add("Role", Role)
             .Add("Honor", Honor);
 
-        var response = await NetworkAPI.MatchMaking.FindMatch("mini-games", NetworkSceneID.From(1), (ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia), parameters: parameters).Operate();
+        var pool = new FixedString<FS20>("mini-games");
+        var scene = NetworkSceneID.From(1);
+        var regions = SparseArray.From(ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia);
+
+        var response = await NetworkAPI.MatchMaking.FindMatch(pool, scene, regions, parameters: parameters).Operate();
 
         if (response.IsError)
         {

@@ -188,9 +188,10 @@ namespace Wsla
 
         public static MatchMakingParameters Empty => default;
 
-        public static MatchMakingParameters New()
+        public static MatchMakingParameters New() => New(0);
+        public static MatchMakingParameters New(int capacity)
         {
-            var list = new List<Entry>();
+            var list = new List<Entry>(capacity);
             return new(list);
         }
     }
