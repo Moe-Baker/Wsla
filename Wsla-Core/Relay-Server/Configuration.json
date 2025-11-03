@@ -1,7 +1,7 @@
 {
   "$schema": "./Schema/Configuration.json",
 
-  "CoordinatorHostname": "10.0.0.10",
+  "CoordinatorHostname": "127.0.0.1",
 
   "RealtimeThreadAllowance": 14,
 
@@ -9,5 +9,5 @@
 
   "Region": "EU",
 
-  "PublicHostname": "10.0.0.10"
+  "PublicHostname": "127.0.0.1"
 }

@@ -472,8 +472,9 @@ namespace Wsla.Unity
             public TimeSpan RTT { get; private set; }
 
             Stopwatch Timer;
-
             TimeSpan Offset;
+
+            readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
 
             /// <summary>
             /// Calculate the time since this room was created
@@ -494,14 +495,16 @@ namespace Wsla.Unity
             {
                 Timer = Stopwatch.StartNew();
 
-                //Poll().Forget();
-                async UniTask Poll()
+                Poll(Timer).Forget();
+                async UniTask Poll(Stopwatch Timer)
                 {
-                    while (true)
+                    while (Timer.IsRunning is true)
                     {
-                        await UniTask.Delay(TimeSpan.FromSeconds(1));
+                        await UniTask.Delay(RefreshInterval);
+                        if (Timer.IsRunning is false)
+                            break;
 
-                        UpdateData();
+                        RequestUpdate();
                     }
                 }
             }
@@ -525,13 +528,11 @@ namespace Wsla.Unity
                 NetworkLog.Info($"Room RTT: {RTT.TotalMilliseconds.ToString("N1")}ms");
             }
 
-            internal void UpdateData()
+            internal void RequestUpdate()
             {
                 var request = CreateRequest();
-
                 Room.Transport.SendData(in request, delivery: DeliveryMethod.ReliableUnordered);
             }
-
             void ResponseHandler(ref RoomTimeResponse message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 ConsumeResponse(message);

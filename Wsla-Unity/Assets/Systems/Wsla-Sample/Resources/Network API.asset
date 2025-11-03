@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Network API
   m_EditorClassIdentifier: 
   <CoordinatorAddress>k__BackingField:
-    <Hostname>k__BackingField: 10.0.0.10
+    <Hostname>k__BackingField: 127.0.0.1
   <ApplicationID>k__BackingField:
     <Override>k__BackingField: 1
     Manual: Wsla-Sample
@@ -22,6 +22,9 @@ MonoBehaviour:
     Major: 0
     Minor: 0
     Patch: 0
+  <Timeout>k__BackingField:
+    <Value>k__BackingField: 5
+    <Units>k__BackingField: 1
   <Tick>k__BackingField:
     <Rate>k__BackingField: 60
   <Channels>k__BackingField:
