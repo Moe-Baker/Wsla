@@ -613,6 +613,11 @@ namespace Wsla.Unity
             Channel = value;
             return this;
         }
+        public RpcInvocationBuilder<TBind, TParameters> SetChannel(NetworkChannelField value)
+        {
+            Channel = value;
+            return this;
+        }
 
         internal DeliveryMethod Delivery;
         public RpcInvocationBuilder<TBind, TParameters> SetDelivery(RemoteSyncDelivery value)

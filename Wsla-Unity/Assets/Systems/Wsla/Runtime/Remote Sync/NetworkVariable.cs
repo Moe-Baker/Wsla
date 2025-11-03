@@ -157,6 +157,11 @@ namespace Wsla.Unity
             Channel = value;
             return this;
         }
+        public VariableInvocationBuilder<T> SetChannel(NetworkChannelField value)
+        {
+            Channel = value;
+            return this;
+        }
 
         internal DeliveryMethod Delivery;
         public VariableInvocationBuilder<T> SetDelivery(RemoteSyncDelivery value)
