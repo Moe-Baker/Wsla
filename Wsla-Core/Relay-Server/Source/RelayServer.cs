@@ -25,6 +25,12 @@ namespace Wsla.Server
 
             await LoadConfig();
 
+            //Load Plugins
+            {
+                var system = new RelayPluginSystem();
+                system.LoadAll();
+            }
+
             Time.Init();
             Realtime.Init();
             Matchmaking.Init();

@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<RootNamespace>Wsla.Server</RootNamespace>
+		<EnableDynamicLoading>true</EnableDynamicLoading>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Wsla-Core\Coordinator-Server\Coordinator-Server.csproj">
+			<Private>false</Private>
+			<IncludeAssets>compile</IncludeAssets>
+		</ProjectReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="plugin-config.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>

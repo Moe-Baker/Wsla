@@ -26,6 +26,12 @@ namespace Wsla.Server
 
             await LoadConfig();
 
+            //Load Plugins
+            {
+                var system = new CoordinatorPluginSystem();
+                system.LoadAll();
+            }
+
             //Initialize
             {
                 Messaging.Initialize();
