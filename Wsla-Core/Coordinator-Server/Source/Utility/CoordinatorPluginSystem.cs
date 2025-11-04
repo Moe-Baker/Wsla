@@ -8,6 +8,7 @@ namespace Wsla.Server
     }
     [AttributeUsage(AttributeTargets.Assembly, Inherited = true, AllowMultiple = false)]
     public sealed class CoordinatorPluginDefinitionAttribute<T> : CoordinatorPluginDefinitionAttribute
+        where T : ICoordinatorPlugin, new()
     {
         public override Type Type => typeof(T);
     }

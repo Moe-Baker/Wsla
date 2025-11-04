@@ -8,6 +8,7 @@ namespace Wsla.Server
     }
     [AttributeUsage(AttributeTargets.Assembly, Inherited = true, AllowMultiple = false)]
     public sealed class RelayPluginDefinitionAttribute<T> : RelayPluginDefinitionAttribute
+        where T : IRelayPlugin, new()
     {
         public override Type Type => typeof(T);
     }
