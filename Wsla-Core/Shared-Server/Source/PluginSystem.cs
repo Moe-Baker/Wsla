@@ -79,6 +79,9 @@ namespace Wsla
             {
                 var plugin = definition.Definition.Create();
                 var context = new PluginLoadContext(definition.Entrypoint);
+
+                NetworkLog.Info($"Loading Plugin ({Path.GetFileName(context.DirectoryPath)})");
+
                 plugin.Load(context);
             }
         }
