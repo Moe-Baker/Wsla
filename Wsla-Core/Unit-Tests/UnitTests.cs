@@ -127,6 +127,25 @@ namespace NetworkSerializationTests
         }
     }
 
+    public class NetworkVersionTests
+    {
+        [Fact] public void JsonSerialization1() => JsonSerialization(new NetworkVersion(0, 0, 0));
+        [Fact] public void JsonSerialization2() => JsonSerialization(new NetworkVersion(1, 2, 3));
+        [Fact] public void JsonSerialization3() => JsonSerialization(new NetworkVersion(255, 255, 255));
+        static void JsonSerialization(NetworkVersion source)
+        {
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.General);
+            options.Converters.Add(new NetworkVersionJsonConverter());
+
+            var json = JsonSerializer.Serialize(source, options: options);
+            Assert.Equal($"\"{source}\"", json);
+
+            var copy = JsonSerializer.Deserialize<NetworkVersion>(json, options: options);
+
+            Assert.Equal(source, copy);
+        }
+    }
+
     public class TupleTests
     {
         [Fact]
