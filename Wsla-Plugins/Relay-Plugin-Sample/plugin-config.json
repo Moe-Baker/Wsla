@@ -1,3 +1,8 @@
 {
-  "Entrypoint": "Relay-Plugin-Sample.dll"
+  "Entrypoint": "Relay-Plugin-Sample.dll",
+  "ApiVersions":
+  [
+    "0.0.1",
+    "0.0.2"
+  ]
 }

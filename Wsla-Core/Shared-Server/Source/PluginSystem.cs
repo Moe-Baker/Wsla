@@ -31,6 +31,13 @@ namespace Wsla
         const string PluginDirectoryName = "Plugins";
         const string PluginConfigFileName = "plugin-config.json";
 
+        JsonSerializerOptions JsonOptions;
+        public PluginSystem()
+        {
+            JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
+            JsonOptions.Converters.Add(new NetworkVersionJsonConverter());
+        }
+
         /// <summary>
         /// Loads all plugins from the default Plugins folder
         /// </summary>
@@ -81,6 +88,12 @@ namespace Wsla
             if (TryReadConfig(directory, out var configuration) is false)
                 return default;
 
+            if (configuration.ApiVersions.Contains(Constants.ApiVersion) is false)
+            {
+                NetworkLog.Warning($"Plugin ({directory.Name}) Doesn't Support API Version {Constants.ApiVersion}, Skipping");
+                return default;
+            }
+
             var entrypoint = Path.Combine(directory.FullName, configuration.Entrypoint);
             if (File.Exists(entrypoint) is false)
             {
@@ -92,6 +105,11 @@ namespace Wsla
 
             return new(definition, entrypoint);
         }
+        record struct DefinitionContext(TDefinition Definition, string Entrypoint)
+        {
+            public int Order => Definition.Order;
+        }
+
         bool TryReadConfig(DirectoryInfo directory, out PluginConfigurationFile configuration)
         {
             var file = new FileInfo(Path.Combine(directory.FullName, PluginConfigFileName));
@@ -105,7 +123,7 @@ namespace Wsla
             try
             {
                 using var stream = file.OpenRead();
-                configuration = JsonSerializer.Deserialize<PluginConfigurationFile>(stream);
+                configuration = JsonSerializer.Deserialize<PluginConfigurationFile>(stream, options: JsonOptions);
                 return true;
             }
             catch (Exception ex)
@@ -129,7 +147,6 @@ namespace Wsla
             var context = new LoadContext(path);
             return context.LoadFromAssemblyName(new(Path.GetFileNameWithoutExtension(name)));
         }
-
         class LoadContext : AssemblyLoadContext
         {
             AssemblyDependencyResolver Resolver;
@@ -155,16 +172,15 @@ namespace Wsla
                 Resolver = new AssemblyDependencyResolver(path);
             }
         }
-        record struct DefinitionContext(TDefinition Definition, string Entrypoint)
-        {
-            public int Order => Definition.Order;
-        }
     }
 
     public class PluginConfigurationFile
     {
         [JsonRequired]
         public string Entrypoint { get; set; }
+
+        [JsonRequired]
+        public NetworkVersion[] ApiVersions { get; set; }
     }
 
     public struct PluginLoadContext

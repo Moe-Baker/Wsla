@@ -25,6 +25,26 @@ namespace Wsla
         public const int MaxOctetCharacterLength = 3;
         public const int MaxVersionCharacterLength = (MaxOctetCharacterLength * 3) + (2);
 
+        public bool TryFormat(Span<char> characters, out int written)
+        {
+            if (characters.Length < MaxVersionCharacterLength)
+            {
+                written = -1;
+                return false;
+            }
+
+            var builder = new SpanStringBuilder(characters);
+
+            builder.Append(Major);
+            builder.Append(SplitCharacter);
+            builder.Append(Minor);
+            builder.Append(SplitCharacter);
+            builder.Append(Patch);
+
+            written = builder.Position;
+            return true;
+        }
+
         public override bool Equals(object obj)
         {
             if (obj is NetworkVersion other)
