@@ -2,24 +2,15 @@
 
 namespace Wsla.Server
 {
-    public abstract class RelayPluginDefinitionAttribute : PluginDefinitionAttribute
-    {
-
-    }
+    public abstract class RelayPluginDefinitionAttribute : PluginDefinitionAttribute { }
     [AttributeUsage(AttributeTargets.Assembly, Inherited = true, AllowMultiple = false)]
-    public sealed class RelayPluginDefinitionAttribute<T> : RelayPluginDefinitionAttribute
-        where T : IRelayPlugin, new()
+    public sealed class RelayPluginDefinitionAttribute<TPlugin> : RelayPluginDefinitionAttribute
+        where TPlugin : IRelayPlugin, new()
     {
-        public override Type Type => typeof(T);
+        public override IPlugin Create() => new TPlugin();
     }
 
-    public interface IRelayPlugin : IPlugin
-    {
+    public interface IRelayPlugin : IPlugin { }
 
-    }
-
-    public class RelayPluginSystem : PluginSystem<RelayPluginDefinitionAttribute, IPlugin>
-    {
-
-    }
+    public class RelayPluginSystem : PluginSystem<RelayPluginDefinitionAttribute, IPlugin> { }
 }

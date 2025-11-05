@@ -11,17 +11,22 @@ namespace Wsla
 {
     public abstract class PluginDefinitionAttribute : Attribute
     {
-        public abstract Type Type { get; }
+        /// <summary>
+        /// Order of plugin loading, smaller values will get loaded before higher values
+        /// </summary>
+        public int Order { get; set; }
+
+        public abstract IPlugin Create();
     }
 
     public interface IPlugin
     {
-        void Load();
+        void Load(PluginLoadContext context);
     }
 
-    public class PluginSystem<TAttribute, TContract>
-        where TAttribute : PluginDefinitionAttribute
-        where TContract : class, IPlugin
+    public class PluginSystem<TDefinition, TPlugin>
+        where TDefinition : PluginDefinitionAttribute
+        where TPlugin : class, IPlugin
     {
         const string PluginDirectoryName = "Plugins";
         const string PluginConfigFileName = "plugin-config.json";
@@ -34,7 +39,6 @@ namespace Wsla
             var path = Path.Combine(Directory.GetCurrentDirectory(), PluginDirectoryName);
             LoadAll(path);
         }
-
         /// <summary>
         /// Load all from specified path
         /// </summary>
@@ -50,60 +54,80 @@ namespace Wsla
             }
 
             var subs = info.GetDirectories();
+            var definitions = new List<DefinitionContext>(subs.Length);
 
             foreach (var sub in subs)
-                LoadDirectory(sub);
+            {
+                var definition = LoadDirectory(sub);
+
+                if (definition == null)
+                    continue;
+
+                definitions.Add(definition.Value);
+            }
+
+            definitions.Sort((x, y) => x.Order.CompareTo(y.Order));
+
+            foreach (var definition in definitions)
+            {
+                var plugin = definition.Definition.Create();
+                var context = new PluginLoadContext(definition.Entrypoint);
+                plugin.Load(context);
+            }
         }
 
-        void LoadDirectory(DirectoryInfo directory)
+        DefinitionContext? LoadDirectory(DirectoryInfo directory)
+        {
+            if (TryReadConfig(directory, out var configuration) is false)
+                return default;
+
+            var entrypoint = Path.Combine(directory.FullName, configuration.Entrypoint);
+            if (File.Exists(entrypoint) is false)
+            {
+                NetworkLog.Warning($"No EntryPoint ({configuration.Entrypoint}) File Found For ({directory.Name}) Plugin");
+                return default;
+            }
+
+            var definition = LoadDLL(entrypoint);
+
+            return new(definition, entrypoint);
+        }
+        bool TryReadConfig(DirectoryInfo directory, out PluginConfigurationFile configuration)
         {
             var file = new FileInfo(Path.Combine(directory.FullName, PluginConfigFileName));
             if (file.Exists is false)
             {
                 NetworkLog.Warning($"No {PluginConfigFileName} Configuration File Found For ({directory.Name}) Plugin");
-                return;
+                configuration = default;
+                return false;
             }
 
-            using var stream = file.OpenRead();
-            var config = JsonSerializer.Deserialize<PluginConfigurationFile>(stream);
-
-            var path = Path.Combine(directory.FullName, config.Entrypoint);
-            if (File.Exists(path) is false)
+            try
             {
-                NetworkLog.Warning($"No EntryPoint ({config.Entrypoint}) File Found For ({directory.Name}) Plugin ");
-                return;
+                using var stream = file.OpenRead();
+                configuration = JsonSerializer.Deserialize<PluginConfigurationFile>(stream);
+                return true;
             }
-
-            var contracts = LoadDLL(path).ToList();
-            if (contracts.Count == 0)
+            catch (Exception ex)
             {
-                NetworkLog.Warning($"No Contracts Defined For ({directory.Name}) Plugin ");
-                return;
-            }
+                NetworkLog.Error($"Exception Reading ({file}) Plugin Configuration");
+                NetworkLog.Error(ex);
 
-            foreach (var contract in contracts)
-                contract.Load();
+                configuration = default;
+                return false;
+            }
         }
 
-        IEnumerable<TContract> LoadDLL(string path)
+        TDefinition LoadDLL(string path)
         {
             var assembly = LoadAssembly(path);
-
-            foreach (var attribute in LoadAttributes(assembly))
-            {
-                var instance = Activator.CreateInstance(attribute.Type) as TContract;
-                yield return instance;
-            }
+            return assembly.GetCustomAttribute<TDefinition>();
         }
         Assembly LoadAssembly(string path)
         {
             var name = Path.GetFileNameWithoutExtension(path);
             var context = new LoadContext(path);
             return context.LoadFromAssemblyName(new(Path.GetFileNameWithoutExtension(name)));
-        }
-        IEnumerable<TAttribute> LoadAttributes(Assembly assembly)
-        {
-            return assembly.GetCustomAttributes<TAttribute>();
         }
 
         class LoadContext : AssemblyLoadContext
@@ -131,11 +155,33 @@ namespace Wsla
                 Resolver = new AssemblyDependencyResolver(path);
             }
         }
+        record struct DefinitionContext(TDefinition Definition, string Entrypoint)
+        {
+            public int Order => Definition.Order;
+        }
     }
 
     public class PluginConfigurationFile
     {
         [JsonRequired]
         public string Entrypoint { get; set; }
+    }
+
+    public struct PluginLoadContext
+    {
+        /// <summary>
+        /// Path to the entrypoint dll, (../Plugins/You-Plugin/Your-Dll.dll)
+        /// </summary>
+        public string EntrypointPath { get; }
+
+        /// <summary>
+        /// Path to the entrypoint's directory (../Plugins/Your-Plugin)
+        /// </summary>
+        public ReadOnlySpan<char> DirectoryPath => Path.GetDirectoryName(EntrypointPath);
+
+        public PluginLoadContext(string Entrypoint)
+        {
+            this.EntrypointPath = Entrypoint;
+        }
     }
 }

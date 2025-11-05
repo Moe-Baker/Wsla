@@ -6,9 +6,9 @@ namespace Wsla.Server
 {
     public class CoordinatorPluginSample : ICoordinatorPlugin
     {
-        public void Load()
+        public void Load(PluginLoadContext context)
         {
-            NetworkLog.Info("Hello From Coordinator Plugin");
+            NetworkLog.Info($"Hello From Coordinator Plugin, Entrypoint: {context.EntrypointPath}");
         }
     }
 }

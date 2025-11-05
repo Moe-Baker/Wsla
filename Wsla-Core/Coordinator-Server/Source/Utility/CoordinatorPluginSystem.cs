@@ -2,24 +2,15 @@
 
 namespace Wsla.Server
 {
-    public abstract class CoordinatorPluginDefinitionAttribute : PluginDefinitionAttribute
-    {
-
-    }
+    public abstract class CoordinatorPluginDefinitionAttribute : PluginDefinitionAttribute { }
     [AttributeUsage(AttributeTargets.Assembly, Inherited = true, AllowMultiple = false)]
-    public sealed class CoordinatorPluginDefinitionAttribute<T> : CoordinatorPluginDefinitionAttribute
-        where T : ICoordinatorPlugin, new()
+    public sealed class CoordinatorPluginDefinitionAttribute<TPlugin> : CoordinatorPluginDefinitionAttribute
+        where TPlugin : ICoordinatorPlugin, new()
     {
-        public override Type Type => typeof(T);
+        public override IPlugin Create() => new TPlugin();
     }
 
-    public interface ICoordinatorPlugin : IPlugin
-    {
+    public interface ICoordinatorPlugin : IPlugin { }
 
-    }
-
-    public class CoordinatorPluginSystem : PluginSystem<CoordinatorPluginDefinitionAttribute, IPlugin>
-    {
-
-    }
+    public class CoordinatorPluginSystem : PluginSystem<CoordinatorPluginDefinitionAttribute, IPlugin> { }
 }
