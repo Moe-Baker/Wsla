@@ -7,6 +7,8 @@ using System.Runtime.Loader;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Wsla.Serialization;
+
 namespace Wsla
 {
     public abstract class PluginDefinitionAttribute : Attribute
@@ -31,9 +33,13 @@ namespace Wsla
         const string PluginDirectoryName = "Plugins";
         const string PluginConfigFileName = "plugin-config.json";
 
+        public List<PluginInfo> Loaded { get; }
+
         JsonSerializerOptions JsonOptions;
         public PluginSystem()
         {
+            Loaded = new();
+
             JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
             JsonOptions.Converters.Add(new NetworkVersionJsonConverter());
         }
@@ -52,15 +58,15 @@ namespace Wsla
         /// <param name="path"></param>
         public void LoadAll(string path)
         {
-            var info = new DirectoryInfo(path);
-            if (info.Exists is false)
+            var directory = new DirectoryInfo(path);
+            if (directory.Exists is false)
             {
                 NetworkLog.Warning($"No Plugins Directory Exists, Creating...");
-                info.Create();
+                directory.Create();
                 return;
             }
 
-            var subs = info.GetDirectories();
+            var subs = directory.GetDirectories();
             var definitions = new List<DefinitionContext>(subs.Length);
 
             foreach (var sub in subs)
@@ -80,9 +86,12 @@ namespace Wsla
                 var plugin = definition.Definition.Create();
                 var context = new PluginLoadContext(definition.Entrypoint);
 
-                NetworkLog.Info($"Loading Plugin ({Path.GetFileName(context.DirectoryPath)})");
+                NetworkLog.Info($"Loading Plugin ({context.PluginName})");
 
                 plugin.Load(context);
+
+                var info = new PluginInfo(context.PluginName.ToString());
+                Loaded.Add(info);
             }
         }
 
@@ -198,9 +207,26 @@ namespace Wsla
         /// </summary>
         public ReadOnlySpan<char> DirectoryPath => Path.GetDirectoryName(EntrypointPath);
 
+        public ReadOnlySpan<char> PluginName => Path.GetFileNameWithoutExtension(DirectoryPath);
+
         public PluginLoadContext(string Entrypoint)
         {
             this.EntrypointPath = Entrypoint;
+        }
+    }
+
+    public struct PluginInfo : IAutoNetworkSerialization
+    {
+        public string Name;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Name);
+        }
+
+        public PluginInfo(string Name)
+        {
+            this.Name = Name;
         }
     }
 }

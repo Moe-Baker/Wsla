@@ -6,7 +6,6 @@ using Microsoft.Extensions.Hosting;
 
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,6 +15,8 @@ namespace Wsla.Server
 {
     public static class CoordinatorServer
     {
+        public static CoordinatorPluginSystem PluginSystem { get; private set; }
+
         static async Task Main(string[] args)
         {
             Console.Title = "Coordinator Server";
@@ -28,8 +29,8 @@ namespace Wsla.Server
 
             //Load Plugins
             {
-                var system = new CoordinatorPluginSystem();
-                system.LoadAll();
+                PluginSystem = new CoordinatorPluginSystem();
+                PluginSystem.LoadAll();
             }
 
             //Initialize
@@ -49,7 +50,6 @@ namespace Wsla.Server
         }
 
         public static ConfigurationProperty Configuration { get; private set; }
-
         static async Task LoadConfig()
         {
 #if DEBUG
@@ -598,7 +598,13 @@ namespace Wsla.Server
             public ActionResult ListRelays()
             {
                 var list = CoordinatorServer.Matchmaking.Browser.ListRelays();
+                return Ok(list);
+            }
 
+            [HttpGet(Constants.RestRoutes.Administration.ListPlugins)]
+            public ActionResult ListPlugins()
+            {
+                var list = CoordinatorServer.PluginSystem.Loaded;
                 return Ok(list);
             }
 
@@ -606,7 +612,6 @@ namespace Wsla.Server
             public ActionResult ListRooms([FromBody] Guid id)
             {
                 var list = CoordinatorServer.Matchmaking.Browser.ListRooms(id);
-
                 return Ok(list);
             }
         }

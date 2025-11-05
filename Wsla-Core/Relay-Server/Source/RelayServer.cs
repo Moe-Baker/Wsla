@@ -31,11 +31,17 @@ namespace Wsla.Server
                 system.LoadAll();
             }
 
-            Time.Init();
-            Realtime.Init();
-            Matchmaking.Init();
+            //Initialize
+            {
+                Time.Init();
+                Realtime.Init();
+                Matchmaking.Init();
+            }
 
-            await Messaging.Start();
+            //Start
+            {
+                await Messaging.Start();
+            }
 
             while (true) Console.ReadKey();
         }

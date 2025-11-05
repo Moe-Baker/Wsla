@@ -1,0 +1,35 @@
+﻿@page "/plugins"
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Plugins</PageTitle>
+
+<h1>Plugins</h1>
+
+@if (list == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <p>(@list.Count) Plugins</p>
+
+    <ul class="table">
+        @foreach (var relay in list)
+        {
+            <li>
+                <MudText>@relay.Name</MudText>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    List<PluginInfo> list;
+
+    protected override async Task OnInitializedAsync()
+    {
+        list = await Http.GetFromJsonAsync<List<PluginInfo>>(Constants.RestRoutes.Administration.ListPlugins, options: SharedServerAPI.JsonOptions);
+    }
+}

@@ -35,9 +35,8 @@ namespace Wsla
             {
                 public const string Root = RestRoutes.Root + "admin/";
 
-                public const string RegisterRelay = Root + "register-relay";
                 public const string ListRelays = Root + "list-relays";
-
+                public const string ListPlugins = Root + "list-plugins";
                 public const string ListRooms = Root + "list-rooms";
             }
         }
