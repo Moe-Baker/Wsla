@@ -5,6 +5,7 @@
 		<Nullable>disable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<RootNamespace>Wsla.ControlPanel</RootNamespace>
+		<AssemblyName>Wsla-$(MSBuildProjectName)</AssemblyName>
 		<CompressionEnabled>false</CompressionEnabled>
 	</PropertyGroup>
 
