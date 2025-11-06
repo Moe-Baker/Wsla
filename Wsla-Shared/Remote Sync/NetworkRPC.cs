@@ -54,5 +54,16 @@ namespace Wsla
             this.Sender = Sender;
             this.Parameters = Parameters;
         }
+
+        public static void WriteArguments(INetworkStream input, INetworkStream output)
+        {
+            var source = input.PeekAvailableMemory();
+            var destination = output.AllocateMemory(source.Length);
+            source.CopyTo(destination);
+        }
+        public static BinarySource ReadArguments(INetworkStream stream)
+        {
+            return BinarySource.From(stream);
+        }
     }
 }

@@ -950,12 +950,7 @@ namespace Wsla.Server
 
                 NetworkSerializer.WriteHeader(in command, output);
 
-                //Write Arguments
-                {
-                    var source = input.PeekAvailableMemory();
-                    var destination = output.AllocateMemory(source.Length);
-                    source.CopyTo(destination);
-                }
+                NetworkRpcCommand.WriteArguments(input, output);
             }
 
             internal void WriteState(NetDataWriter writer)

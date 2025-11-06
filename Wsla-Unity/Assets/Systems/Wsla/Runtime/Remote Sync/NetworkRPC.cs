@@ -28,10 +28,10 @@ namespace Wsla.Unity
 
         internal void Invoke(INetworkStream stream, RpcInfo info)
         {
-            var source = BinarySource.From(stream);
-            Invoke(ref source, info);
+            var arguments = NetworkRpcCommand.ReadArguments(stream);
+            Invoke(ref arguments, info);
         }
-        internal abstract void Invoke(ref BinarySource reader, RpcInfo info);
+        internal abstract void Invoke(ref BinarySource arguments, RpcInfo info);
     }
 
     public interface IBaseRpcBind<TParameters>
