@@ -782,7 +782,7 @@ namespace Wsla.Unity
                 return entity;
             }
 
-            public SpawnOptions Spawn() => SpawnOptions.CreateDefault();
+            public EntitySpawnOptions Spawn() => EntitySpawnOptions.CreateDefault();
 
             public void Despawn(NetworkEntity entity)
             {
@@ -935,7 +935,7 @@ namespace Wsla.Unity
                 return instance;
             }
 
-            internal NetworkEntity SpawnLocal(ref SpawnOptions options)
+            internal NetworkEntity SpawnLocal(ref EntitySpawnOptions options)
             {
                 var entity = options.Instance;
 
@@ -1403,7 +1403,7 @@ namespace Wsla.Unity
         }
     }
 
-    public ref struct SpawnOptions
+    public ref struct EntitySpawnOptions
     {
         internal NetworkEntityID Token;
         internal NetworkEntity Instance;
@@ -1412,25 +1412,25 @@ namespace Wsla.Unity
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;
 
-        public SpawnOptions SetResource(NetworkResourceID resource)
+        public EntitySpawnOptions SetResource(NetworkResourceID resource)
         {
             var instance = Room.Entities.InstantiatePrefab(resource);
             SetInstance(instance);
             return this;
         }
-        public SpawnOptions SetPrefab(GameObject prefab)
+        public EntitySpawnOptions SetPrefab(GameObject prefab)
         {
             var instance = Room.Entities.InstantiatePrefab(prefab);
             SetInstance(instance);
             return this;
         }
-        public SpawnOptions SetInstance(NetworkEntity value)
+        public EntitySpawnOptions SetInstance(NetworkEntity value)
         {
             Instance = value;
             return this;
         }
 
-        public SpawnOptions SetAuthority(NetworkEntityAuthorityMode mode)
+        public EntitySpawnOptions SetAuthority(NetworkEntityAuthorityMode mode)
         {
             if (mode is NetworkEntityAuthorityMode.Authoritative && Room.Clients.Local.IsMaster is false)
             {
@@ -1473,14 +1473,14 @@ namespace Wsla.Unity
 
         internal SpawnPrefabEntityRequest CreateSpawnRequest() => new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
 
-        public static SpawnOptions CreateDefault() => new SpawnOptions()
+        public static EntitySpawnOptions CreateDefault() => new EntitySpawnOptions()
         {
             Authority = NetworkEntityAuthorityMode.Explicit,
         };
     }
     public ref struct EntitySpawnTicket
     {
-        SpawnOptions Options;
+        EntitySpawnOptions Options;
         NetDataWriter Writer;
 
         public NetworkEntity Entity => Options.Instance;
@@ -1578,7 +1578,7 @@ namespace Wsla.Unity
             }
         }
 
-        public EntitySpawnTicket(ref SpawnOptions Options)
+        public EntitySpawnTicket(ref EntitySpawnOptions Options)
         {
             this.Options = Options;
 
