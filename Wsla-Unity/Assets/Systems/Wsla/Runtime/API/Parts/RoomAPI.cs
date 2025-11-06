@@ -1153,7 +1153,7 @@ namespace Wsla.Unity
                 }
 
                 var info = NetworkVariableInfo.FromRemote(ref message, channel, delivery);
-                var source = BinarySource.From(reader);
+                var source = NetworkVariableCommand.ReadValue(reader);
 
                 bind.Read(ref source, info);
             }

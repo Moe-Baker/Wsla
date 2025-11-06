@@ -1013,12 +1013,7 @@ namespace Wsla.Server
 
                 NetworkSerializer.WriteHeader(in command, output);
 
-                //Write Value
-                {
-                    var source = input.PeekAvailableMemory();
-                    var destination = output.AllocateMemory(source.Length);
-                    source.CopyTo(destination);
-                }
+                NetworkVariableCommand.WriteValue(input, output);
             }
 
             internal void WriteState(NetDataWriter writer)
