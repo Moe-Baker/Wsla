@@ -119,8 +119,6 @@ public partial class Level : NetworkBehaviour
 
     public void SpawnPlayer()
     {
-        return;
-
         var ticket = Network.Room.Entities.Spawn()
             .SetPrefab(PlayerPrefab)
             .SetAuthority(NetworkEntityAuthorityMode.Explicit)
@@ -142,8 +140,6 @@ public partial class Level : NetworkBehaviour
         }
 
         var entity = ticket.Send();
-
-        entity.OutputGroups = new NetworkGroupID(0);
     }
 
     void DisconnectAction()
