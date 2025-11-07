@@ -240,6 +240,70 @@ namespace Wsla
 
             this.Authority = Authority;
         }
+
+        public static class SyncMemberInitializationPayload
+        {
+            public ref struct Writer
+            {
+                int Cursor;
+                BinarySource Header;
+
+                public void Dispose()
+                {
+                    var length = (ushort)(Stream.Position - Cursor);
+                    NetworkSerializer.WriteValue(in length, ref Header);
+                }
+
+                public INetworkStream Stream { get; }
+                public Writer(INetworkStream Stream, NetworkBehaviourID behaviour, SyncMemberType type, NetworkSyncMemberID member)
+                {
+                    this.Stream = Stream;
+
+                    NetworkSerializer.WriteValue(behaviour, Stream);
+                    NetworkSerializer.WriteValue(type, Stream);
+                    NetworkSerializer.WriteValue(member, Stream);
+
+                    //Allocate Header
+                    {
+                        var span = Stream.AllocateMemory(sizeof(ushort));
+                        Header = BinarySource.From(span);
+                    }
+
+                    Cursor = Stream.Position;
+                }
+            }
+            public ref struct Reader
+            {
+                public bool TryRead(out NetworkBehaviourID behaviour, out SyncMemberType type, out NetworkSyncMemberID member, out Memory<byte> data)
+                {
+                    if (Stream.Available is 0)
+                    {
+                        behaviour = default;
+                        type = default;
+                        member = default;
+                        data = default;
+                        return false;
+                    }
+
+                    NetworkSerializer.ReadValue(Stream, out behaviour);
+                    NetworkSerializer.ReadValue(Stream, out type);
+                    NetworkSerializer.ReadValue(Stream, out member);
+
+                    NetworkSerializer.ReadValue(Stream, out ushort length);
+                    data = Stream.ReadMemory(length);
+
+                    return true;
+                }
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public Reader(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+                }
+            }
+        }
     }
 
     [NetworkBlittable]

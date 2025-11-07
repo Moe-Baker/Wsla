@@ -705,24 +705,22 @@ namespace Wsla.Server
 
                 Register(entity);
 
-                Memory<byte> InitializationData;
+                var PolicyData = reader.PeekAvailableMemory();
 
-                //Read Initialization Data (RPCs & Variables)
+                //Read RPC & Variable Initialization Data
                 {
-                    InitializationData = reader.PeekAvailableMemory();
+                    using var payload = new SpawnPrefabEntityRequest.SyncMemberInitializationPayload.Reader(reader);
 
-                    var initialization = new EntitySpawnRequestInitializationDataReader(reader);
-
-                    foreach (var entry in initialization)
+                    while (payload.TryRead(out var behaviourID, out var type, out var memberID, out var binary))
                     {
-                        switch (entry.Type)
+                        switch (type)
                         {
                             case SyncMemberType.RPC:
-                                entity.RpcBuffer.Register(sender, entry.Behaviour, entry.Member, entry.Binary.Span);
+                                entity.RpcBuffer.Register(sender, behaviourID, memberID, binary.Span);
                                 break;
 
                             case SyncMemberType.Variable:
-                                entity.VariableBuffer.Register(sender, entry.Behaviour, entry.Member, entry.Binary.Span);
+                                entity.VariableBuffer.Register(sender, behaviourID, memberID, binary.Span);
                                 break;
 
                             default: throw new NotImplementedException();
@@ -743,10 +741,10 @@ namespace Wsla.Server
                     var command = new SpawnPrefabEntityCommand(entity.ID, entity.Resource, entity.Authority, entity.Owner.ID);
                     NetworkSerializer.WriteHeader(in command, writer);
 
-                    //Append Policy
+                    //Append Policy Data
                     {
-                        var destination = writer.AllocateMemory(InitializationData.Length);
-                        InitializationData.CopyTo(destination);
+                        var destination = writer.AllocateMemory(PolicyData.Length);
+                        PolicyData.CopyTo(destination);
                     }
 
                     Transport.BroadcastWriter(writer, except: sender);

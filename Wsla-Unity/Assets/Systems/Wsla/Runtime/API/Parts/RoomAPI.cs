@@ -855,23 +855,22 @@ namespace Wsla.Unity
 
                 var instance = Assimilate(definition);
 
-                //Read Network Variables
+                //Read RPC & Variable Initialization Data
+                using (var payload = new SpawnPrefabEntityRequest.SyncMemberInitializationPayload.Reader(reader))
                 {
-                    var initialization = new EntitySpawnRequestInitializationDataReader(reader);
-
-                    foreach (var entry in initialization)
+                    while (payload.TryRead(out var behaviourID, out var type, out var memberID, out var binary))
                     {
-                        if (instance.Behaviours.TryGet(entry.Behaviour, out var behaviour) is false)
-                            throw new Exception($"No Behaviour {entry.Behaviour} Found on {instance}");
+                        if (instance.Behaviours.TryGet(behaviourID, out var behaviour) is false)
+                            throw new Exception($"No Behaviour {behaviourID} Found on {instance}");
 
-                        switch (entry.Type)
+                        switch (type)
                         {
                             case SyncMemberType.RPC:
                             {
-                                if (behaviour.RPC.TryGet(entry.Member, out var bind) is false)
-                                    throw new Exception($"No RPC {entry.Member} Found on {behaviour}");
+                                if (behaviour.RPC.TryGet(memberID, out var bind) is false)
+                                    throw new Exception($"No RPC {memberID} Found on {behaviour}");
 
-                                var source = BinarySource.From(entry.Binary.Span);
+                                var source = BinarySource.From(binary.Span);
                                 var info = RpcInfo.FromInitialization(message.Owner);
 
                                 bind.Invoke(ref source, info);
@@ -880,10 +879,10 @@ namespace Wsla.Unity
 
                             case SyncMemberType.Variable:
                             {
-                                if (behaviour.Variables.TryGet(entry.Member, out var variable) is false)
-                                    throw new Exception($"No Variable {entry.Member} Found on {behaviour}");
+                                if (behaviour.Variables.TryGet(memberID, out var variable) is false)
+                                    throw new Exception($"No Variable {memberID} Found on {behaviour}");
 
-                                var source = BinarySource.From(entry.Binary.Span);
+                                var source = BinarySource.From(binary.Span);
                                 var info = NetworkVariableInfo.FromInitialization(message.Owner);
 
                                 variable.Read(ref source, info);
@@ -1475,7 +1474,7 @@ namespace Wsla.Unity
     public ref struct EntitySpawnTicket
     {
         EntitySpawnOptions Options;
-        NetDataWriter Writer;
+        NetDataWriter Stream;
 
         public NetworkEntity Entity => Options.Instance;
 
@@ -1484,7 +1483,7 @@ namespace Wsla.Unity
 
         public NetworkEntity Send()
         {
-            Room.Transport.SendWriter(in Writer);
+            Room.Transport.SendWriter(in Stream);
 
             //Spawn Local
             return Room.Entities.SpawnLocal(ref Options);
@@ -1503,19 +1502,6 @@ namespace Wsla.Unity
                 return;
             }
 
-            var source = BinarySource.From(Writer);
-
-            NetworkSerializer.WriteValue(bind.Behaviour.ID, ref source);
-            NetworkSerializer.WriteValue(SyncMemberType.RPC, ref source);
-            NetworkSerializer.WriteValue(bind.ID, ref source);
-
-            BinarySource LengthHeader;
-            //Allocate Length
-            {
-                var span = source.AllocateSpan(sizeof(ushort));
-                LengthHeader = BinarySource.From(span);
-            }
-
             //Invoke Local Method
             if (local)
             {
@@ -1523,13 +1509,9 @@ namespace Wsla.Unity
                 bind.Invoke(parameters, info);
             }
 
-            var cursor = source.Position;
-            parameters.WriteTo(Writer);
-
-            //Write Length
+            using (var payload = new SpawnPrefabEntityRequest.SyncMemberInitializationPayload.Writer(Stream, bind.Behaviour.ID, SyncMemberType.RPC, bind.ID))
             {
-                var length = (ushort)(source.Position - cursor);
-                NetworkSerializer.WriteValue(in length, ref LengthHeader);
+                parameters.WriteTo(payload.Stream);
             }
         }
         internal void WriteVariable<T>(NetworkVariable<T> variable, in T value)
@@ -1543,32 +1525,16 @@ namespace Wsla.Unity
                 return;
             }
 
-            var source = BinarySource.From(Writer);
-
-            NetworkSerializer.WriteValue(variable.Behaviour.ID, ref source);
-            NetworkSerializer.WriteValue(SyncMemberType.Variable, ref source);
-            NetworkSerializer.WriteValue(variable.ID, ref source);
-
-            BinarySource LengthHeader;
-            //Allocate Length
-            {
-                var span = source.AllocateSpan(sizeof(ushort));
-                LengthHeader = BinarySource.From(span);
-            }
-
             //Set Local Variable
             {
                 var info = NetworkVariableInfo.FromInitialization();
                 variable.Set(value, info);
             }
 
-            var cursor = source.Position;
-            variable.Write(ref source);
-
-            //Write Length
+            using (var payload = new SpawnPrefabEntityRequest.SyncMemberInitializationPayload.Writer(Stream, variable.Behaviour.ID, SyncMemberType.Variable, variable.ID))
             {
-                var length = (ushort)(source.Position - cursor);
-                NetworkSerializer.WriteValue(in length, ref LengthHeader);
+                var source = BinarySource.From(payload.Stream);
+                variable.Write(ref source);
             }
         }
 
@@ -1576,11 +1542,11 @@ namespace Wsla.Unity
         {
             this.Options = Options;
 
-            Writer = Room.Pools.SinglePackerWriter.Take();
+            Stream = Room.Pools.SinglePackerWriter.Take();
 
             var request = Options.CreateSpawnRequest();
 
-            NetworkSerializer.WriteHeader(in request, Writer);
+            NetworkSerializer.WriteHeader(in request, Stream);
         }
     }
 }
