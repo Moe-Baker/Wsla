@@ -59,5 +59,49 @@ namespace Wsla
             this.ID = ID;
             this.Username = Username;
         }
+
+        public ref struct PayloadWriter
+        {
+            readonly INetworkStream Stream;
+
+            public void Write(NetworkClientDefinition definition)
+            {
+                NetworkSerializer.WriteValue(definition, Stream);
+            }
+
+            public void Dispose() { }
+
+            public PayloadWriter(INetworkStream Stream)
+            {
+                this.Stream = Stream;
+            }
+        }
+        public ref struct PayloadReader
+        {
+            readonly INetworkStream Stream;
+            public int Count { get; }
+
+            int Index;
+
+            public NetworkClientDefinition Read()
+            {
+                Index += 1;
+                return NetworkSerializer.ReadValue<NetworkClientDefinition>(Stream);
+            }
+
+            public void Dispose()
+            {
+                if (Count != Index)
+                    throw new InvalidOperationException($"({typeof(PayloadReader).FullName}) Mismatched Read, Read {Index}, Expected {Count}");
+            }
+
+            public PayloadReader(INetworkStream Stream, int Count)
+            {
+                this.Stream = Stream;
+                this.Count = Count;
+
+                Index = 0;
+            }
+        }
     }
 }

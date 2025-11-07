@@ -610,10 +610,13 @@ namespace Wsla.Server
                 throw new InvalidOperationException($"No Registered Clients to Choose From");
             }
 
-            internal void WriteState(NetDataWriter writer)
+            internal void WriteState(NetDataWriter stream)
             {
-                foreach (var client in Collection)
-                    NetworkSerializer.WriteValue(client.Definition, writer);
+                using (var payload = new NetworkClientDefinition.PayloadWriter(stream))
+                {
+                    foreach (var client in Collection)
+                        payload.Write(client.Definition);
+                }
             }
 
             public void Dispose()

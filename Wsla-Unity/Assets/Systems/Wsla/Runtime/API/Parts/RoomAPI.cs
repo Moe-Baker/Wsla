@@ -587,11 +587,13 @@ namespace Wsla.Unity
                 return Room.ReadState(message, reader);
             }
 
-            internal void ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            internal void ReadState(NetPacketReader stream, ClientConnectionResponse message)
             {
-                for (int i = 0; i < message.Clients; i++)
+                using var reader = new NetworkClientDefinition.PayloadReader(stream, message.Clients);
+
+                for (int i = 0; i < reader.Count; i++)
                 {
-                    var definition = NetworkSerializer.ReadValue<NetworkClientDefinition>(reader);
+                    var definition = reader.Read();
 
                     NetworkClient client;
 
