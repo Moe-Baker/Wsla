@@ -1,3 +1,5 @@
+using System;
+
 using Wsla.Serialization;
 
 namespace Wsla
@@ -36,11 +38,10 @@ namespace Wsla
             this.Parameters = Parameters;
         }
 
-        public static void WriteValue(INetworkStream input, INetworkStream output)
+        public static void WriteValue(ReadOnlySpan<byte> value, INetworkStream stream)
         {
-            var source = input.PeekAvailableMemory();
-            var destination = output.AllocateMemory(source.Length);
-            source.CopyTo(destination);
+            var destination = stream.AllocateMemory(value.Length);
+            value.CopyTo(destination.Span);
         }
         public static BinarySource ReadValue(INetworkStream stream)
         {

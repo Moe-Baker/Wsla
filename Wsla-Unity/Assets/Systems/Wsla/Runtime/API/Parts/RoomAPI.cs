@@ -183,6 +183,9 @@ namespace Wsla.Unity
                         {
                             NetworkSerializer.ReadValue(reader, out T data);
                             handler(ref data, reader, channel, delivery);
+
+                            if (reader.AvailableBytes != 0)
+                                NetworkLog.Warning($"Payload ({typeof(T)}) Handler's ({handler}) Reader Still Has {reader.AvailableBytes} Bytes Available");
                         }
                         catch (Exception ex)
                         {
@@ -209,6 +212,9 @@ namespace Wsla.Unity
                         {
                             NetworkSerializer.ReadValue(reader, out T data);
                             await handler(data, reader, channel, delivery);
+
+                            if (reader.AvailableBytes != 0)
+                                NetworkLog.Warning($"Payload ({typeof(T)}) Handler's ({handler}) Reader Still Has {reader.AvailableBytes} Bytes Available");
                         }
                         catch (Exception ex)
                         {

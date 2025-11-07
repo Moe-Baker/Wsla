@@ -36,6 +36,18 @@ namespace Wsla.Serialization
         }
 
         /// <summary>
+        /// Returns the complete remaining unread data, advancing the data position
+        /// </summary>
+        /// <returns></returns>
+        public static Memory<byte> PopAvailableMemory<TStream>(this TStream stream)
+            where TStream : INetworkStream
+        {
+            var memory = PeekAvailableMemory(stream);
+            stream.Position += memory.Length;
+            return memory;
+        }
+
+        /// <summary>
         /// Returns the total span (read + unread), no read position adjusted
         /// </summary>
         /// <returns></returns>

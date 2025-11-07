@@ -70,11 +70,6 @@ namespace Wsla.Server
 
         public ushort Count => Collection is null ? (ushort)0 : (ushort)Collection.Count;
 
-        public void Register(NetworkClient sender, NetworkBehaviourID behaviour, NetworkSyncMemberID member, NetDataReader Input)
-        {
-            var binary = Input.PeekAvailableMemory();
-            Register(sender, behaviour, member, binary.Span);
-        }
         public void Register(NetworkClient sender, NetworkBehaviourID behaviour, NetworkSyncMemberID member, ReadOnlySpan<byte> binary)
         {
             if (Collection is null)

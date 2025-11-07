@@ -175,6 +175,9 @@ namespace Wsla.Server
                     {
                         NetworkSerializer.ReadValue(reader, out T data);
                         handler(sender, ref data, reader, channel, delivery);
+
+                        if (reader.AvailableBytes != 0)
+                            NetworkLog.Warning($"Payload ({typeof(T)}) Handler's ({handler}) Reader Still Has {reader.AvailableBytes} Bytes Available");
                     }
                 }
 
@@ -899,13 +902,15 @@ namespace Wsla.Server
                     return;
                 }
 
+                var arguments = reader.PopAvailableMemory().Span;
+
                 if (message.Buffer is RemoteBufferMode.Buffer)
-                    entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
+                    entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, arguments);
 
                 //Send to Others
                 {
                     var writer = Room.Pools.SinglePackerWriter.Take();
-                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    WriteCommand(sender, ref message.Parameters, arguments, writer);
                     Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender, groups: message.Groups);
                 }
             }
@@ -918,7 +923,9 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
+                var arguments = reader.PopAvailableMemory().Span;
+
+                entity.RpcBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, arguments);
             }
 
             void TargetRequestHandler(NetworkClient sender, ref TargetNetworkRpcRequest message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
@@ -935,21 +942,23 @@ namespace Wsla.Server
                     return;
                 }
 
+                var arguments = reader.PopAvailableMemory().Span;
+
                 //Send to Target
                 {
                     var writer = Room.Pools.SinglePackerWriter.Take();
-                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    WriteCommand(sender, ref message.Parameters, arguments, writer);
                     Transport.SendWriter(target, writer);
                 }
             }
 
-            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, NetPacketReader input, NetDataWriter output)
+            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, Span<byte> arguments, NetDataWriter output)
             {
                 var command = new NetworkRpcCommand(sender.ID, parameters);
 
                 NetworkSerializer.WriteHeader(in command, output);
 
-                NetworkRpcCommand.WriteArguments(input, output);
+                NetworkRpcCommand.WriteArguments(arguments, output);
             }
 
             internal void WriteState(NetDataWriter stream)
@@ -991,12 +1000,14 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
+                var value = reader.PopAvailableMemory().Span;
+
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, value);
 
                 //Send to Others
                 {
                     var writer = Room.Pools.SinglePackerWriter.Take();
-                    WriteCommand(sender, ref message.Parameters, reader, writer);
+                    WriteCommand(sender, ref message.Parameters, value, writer);
                     Transport.BroadcastWriter(writer, channel: channel, delivery: delivery, except: sender);
                 }
             }
@@ -1009,16 +1020,18 @@ namespace Wsla.Server
                     return;
                 }
 
-                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, reader);
+                var value = reader.PopAvailableMemory().Span;
+
+                entity.VariableBuffer.Register(sender, message.Parameters.Behaviour, message.Parameters.Member, value);
             }
 
-            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, NetPacketReader input, NetDataWriter output)
+            void WriteCommand(NetworkClient sender, ref NetworkSyncMemberParameters parameters, Span<byte> value, NetDataWriter output)
             {
                 var command = new NetworkVariableCommand(sender.ID, parameters);
 
                 NetworkSerializer.WriteHeader(in command, output);
 
-                NetworkVariableCommand.WriteValue(input, output);
+                NetworkVariableCommand.WriteValue(value, output);
             }
 
             internal void WriteState(NetDataWriter stream)
