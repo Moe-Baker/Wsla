@@ -663,7 +663,7 @@ namespace Wsla.Server
                     return;
                 }
 
-                if (sender.ValdiateSpawnToken(message.SpawnToken) is false)
+                if (sender.ValidateSpawnToken(message.SpawnToken) is false)
                 {
                     NetworkLog.Warning($"Invalid Spawn Token {message.SpawnToken} Received from {sender}");
                     Transport.Kick(sender, WslaError.From(WslaErrorCode.SpawnTokenContractBroken));

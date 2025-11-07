@@ -52,17 +52,17 @@ namespace Wsla.Server
             return SpawnTokens.Dequeue();
         }
 
-        public bool ValdiateSpawnToken(NetworkEntityID target)
+        public bool ValidateSpawnToken(NetworkEntityID target)
         {
-            if (SpawnTokens.TryPeek(out var registerd) is false)
+            if (SpawnTokens.TryPeek(out var registered) is false)
             {
                 NetworkLog.Warning($"No Spawn Tokens Available");
                 return false;
             }
 
-            if (registerd != target)
+            if (registered != target)
             {
-                NetworkLog.Warning($"Expected Token {registerd} Got {target}");
+                NetworkLog.Warning($"Expected Token {registered} Got {target}");
                 return false;
             }
 
