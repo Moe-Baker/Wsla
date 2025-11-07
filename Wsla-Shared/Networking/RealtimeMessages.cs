@@ -244,12 +244,135 @@ namespace Wsla
     }
 
     [NetworkBlittable]
-    public struct SpawnSceneRequest { }
+    public struct SpawnSceneRequest
+    {
+        public class AuthorizationPayload
+        {
+            public ref struct Writer
+            {
+                readonly INetworkStream Stream;
+                readonly byte Capacity;
+
+                byte Counter;
+
+                public void Write(NetworkEntityAuthorityMode ID)
+                {
+                    Counter += 1;
+
+                    NetworkSerializer.WriteValue(ID, Stream);
+                }
+
+                public void Dispose()
+                {
+                    if (Capacity != Counter)
+                        throw new InvalidOperationException($"Not Enough Entities Written, Expected {Capacity}, Got {Counter}");
+                }
+
+                public Writer(INetworkStream Stream, byte Capacity)
+                {
+                    this.Stream = Stream;
+                    this.Capacity = Capacity;
+                    Counter = 0;
+
+                    NetworkSerializer.WriteValue(Capacity, Stream);
+                }
+            }
+            public ref struct Reader
+            {
+                readonly INetworkStream Stream;
+                public byte Count { get; }
+
+                byte Index;
+
+                public NetworkEntityAuthorityMode Read()
+                {
+                    Index += 1;
+                    return NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(Stream);
+                }
+
+                public void Dispose()
+                {
+                    if (Count != Index)
+                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Didn't Read All Data, Read {Index}, Total: {Count}");
+
+                    if (Stream.Available > 0)
+                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Still Contains {Stream.Available} Bytes After Reading All ({Count}) Entities");
+                }
+
+                public Reader(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+                    Count = NetworkSerializer.ReadValue<byte>(Stream);
+
+                    Index = default;
+                }
+            }
+        }
+    }
 
     [NetworkBlittable]
     public struct SpawnSceneCommand
     {
+        public class EntityIDPayload
+        {
+            public ref struct Writer
+            {
+                readonly INetworkStream Stream;
+                readonly byte Capacity;
 
+                byte Counter;
+
+                public void Write(NetworkEntityID ID)
+                {
+                    Counter += 1;
+
+                    NetworkSerializer.WriteValue(ID, Stream);
+                }
+
+                public void Dispose()
+                {
+                    if (Capacity != Counter)
+                        throw new InvalidOperationException($"Not Enough Entities Written, Expected {Capacity}, Got {Counter}");
+                }
+
+                public Writer(INetworkStream Stream, byte Capacity)
+                {
+                    this.Stream = Stream;
+                    this.Capacity = Capacity;
+                    Counter = 0;
+                }
+            }
+            public ref struct Reader
+            {
+                readonly INetworkStream Stream;
+                public byte Count { get; }
+
+                byte Index;
+
+                public NetworkEntityID Read()
+                {
+                    Index += 1;
+                    return NetworkSerializer.ReadValue<NetworkEntityID>(Stream);
+                }
+
+                public void Dispose()
+                {
+                    if (Count != Index)
+                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Didn't Read All Data, Read {Index}, Total: {Count}");
+
+                    if (Stream.Available > 0)
+                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Still Contains {Stream.Available} Bytes After Reading All ({Count}) Entities");
+                }
+
+                public Reader(INetworkStream Stream, byte Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Index = default;
+                }
+            }
+        }
     }
 
     [NetworkBlittable]

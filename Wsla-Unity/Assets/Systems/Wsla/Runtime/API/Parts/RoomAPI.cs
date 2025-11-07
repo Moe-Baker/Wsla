@@ -1325,13 +1325,13 @@ namespace Wsla.Unity
             void SpawnSceneCommandHandler(ref SpawnSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 var component = Room.Scene.Component;
-                var count = Room.Scene.Component.Locals.Length;
 
-                for (byte i = 0; i < count; i++)
+                using var payload = new SpawnSceneCommand.EntityIDPayload.Reader(reader, (byte)Room.Scene.Component.Locals.Length);
+                for (byte i = 0; i < payload.Count; i++)
                 {
                     var entity = component.Locals[i];
 
-                    var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                    var id = payload.Read();
                     var resource = new NetworkResourceID(i);
                     var authority = component.Locals[i].Authority;
                     var ownerID = Room.Clients.Master.ID;

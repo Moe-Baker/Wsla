@@ -68,19 +68,20 @@ namespace Wsla.Unity
         public event Action OnDespawn;
         #endregion
 
-        internal void WriteRequest(NetDataWriter writer)
+        internal void WriteRequest(NetDataWriter stream)
         {
-            NetworkSerializer.WriteValue((byte)Locals.Length, writer);
-
-            foreach (var entity in Locals)
+            using (var writer = new SpawnSceneRequest.AuthorizationPayload.Writer(stream, (byte)Locals.Length))
             {
-                if (entity.Authority is NetworkEntityAuthorityMode.Explicit)
+                foreach (var entity in Locals)
                 {
-                    Debug.LogWarning($"Network Entity ({entity.gameObject}) in Scene ({entity.gameObject.scene.name}) Has an {entity.Authority} Authority, Scene Objects Can Only have {NetworkEntityAuthorityMode.Authoritative} & {NetworkEntityAuthorityMode.Transferable} Authority, Switching");
-                    entity.Authority = NetworkEntityAuthorityMode.Authoritative;
-                }
+                    if (entity.Authority is NetworkEntityAuthorityMode.Explicit)
+                    {
+                        Debug.LogWarning($"Network Entity ({entity.gameObject}) in Scene ({entity.gameObject.scene.name}) Has an {entity.Authority} Authority, Scene Objects Can Only have {NetworkEntityAuthorityMode.Authoritative} & {NetworkEntityAuthorityMode.Transferable} Authority, Switching");
+                        entity.Authority = NetworkEntityAuthorityMode.Authoritative;
+                    }
 
-                NetworkSerializer.WriteValue(entity.Authority, writer);
+                    writer.Write(entity.Authority);
+                }
             }
         }
 

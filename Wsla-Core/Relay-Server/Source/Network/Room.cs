@@ -1072,41 +1072,49 @@ namespace Wsla.Server
                     return;
                 }
 
-                var count = NetworkSerializer.ReadValue<byte>(reader);
+                List<NetworkEntity> entities;
 
-                if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[count], out var ids) is false)
+                //Spawn Entities
                 {
-                    NetworkLog.Error($"Room {Room} Entitiy ID Generatror Overloaded");
-                    Room.Stop();
-                    return;
-                }
+                    using var payload = new SpawnSceneRequest.AuthorizationPayload.Reader(reader);
 
-                var entities = Room.Pools.EntityList.Take();
+                    if (Room.Entities.IDGenerator.TryReserve(stackalloc NetworkEntityID[payload.Count], out var ids) is false)
+                    {
+                        NetworkLog.Error($"Room {Room} Entity ID Generator Overloaded");
+                        Room.Stop();
+                        return;
+                    }
 
-                for (byte i = 0; i < count; i++)
-                {
-                    var resource = new NetworkResourceID(i);
-                    var authority = NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(reader);
-                    var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, sender, authority);
+                    entities = Room.Pools.EntityList.Take();
+                    entities.EnsureCapacity(payload.Count);
 
-                    Room.Entities.Register(entity);
+                    for (byte i = 0; i < payload.Count; i++)
+                    {
+                        var resource = new NetworkResourceID(i);
+                        var authority = payload.Read();
+                        var entity = new NetworkEntity(Room, ids[i], NetworkEntityOrigin.Scene, resource, sender, authority);
 
-                    entities.Add(entity);
+                        Room.Entities.Register(entity);
+
+                        entities.Add(entity);
+                    }
                 }
 
                 IsSpawned = true;
 
                 //Broadcast to Others
                 {
-                    var writer = Room.Pools.SinglePackerWriter.Take();
+                    var stream = Room.Pools.SinglePackerWriter.Take();
 
                     var command = new SpawnSceneCommand();
-                    NetworkSerializer.WriteHeader(in command, writer);
+                    NetworkSerializer.WriteHeader(in command, stream);
+
+                    using var payload = new SpawnSceneCommand.EntityIDPayload.Writer(stream, (byte)entities.Count);
 
                     foreach (var entity in entities)
-                        NetworkSerializer.WriteValue(entity.ID, writer);
+                        payload.Write(entity.ID);
 
-                    Transport.BroadcastWriter(writer);
+                    Transport.BroadcastWriter(stream);
                 }
             }
 
