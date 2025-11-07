@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Runtime.InteropServices;
 
 using LiteNetLib;
@@ -951,13 +952,19 @@ namespace Wsla.Server
                 NetworkRpcCommand.WriteArguments(input, output);
             }
 
-            internal void WriteState(NetDataWriter writer)
+            internal void WriteState(NetDataWriter stream)
             {
-                foreach (var (id, entity) in Room.Entities.Dictionary)
-                    entity.RpcBuffer.WriteState(id, writer);
+                using var payload = new NetworkSyncMemberBufferPayload.EntityWriter(stream);
 
-                //End of Stream
-                NetworkSerializer.WriteValue(NetworkEntityID.None, writer);
+                foreach (var (id, entity) in Room.Entities.Dictionary)
+                {
+                    var buffer = entity.RpcBuffer;
+                    if (buffer.Count == 0)
+                        continue;
+
+                    using var member = payload.Write(entity.ID, buffer.Count);
+                    buffer.WriteState(member);
+                }
             }
 
             readonly Room Room;
@@ -1014,13 +1021,19 @@ namespace Wsla.Server
                 NetworkVariableCommand.WriteValue(input, output);
             }
 
-            internal void WriteState(NetDataWriter writer)
+            internal void WriteState(NetDataWriter stream)
             {
-                foreach (var (id, entity) in Room.Entities.Dictionary)
-                    entity.VariableBuffer.WriteState(id, writer);
+                using var payload = new NetworkSyncMemberBufferPayload.EntityWriter(stream);
 
-                //End of Stream
-                NetworkSerializer.WriteValue(NetworkEntityID.None, writer);
+                foreach (var (id, entity) in Room.Entities.Dictionary)
+                {
+                    var buffer = entity.VariableBuffer;
+                    if (buffer.Count == 0)
+                        continue;
+
+                    using var member = payload.Write(entity.ID, buffer.Count);
+                    buffer.WriteState(member);
+                }
             }
 
             readonly Room Room;

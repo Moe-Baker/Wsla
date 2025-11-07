@@ -77,4 +77,114 @@ namespace Wsla
             this.Member = Member;
         }
     }
+
+    public static class NetworkSyncMemberBufferPayload
+    {
+        public ref struct EntityWriter
+        {
+            public MemberWriter Write(NetworkEntityID id, ushort count)
+            {
+                NetworkSerializer.WriteValue(id, Stream);
+                NetworkSerializer.WriteValue(count, Stream);
+
+                return new MemberWriter(Stream);
+            }
+
+            public void Dispose()
+            {
+                //End of Stream
+                NetworkSerializer.WriteValue(NetworkEntityID.None, Stream);
+            }
+
+            readonly INetworkStream Stream;
+            public EntityWriter(INetworkStream Stream)
+            {
+                this.Stream = Stream;
+            }
+        }
+        public ref struct MemberWriter
+        {
+            public void Write(NetworkBehaviourID behaviour, NetworkSyncMemberID member, NetworkClientID sender, Span<byte> data)
+            {
+                NetworkSerializer.WriteValue(behaviour, Stream);
+                NetworkSerializer.WriteValue(member, Stream);
+                NetworkSerializer.WriteValue(sender, Stream);
+
+                if (data.Length > 0)
+                {
+                    var destination = Stream.AllocateMemory(data.Length);
+                    data.CopyTo(destination.Span);
+                }
+            }
+
+            public void Dispose()
+            {
+
+            }
+
+            readonly INetworkStream Stream;
+            public MemberWriter(INetworkStream Stream)
+            {
+                this.Stream = Stream;
+            }
+        }
+
+        public ref struct EntityReader
+        {
+            public bool TryReadID(out NetworkEntityID entity)
+            {
+                entity = NetworkSerializer.ReadValue<NetworkEntityID>(Stream);
+                return entity != NetworkEntityID.None;
+            }
+            public MemberReader ReadMember(NetworkEntityID entity)
+            {
+                var count = NetworkSerializer.ReadValue<ushort>(Stream);
+                return new MemberReader(Stream, entity, count);
+            }
+
+            public void Dispose()
+            {
+
+            }
+
+            readonly INetworkStream Stream;
+            public EntityReader(INetworkStream Stream)
+            {
+                this.Stream = Stream;
+            }
+        }
+        public ref struct MemberReader
+        {
+            public NetworkEntityID Entity { get; }
+            public int Count { get; }
+
+            int Index;
+
+            public void Read(out NetworkBehaviourID behaviour, out NetworkSyncMemberID member, out NetworkClientID sender, out INetworkStream data)
+            {
+                Index += 1;
+
+                behaviour = NetworkSerializer.ReadValue<NetworkBehaviourID>(Stream);
+                member = NetworkSerializer.ReadValue<NetworkSyncMemberID>(Stream);
+                sender = NetworkSerializer.ReadValue<NetworkClientID>(Stream);
+                data = Stream;
+            }
+
+            public void Dispose()
+            {
+                if (Count != Index)
+                    throw new InvalidOperationException($"({typeof(MemberReader).FullName}) Mismatched Read, Read {Index}, Expected {Count}");
+            }
+
+            readonly INetworkStream Stream;
+            public MemberReader(INetworkStream Stream, NetworkEntityID Entity, int Count)
+            {
+                this.Stream = Stream;
+                this.Entity = Entity;
+                this.Count = Count;
+
+                Index = default;
+            }
+        }
+    }
 }

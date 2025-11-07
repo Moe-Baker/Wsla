@@ -1100,30 +1100,25 @@ namespace Wsla.Unity
                 return true;
             }
 
-            internal void ReadState(NetPacketReader reader)
+            internal void ReadState(NetPacketReader stream)
             {
-                while (true)
-                {
-                    var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
-                    if (entityID == NetworkEntityID.None)
-                        break;
+                using var payload = new NetworkSyncMemberBufferPayload.EntityReader(stream);
 
+                while (payload.TryReadID(out var entityID))
+                {
                     if (Room.Entities.TryGet(entityID, out var entity) is false)
                         throw new InvalidOperationException($"No Entity found With ID {entityID}");
 
-                    var count = NetworkSerializer.ReadValue<ushort>(reader);
+                    using var member = payload.ReadMember(entityID);
 
-                    for (int y = 0; y < count; y++)
+                    for (int i = 0; i < member.Count; i++)
                     {
-                        var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
-                        var rpcID = NetworkSerializer.ReadValue<NetworkSyncMemberID>(reader);
+                        member.Read(out var behaviour, out var rpc, out var sender, out var data);
 
-                        var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
-
-                        if (Get(entity, behaviourID, rpcID, out var bind))
+                        if (Get(entity, behaviour, rpc, out var bind))
                         {
-                            var info = RpcInfo.FromBuffer(senderID);
-                            bind.Invoke(reader, info);
+                            var info = RpcInfo.FromBuffer(sender);
+                            bind.Invoke(data, info);
                         }
                     }
                 }
@@ -1187,32 +1182,26 @@ namespace Wsla.Unity
                 return true;
             }
 
-            internal void ReadState(NetPacketReader reader)
+            internal void ReadState(NetPacketReader stream)
             {
-                while (true)
+                using var payload = new NetworkSyncMemberBufferPayload.EntityReader(stream);
+
+                while (payload.TryReadID(out var entityID))
                 {
-                    var entityID = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
-                    if (entityID == NetworkEntityID.None)
-                        break;
-
                     if (Room.Entities.TryGet(entityID, out var entity) is false)
-                        throw new NotImplementedException();
+                        throw new InvalidOperationException($"No Entity found With ID {entityID}");
 
-                    var count = NetworkSerializer.ReadValue<ushort>(reader);
+                    using var member = payload.ReadMember(entityID);
 
-                    for (int y = 0; y < count; y++)
+                    for (int i = 0; i < member.Count; i++)
                     {
-                        var behaviourID = NetworkSerializer.ReadValue<NetworkBehaviourID>(reader);
-                        var variableID = NetworkSerializer.ReadValue<NetworkSyncMemberID>(reader);
+                        member.Read(out var behaviour, out var variable, out var sender, out var data);
 
-                        var senderID = NetworkSerializer.ReadValue<NetworkClientID>(reader);
-
-                        if (Get(entity, behaviourID, variableID, out var variable))
+                        if (Get(entity, behaviour, variable, out var bind))
                         {
-                            var info = NetworkVariableInfo.FromBuffer(senderID);
-                            var source = BinarySource.From(reader);
-
-                            variable.Read(ref source, info);
+                            var info = NetworkVariableInfo.FromBuffer(sender);
+                            var source = BinarySource.From(data);
+                            bind.Read(ref source, info);
                         }
                     }
                 }

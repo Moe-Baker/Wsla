@@ -46,6 +46,13 @@ namespace Wsla.Server
             public NetworkClientVersion SenderVersion;
 
             public readonly NetDataWriter Stream;
+            public Memory<byte> ReadData()
+            {
+                if (Stream == null)
+                    return default;
+
+                return Stream.PeekAllocatedMemory();
+            }
 
             public void SetSender(NetworkClient sender)
             {
@@ -109,42 +116,25 @@ namespace Wsla.Server
             }
         }
 
-        public void WriteState(NetworkEntityID entity, NetDataWriter output)
+        public void WriteState(NetworkSyncMemberBufferPayload.MemberWriter writer)
         {
-            if (Collection is null)
-                return;
-
-            NetworkSerializer.WriteValue(in entity, output);
-
-            NetworkSerializer.WriteValue(Count, output);
-
             foreach (var (key, payload) in Collection)
             {
-                //Write Key
-                {
-                    NetworkSerializer.WriteValue(key.Behaviour, output);
-                    NetworkSerializer.WriteValue(key.Member, output);
-                }
+                var sender = GetSenderID(payload.SenderID, payload.SenderVersion);
+                var data = payload.ReadData();
 
-                //Write Sender
-                {
-                    if (TryGetClient(payload.SenderID, payload.SenderVersion, out var client))
-                        NetworkSerializer.WriteValue(client.ID, output);
-                    else
-                        NetworkSerializer.WriteValue(NetworkClientID.None, output);
-                }
-
-                //Write Payload
-                if (payload.Stream is not null)
-                {
-                    var source = payload.Stream.PeekAllocatedMemory();
-                    var destination = output.AllocateMemory(source.Length);
-                    source.CopyTo(destination);
-                }
+                writer.Write(key.Behaviour, key.Member, sender, data.Span);
             }
         }
 
-        bool TryGetClient(NetworkClientID id, NetworkClientVersion version, out NetworkClient client)
+        NetworkClientID GetSenderID(NetworkClientID id, NetworkClientVersion version)
+        {
+            if (TryGetSender(id, version, out var sender) is false)
+                return NetworkClientID.None;
+
+            return sender.ID;
+        }
+        bool TryGetSender(NetworkClientID id, NetworkClientVersion version, out NetworkClient client)
         {
             if (Room.Clients.TryGet(id, out client) is false)
                 return false;
