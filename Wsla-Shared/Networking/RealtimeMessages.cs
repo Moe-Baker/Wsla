@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 
 using Wsla.Serialization;
 
@@ -97,6 +99,61 @@ namespace Wsla
         {
             this.ClientID = ClientID;
             this.MasterID = MasterID;
+        }
+
+        public struct EntityHandlingPayload : IAutoNetworkSerialization
+        {
+            public NetworkEntityID ID;
+            public EntityDisconnectBehaviour Behaviour;
+
+            public void Select(ref AutoSerializationContext context)
+            {
+                context.Select(ref ID);
+                context.Select(ref Behaviour);
+            }
+
+            public EntityHandlingPayload(NetworkEntityID ID, EntityDisconnectBehaviour Behaviour)
+            {
+                this.ID = ID;
+                this.Behaviour = Behaviour;
+            }
+
+            public ref struct Writer
+            {
+                public void Write(NetworkEntityID ID, EntityDisconnectBehaviour Behaviour)
+                {
+                    var handling = new EntityHandlingPayload(ID, Behaviour);
+                    NetworkSerializer.WriteValue(handling, Stream);
+                }
+
+                readonly INetworkStream Stream;
+                public Writer(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+                }
+            }
+            public ref struct Reader
+            {
+                readonly INetworkStream Stream;
+                public EntityHandlingPayload Current { get; private set; }
+
+                public bool MoveNext()
+                {
+                    if (Stream.Available == 0)
+                        return false;
+
+                    Current = NetworkSerializer.ReadValue<EntityHandlingPayload>(Stream);
+                    return true;
+                }
+
+                public Reader GetEnumerator() => this;
+
+                public Reader(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+                    Current = default;
+                }
+            }
         }
     }
 

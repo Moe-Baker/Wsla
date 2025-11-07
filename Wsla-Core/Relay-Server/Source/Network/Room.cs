@@ -521,6 +521,8 @@ namespace Wsla.Server
                     var message = new ClientDisconnectMessage(client.ID, isMaster ? Master.ID : null);
                     NetworkSerializer.WriteHeader(in message, writer);
 
+                    var PayloadWriter = new ClientDisconnectMessage.EntityHandlingPayload.Writer(writer);
+
                     foreach (var entity in client.Entities)
                     {
                         switch (entity.Authority)
@@ -538,15 +540,13 @@ namespace Wsla.Server
                             //Serialize their ID's and Despawn Explicitly on Remote Clients
                             case NetworkEntityAuthorityMode.Transferable:
                             {
-                                NetworkSerializer.WriteValue(entity.ID, writer);
-
                                 switch (entity.Origin)
                                 {
                                     //Despawn all Prefabs Entities
                                     case NetworkEntityOrigin.Prefab:
                                     {
                                         Room.Entities.Despawn(entity);
-                                        NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Despawn, writer);
+                                        PayloadWriter.Write(entity.ID, EntityDisconnectBehaviour.Despawn);
                                     }
                                     break;
 
@@ -554,7 +554,7 @@ namespace Wsla.Server
                                     case NetworkEntityOrigin.Scene:
                                     {
                                         Room.Entities.Transfer(entity, Master);
-                                        NetworkSerializer.WriteValue(EntityDisconnectBehaviour.Transfer, writer);
+                                        PayloadWriter.Write(entity.ID, EntityDisconnectBehaviour.Transfer);
                                     }
                                     break;
 

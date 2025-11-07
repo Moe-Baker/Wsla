@@ -652,15 +652,12 @@ namespace Wsla.Unity
                 }
 
                 //Despawn Instructed Entities
-                while (reader.AvailableBytes > 0)
+                foreach (var handling in new ClientDisconnectMessage.EntityHandlingPayload.Reader(reader))
                 {
-                    var id = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
-                    var behaviour = NetworkSerializer.ReadValue<EntityDisconnectBehaviour>(reader);
-
-                    if (Room.Entities.TryGet(id, out var entity) is false)
+                    if (Room.Entities.TryGet(handling.ID, out var entity) is false)
                         throw new InvalidOperationException($"No Entity with ID {entity} Found");
 
-                    switch (behaviour)
+                    switch (handling.Behaviour)
                     {
                         case EntityDisconnectBehaviour.Despawn:
                             Room.Entities.InvokeDespawn(entity);
