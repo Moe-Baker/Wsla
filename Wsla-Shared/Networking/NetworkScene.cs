@@ -81,4 +81,25 @@ namespace Wsla
         public static bool operator ==(NetworkSceneVersion left, NetworkSceneVersion right) => left.Equals(right);
         public static bool operator !=(NetworkSceneVersion left, NetworkSceneVersion right) => !left.Equals(right);
     }
+
+    public struct NetworkSceneDefinition : IAutoNetworkSerialization
+    {
+        public NetworkSceneID ID;
+        public NetworkSceneVersion Version;
+        public bool IsSpawned;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref ID);
+            context.Select(ref Version);
+            context.Select(ref IsSpawned);
+        }
+
+        public NetworkSceneDefinition(NetworkSceneID ID, NetworkSceneVersion Version, bool IsSpawned)
+        {
+            this.ID = ID;
+            this.Version = Version;
+            this.IsSpawned = IsSpawned;
+        }
+    }
 }

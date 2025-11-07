@@ -1245,11 +1245,11 @@ namespace Wsla.Unity
             }
             public event Action OnRegister;
 
-            internal UniTask ReadState(NetPacketReader reader, ClientConnectionResponse message)
+            internal UniTask ApplyState(NetworkSceneDefinition definition)
             {
-                ID = NetworkSerializer.ReadValue<NetworkSceneID>(reader);
-                Version = NetworkSerializer.ReadValue<NetworkSceneVersion>(reader);
-                IsSpawned = NetworkSerializer.ReadValue<bool>(reader);
+                ID = definition.ID;
+                Version = definition.Version;
+                IsSpawned = definition.IsSpawned;
 
                 return ChangeProcedure(ID, Version);
             }
@@ -1371,7 +1371,7 @@ namespace Wsla.Unity
                 Clients.Local.ReadSpawnTokens(reader, message);
 
                 //Sync Scenes
-                await Scene.ReadState(reader, message);
+                await Scene.ApplyState(message.Scene);
 
                 var entities = Pools.EntityList.Take();
 

@@ -459,7 +459,7 @@ namespace Wsla.Server
 
                     var TimeResponse = Room.Time.Respond(ref request.TimeRequest);
 
-                    var message = new ClientConnectionResponse(client.ID, Master.ID, TimeResponse, Count, client.SpawnAllowance, Room.Entities.Count);
+                    var message = new ClientConnectionResponse(client.ID, Master.ID, TimeResponse, Count, client.SpawnAllowance, Room.Entities.Count, Room.Scene.Definition);
                     NetworkSerializer.WriteHeader(in message, writer);
 
                     Room.WriteState(client, writer);
@@ -1033,8 +1033,9 @@ namespace Wsla.Server
         {
             public NetworkSceneID ID { get; private set; }
             public NetworkSceneVersion Version { get; private set; }
-
             public bool IsSpawned { get; private set; }
+
+            public NetworkSceneDefinition Definition => new(ID, Version, IsSpawned);
 
             public TransportProperty Transport => Room.Transport;
 
@@ -1118,13 +1119,6 @@ namespace Wsla.Server
                 }
             }
 
-            internal void WriteState(NetDataWriter writer)
-            {
-                NetworkSerializer.WriteValue(ID, writer);
-                NetworkSerializer.WriteValue(Version, writer);
-                NetworkSerializer.WriteValue(IsSpawned, writer);
-            }
-
             readonly Room Room;
             public SceneProperty(Room Room, CreateRoomParameters parameters)
             {
@@ -1174,9 +1168,6 @@ namespace Wsla.Server
 
             //Sync Spawn Tokens
             client.WriteSpawnTokens(writer);
-
-            //Sync Scene
-            Scene.WriteState(writer);
 
             //Sync Entity Definitions
             Entities.WriteDefinitions(writer);

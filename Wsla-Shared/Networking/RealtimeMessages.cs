@@ -34,8 +34,7 @@ namespace Wsla
             TimeRequest = default;
         }
     }
-    [NetworkBlittable]
-    public struct ClientConnectionResponse
+    public struct ClientConnectionResponse : IAutoNetworkSerialization
     {
         public NetworkClientID LocalID;
         public NetworkClientID MasterID;
@@ -46,9 +45,25 @@ namespace Wsla
         public byte SpawnTokens;
         public ushort Entities;
 
+        public NetworkSceneDefinition Scene;
+
         public override string ToString() => $"(ClientID: {LocalID})";
 
-        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, RoomTimeResponse TimeResponse, byte Clients, byte SpawnTokens, ushort Entities)
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref LocalID);
+            context.Select(ref MasterID);
+
+            context.Select(ref TimeResponse);
+
+            context.Select(ref Clients);
+            context.Select(ref SpawnTokens);
+            context.Select(ref Entities);
+
+            context.Select(ref Scene);
+        }
+
+        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, RoomTimeResponse TimeResponse, byte Clients, byte SpawnTokens, ushort Entities, NetworkSceneDefinition Scene)
         {
             this.LocalID = LocalID;
             this.MasterID = MasterID;
@@ -58,6 +73,8 @@ namespace Wsla
             this.Clients = Clients;
             this.SpawnTokens = SpawnTokens;
             this.Entities = Entities;
+
+            this.Scene = Scene;
         }
     }
 
