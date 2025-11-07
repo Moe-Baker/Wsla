@@ -70,10 +70,12 @@ namespace Wsla.Server
             return true;
         }
 
-        public void WriteSpawnTokens(NetDataWriter writer)
+        public void WriteSpawnTokens(NetDataWriter stream)
         {
+            using var writer = new ClientConnectionResponse.SpawnTokenPayload.Writer(stream);
+
             foreach (var token in SpawnTokens)
-                NetworkSerializer.WriteValue(token, writer);
+                writer.Write(token);
         }
         #endregion
 

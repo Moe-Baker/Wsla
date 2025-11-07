@@ -81,32 +81,27 @@ namespace Wsla.Unity
     public class LocalNetworkClient : NetworkClient
     {
         #region Spawn Tokens
-        public Queue<NetworkEntityID> SpawnTokens { get; }
+        public Queue<NetworkEntityID> SpawnTokens { get; private set; }
         public byte SpawnAllowance => (byte)SpawnTokens.Count;
 
-        public void AddSpawnToken(NetworkEntityID id)
-        {
-            SpawnTokens.Enqueue(id);
-        }
-        public NetworkEntityID RemoveSpawnToken()
-        {
-            return SpawnTokens.Dequeue();
-        }
+        public void AddSpawnToken(NetworkEntityID id) => SpawnTokens.Enqueue(id);
+        public NetworkEntityID RemoveSpawnToken() => SpawnTokens.Dequeue();
 
-        internal void ReadSpawnTokens(NetPacketReader reader, ClientConnectionResponse message)
+        internal void ReadSpawnTokens(NetPacketReader stream, ClientConnectionResponse message)
         {
+            using var reader = new ClientConnectionResponse.SpawnTokenPayload.Reader(stream, message.SpawnTokens);
+
+            SpawnTokens = new Queue<NetworkEntityID>(reader.Count);
+
             for (int i = 0; i < message.SpawnTokens; i++)
             {
-                var token = NetworkSerializer.ReadValue<NetworkEntityID>(reader);
+                var token = reader.Read();
                 AddSpawnToken(token);
             }
         }
         #endregion
 
-        public LocalNetworkClient(NetworkClientID ID, FixedString<FS20> Username, int SpawnTokenCapacity) : base(ID, Username)
-        {
-            SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
-        }
-        public LocalNetworkClient(NetworkClientDefinition definition, int SpawnTokenCapacity) : this(definition.ID, definition.Username, SpawnTokenCapacity) { }
+        public LocalNetworkClient(NetworkClientID ID, FixedString<FS20> Username) : base(ID, Username) { }
+        public LocalNetworkClient(NetworkClientDefinition definition) : this(definition.ID, definition.Username) { }
     }
 }

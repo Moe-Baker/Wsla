@@ -598,7 +598,7 @@ namespace Wsla.Unity
                     NetworkClient client;
 
                     if (definition.ID == message.LocalID)
-                        client = Local = new LocalNetworkClient(definition, message.SpawnTokens);
+                        client = Local = new LocalNetworkClient(definition);
                     else
                         client = new RemoteNetworkClient(definition);
 

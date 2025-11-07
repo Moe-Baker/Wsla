@@ -76,6 +76,53 @@ namespace Wsla
 
             this.Scene = Scene;
         }
+
+        public static class SpawnTokenPayload
+        {
+            public ref struct Writer
+            {
+                readonly INetworkStream Stream;
+
+                public void Write(NetworkEntityID token)
+                {
+                    NetworkSerializer.WriteValue(token, Stream);
+                }
+
+                public void Dispose() { }
+
+                public Writer(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+                }
+            }
+            public ref struct Reader
+            {
+                readonly INetworkStream Stream;
+                public int Count { get; }
+
+                int Index;
+
+                public NetworkEntityID Read()
+                {
+                    Index += 1;
+                    return NetworkSerializer.ReadValue<NetworkEntityID>(Stream);
+                }
+
+                public void Dispose()
+                {
+                    if (Count != Index)
+                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Mismatched Read, Read {Index}, Expected {Count}");
+                }
+
+                public Reader(INetworkStream Stream, int Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Index = 0;
+                }
+            }
+        }
     }
 
     public struct ClientConnectMessage : IAutoNetworkSerialization
