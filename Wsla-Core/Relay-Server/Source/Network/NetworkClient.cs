@@ -14,6 +14,8 @@ namespace Wsla.Server
 
         public FixedString<FS20> Username { get; private set; }
 
+        public NetworkClientDefinition Definition => new NetworkClientDefinition(ID, Username);
+
         public NetPeer Peer { get; private set; }
         internal void AssignPeer(NetPeer value)
         {
@@ -87,12 +89,6 @@ namespace Wsla.Server
             Entities.RemoveAt(target.OwnerRegisteration);
         }
         #endregion
-
-        public void WriteState(NetDataWriter writer)
-        {
-            NetworkSerializer.WriteValue(ID, writer);
-            NetworkSerializer.WriteValue(Username, writer);
-        }
 
         public override string ToString() => $"(ID: {ID}, Username: {Username})";
 

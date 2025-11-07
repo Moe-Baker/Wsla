@@ -59,10 +59,19 @@ namespace Wsla
         }
     }
 
-    [NetworkBlittable]
-    public struct ClientConnectMessage
+    public struct ClientConnectMessage : IAutoNetworkSerialization
     {
+        public NetworkClientDefinition Client;
 
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Client);
+        }
+
+        public ClientConnectMessage(NetworkClientDefinition Client)
+        {
+            this.Client = Client;
+        }
     }
     [NetworkBlittable]
     public struct ClientDisconnectMessage

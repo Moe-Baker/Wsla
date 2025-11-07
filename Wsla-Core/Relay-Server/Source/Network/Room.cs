@@ -449,15 +449,8 @@ namespace Wsla.Server
 
                 //Broadcast To Others
                 {
-                    var writer = Room.Pools.SinglePackerWriter.Take();
-
-                    var message = new ClientConnectMessage();
-
-                    NetworkSerializer.WriteHeader(in message, writer);
-
-                    client.WriteState(writer);
-
-                    Transport.BroadcastWriter(writer, except: client);
+                    var message = new ClientConnectMessage(client.Definition);
+                    Transport.BroadcastData(message, except: client);
                 }
 
                 //Unicast to Client
@@ -619,8 +612,8 @@ namespace Wsla.Server
 
             internal void WriteState(NetDataWriter writer)
             {
-                foreach (var other in Collection)
-                    other.WriteState(writer);
+                foreach (var client in Collection)
+                    NetworkSerializer.WriteValue(client.Definition, writer);
             }
 
             public void Dispose()

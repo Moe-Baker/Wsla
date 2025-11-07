@@ -40,15 +40,6 @@ namespace Wsla.Unity
         public NetworkAPI API => NetworkAPI.Instance;
         public RoomAPI Room => API.Room;
 
-        public static NetworkClientID ReadID(NetPacketReader reader)
-        {
-            return NetworkSerializer.ReadValue<NetworkClientID>(reader);
-        }
-        public virtual void ReadState(NetPacketReader reader)
-        {
-            Username = NetworkSerializer.ReadValue<FixedString<FS20>>(reader);
-        }
-
         public override string ToString()
         {
             IEnumerable<string> Parts()
@@ -73,9 +64,10 @@ namespace Wsla.Unity
             return builder.ToString();
         }
 
-        public NetworkClient(NetworkClientID ID)
+        public NetworkClient(NetworkClientID ID, FixedString<FS20> Username)
         {
             this.ID = ID;
+            this.Username = Username;
 
             Entities = new(0);
         }
@@ -83,18 +75,8 @@ namespace Wsla.Unity
 
     public class RemoteNetworkClient : NetworkClient
     {
-        public static RemoteNetworkClient ReadInstance(ref NetPacketReader reader)
-        {
-            var id = ReadID(reader);
-
-            var client = new RemoteNetworkClient(id);
-
-            client.ReadState(reader);
-
-            return client;
-        }
-
-        public RemoteNetworkClient(NetworkClientID ID) : base(ID) { }
+        public RemoteNetworkClient(NetworkClientID ID, FixedString<FS20> Username) : base(ID, Username) { }
+        public RemoteNetworkClient(NetworkClientDefinition definition) : this(definition.ID, definition.Username) { }
     }
     public class LocalNetworkClient : NetworkClient
     {
@@ -121,9 +103,10 @@ namespace Wsla.Unity
         }
         #endregion
 
-        public LocalNetworkClient(NetworkClientID ID, int SpawnTokenCapacity) : base(ID)
+        public LocalNetworkClient(NetworkClientID ID, FixedString<FS20> Username, int SpawnTokenCapacity) : base(ID, Username)
         {
             SpawnTokens = new Queue<NetworkEntityID>(SpawnTokenCapacity);
         }
+        public LocalNetworkClient(NetworkClientDefinition definition, int SpawnTokenCapacity) : this(definition.ID, definition.Username, SpawnTokenCapacity) { }
     }
 }

@@ -591,19 +591,17 @@ namespace Wsla.Unity
             {
                 for (int i = 0; i < message.Clients; i++)
                 {
-                    var id = NetworkClient.ReadID(reader);
+                    var definition = NetworkSerializer.ReadValue<NetworkClientDefinition>(reader);
 
                     NetworkClient client;
 
-                    if (id == message.LocalID)
-                        client = Local = new LocalNetworkClient(id, message.SpawnTokens);
+                    if (definition.ID == message.LocalID)
+                        client = Local = new LocalNetworkClient(definition, message.SpawnTokens);
                     else
-                        client = new RemoteNetworkClient(id);
+                        client = new RemoteNetworkClient(definition);
 
-                    if (id == message.MasterID)
+                    if (client.ID == message.MasterID)
                         Master = client;
-
-                    client.ReadState(reader);
 
                     Register(client);
                 }
@@ -619,7 +617,7 @@ namespace Wsla.Unity
 
             void ConnectHandler(ref ClientConnectMessage message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var client = RemoteNetworkClient.ReadInstance(ref reader);
+                var client = new RemoteNetworkClient(message.Client);
 
                 Register(client);
 

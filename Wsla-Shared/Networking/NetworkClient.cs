@@ -41,4 +41,23 @@ namespace Wsla
 
         public static NetworkClientID Increment(NetworkClientID index) => new NetworkClientID((byte)(index.Value + 1));
     }
+
+    [Serializable]
+    public partial struct NetworkClientDefinition : IAutoNetworkSerialization
+    {
+        public NetworkClientID ID;
+        public FixedString<FS20> Username;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref ID);
+            context.Select(ref Username);
+        }
+
+        public NetworkClientDefinition(NetworkClientID ID, FixedString<FS20> Username)
+        {
+            this.ID = ID;
+            this.Username = Username;
+        }
+    }
 }
