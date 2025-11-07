@@ -117,6 +117,50 @@ namespace Wsla
 
             this.TransferToken = TransferToken;
         }
+
+        public ref struct PayloadWriter
+        {
+            readonly INetworkStream Stream;
+
+            public void Write(NetworkEntityDefinition definition)
+            {
+                NetworkSerializer.WriteValue(definition, Stream);
+            }
+
+            public void Dispose() { }
+
+            public PayloadWriter(INetworkStream Stream)
+            {
+                this.Stream = Stream;
+            }
+        }
+        public ref struct PayloadReader
+        {
+            readonly INetworkStream Stream;
+            public int Count { get; }
+
+            int Index;
+
+            public NetworkEntityDefinition Read()
+            {
+                Index += 1;
+                return NetworkSerializer.ReadValue<NetworkEntityDefinition>(Stream);
+            }
+
+            public void Dispose()
+            {
+                if (Count != Index)
+                    throw new InvalidOperationException($"({typeof(PayloadReader).FullName}) Mismatched Read, Read {Index}, Expected {Count}");
+            }
+
+            public PayloadReader(INetworkStream Stream, int Count)
+            {
+                this.Stream = Stream;
+                this.Count = Count;
+
+                Index = 0;
+            }
+        }
     }
 
     public enum NetworkEntityOrigin : byte

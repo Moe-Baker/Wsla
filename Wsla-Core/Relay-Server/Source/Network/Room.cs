@@ -853,10 +853,12 @@ namespace Wsla.Server
                 to.RegisterEntity(entity);
             }
 
-            internal void WriteDefinitions(NetDataWriter writer)
+            internal void WriteDefinitions(NetDataWriter stream)
             {
+                using var payload = new NetworkEntityDefinition.PayloadWriter(stream);
+
                 foreach (var (id, entity) in Dictionary)
-                    entity.WriteDefinition(writer);
+                    payload.Write(entity.Definition);
             }
 
             public void Dispose()

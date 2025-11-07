@@ -30,16 +30,12 @@ namespace Wsla.Server
 
         public NetworkEntityTransferToken TransferToken { get; internal set; }
 
+        public NetworkEntityDefinition Definition => new(ID, Origin, Resource, Authority, Owner.ID, TransferToken);
+
         #region Remote Buffer
         internal RemoteSyncBufferCollection RpcBuffer;
         internal RemoteSyncBufferCollection VariableBuffer;
         #endregion
-
-        public void WriteDefinition(NetDataWriter writer)
-        {
-            var definition = new NetworkEntityDefinition(ID, Origin, Resource, Authority, Owner.ID, TransferToken);
-            NetworkSerializer.WriteValue(in definition, writer);
-        }
 
         public void Dispose()
         {

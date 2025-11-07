@@ -741,11 +741,13 @@ namespace Wsla.Unity
 
             TransportProperty Transport => Room.Transport;
 
-            internal void ReadState(NetPacketReader reader, ClientConnectionResponse message, List<NetworkEntity> list)
+            internal void ReadState(NetPacketReader stream, ClientConnectionResponse message, List<NetworkEntity> list)
             {
-                for (int i = 0; i < message.Entities; i++)
+                using var payload = new NetworkEntityDefinition.PayloadReader(stream, message.Entities);
+
+                for (int i = 0; i < payload.Count; i++)
                 {
-                    var definition = NetworkSerializer.ReadValue<NetworkEntityDefinition>(reader);
+                    var definition = payload.Read();
                     var instance = Assimilate(definition);
                     list.Add(instance);
                 }
