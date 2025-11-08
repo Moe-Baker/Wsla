@@ -1,3 +1,5 @@
+using Cysharp.Threading.Tasks;
+
 using LiteNetLib.Utils;
 
 using System;
@@ -15,14 +17,17 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-using Wsla.Serialization;
-
 namespace Wsla.Unity
 {
     public class NetworkScene : MonoBehaviour
     {
         public NetworkSceneID ID { get; private set; }
+        public NetworkSceneVersion Version { get; private set; }
+
         public int BuildIndex => ID.Value;
+        public Scene UnityScene => gameObject.scene;
+
+        public NetworkSceneDefinition Definition => new(ID, Version);
 
         [field: SerializeField]
         public NetworkEntity[] Locals { get; private set; }
@@ -68,23 +73,6 @@ namespace Wsla.Unity
         public event Action OnDespawn;
         #endregion
 
-        internal void WriteRequest(NetDataWriter stream)
-        {
-            using (var writer = new SpawnSceneRequest.AuthorizationPayload.Writer(stream, (byte)Locals.Length))
-            {
-                foreach (var entity in Locals)
-                {
-                    if (entity.Authority is NetworkEntityAuthorityMode.Explicit)
-                    {
-                        Debug.LogWarning($"Network Entity ({entity.gameObject}) in Scene ({entity.gameObject.scene.name}) Has an {entity.Authority} Authority, Scene Objects Can Only have {NetworkEntityAuthorityMode.Authoritative} & {NetworkEntityAuthorityMode.Transferable} Authority, Switching");
-                        entity.Authority = NetworkEntityAuthorityMode.Authoritative;
-                    }
-
-                    writer.Write(entity.Authority);
-                }
-            }
-        }
-
         internal void Assign(IList<NetworkEntity> source)
         {
             Locals = new NetworkEntity[source.Count];
@@ -94,17 +82,13 @@ namespace Wsla.Unity
 
         void Awake()
         {
-            ID = new NetworkSceneID((byte)gameObject.scene.buildIndex);
-        }
-        void Start()
-        {
-            if (Room is null)
-            {
-                Debug.LogWarning($"Network Scene Loaded Without an Active Room, Having Network Entities on you Main Menu is not Supported!");
-                return;
-            }
+            ID = new NetworkSceneID((byte)UnityScene.buildIndex);
 
-            Room.Scene.Register(this);
+            Manager.Register(this);
+        }
+        void OnDestroy()
+        {
+            Manager.Unregister(this);
         }
 
 #if UNITY_EDITOR
@@ -154,5 +138,109 @@ namespace Wsla.Unity
             }
         }
 #endif
+
+        public static class Manager
+        {
+            static List<NetworkScene> List;
+
+            public static class Loading
+            {
+                static List<Entry> Entries;
+                struct Entry
+                {
+                    public NetworkSceneID ID { get; }
+                    public UniTaskCompletionSource<NetworkScene> Operation { get; }
+
+                    public Entry(NetworkSceneID ID) : this(ID, new()) { }
+                    public Entry(NetworkSceneID ID, UniTaskCompletionSource<NetworkScene> Operation)
+                    {
+                        this.ID = ID;
+                        this.Operation = Operation;
+                    }
+                }
+
+                static void CompleteEntry(NetworkScene scene)
+                {
+                    for (int i = 0; i < Entries.Count; i++)
+                    {
+                        var entry = Entries[i];
+
+                        if (entry.ID != scene.ID)
+                            continue;
+
+                        entry.Operation.TrySetResult(scene);
+                        Entries.RemoveAt(i);
+                        return;
+                    }
+
+                    NetworkLog.Warning($"No Loading Entry Found For Network Scene ({scene}), Network Scenes Can Only Be Loaded Via Network Methods");
+                }
+
+                public static async UniTask<NetworkScene> Load(NetworkSceneID ID, NetworkSceneVersion Version, LoadSceneMode mode)
+                {
+                    var entry = new Entry(ID);
+                    Entries.Add(entry);
+
+                    await SceneManager.LoadSceneAsync(ID.Value, mode).ToUniTask();
+
+                    var scene = await entry.Operation.Task;
+
+                    scene.Version = Version;
+
+                    return scene;
+                }
+
+                static Loading()
+                {
+                    Entries = new(1);
+
+                    OnRegister += CompleteEntry;
+                }
+            }
+            public static class Unloading
+            {
+                public static async UniTask Unload(NetworkScene scene)
+                {
+                    await SceneManager.UnloadSceneAsync(scene.UnityScene).ToUniTask();
+                }
+            }
+
+            public static bool TryGet(NetworkSceneID ID, out NetworkScene instance)
+            {
+                for (int i = 0; i < List.Count; i++)
+                {
+                    instance = List[i];
+
+                    if (instance.ID == ID)
+                        return true;
+                }
+
+                instance = default;
+                return false;
+            }
+
+            internal static void Register(NetworkScene scene)
+            {
+                List.Add(scene);
+
+                OnRegister?.Invoke(scene);
+            }
+            public static event RegistrationDelegate OnRegister;
+
+            internal static void Unregister(NetworkScene scene)
+            {
+                List.Remove(scene);
+
+                OnUnregister?.Invoke(scene);
+            }
+            public static event RegistrationDelegate OnUnregister;
+
+            public delegate void RegistrationDelegate(NetworkScene scene);
+
+            static Manager()
+            {
+                List = new(1);
+            }
+        }
     }
 }

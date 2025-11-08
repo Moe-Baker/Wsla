@@ -53,13 +53,13 @@ public class MainMenu : MonoBehaviour
     {
         var Name = "SAMPLE-ROOM-NAME";
         var Capacity = (byte)3;
-        var Scene = NetworkSceneID.From(1);
+        var Scenes = SparseArray.From(NetworkSceneID.From(1), NetworkSceneID.From(3), NetworkSceneID.From(4));
         var Password = new FixedString<FS20>();
         var Privacy = RoomPrivacy.Public;
         var Lock = RoomLockPolicy.AfterFill;
         var Shutdown = RoomShutdownPolicy.OnMasterDisconnect;
 
-        return new CreateRoomParameters(Name, Capacity, Scene, Password, Privacy, Lock, Shutdown);
+        return new CreateRoomParameters(Name, Capacity, Scenes, Password, Privacy, Lock, Shutdown);
     }
 
     async void PerformOperation(Func<UniTask> operation)
@@ -123,10 +123,10 @@ public class MainMenu : MonoBehaviour
             .Add("Honor", Honor);
 
         var pool = new FixedString<FS20>("mini-games");
-        var scene = NetworkSceneID.From(1);
+        var Scenes = SparseArray.From(NetworkSceneID.From(1), NetworkSceneID.From(3), NetworkSceneID.From(4));
         var regions = SparseArray.From(ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia);
 
-        var response = await NetworkAPI.MatchMaking.FindMatch(pool, scene, regions, parameters: parameters).Operate();
+        var response = await NetworkAPI.MatchMaking.FindMatch(pool, Scenes, regions, parameters: parameters).Operate();
 
         if (response.IsError)
         {

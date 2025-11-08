@@ -91,6 +91,8 @@ namespace Wsla
 
         public NetworkEntityTransferToken TransferToken;
 
+        public NetworkSceneID Scene;
+
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref ID);
@@ -103,9 +105,11 @@ namespace Wsla
 
             if (Authority is NetworkEntityAuthorityMode.Transferable)
                 context.Select(ref TransferToken);
+
+            context.Select(ref Scene);
         }
 
-        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkEntityTransferToken TransferToken)
+        public NetworkEntityDefinition(NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkEntityTransferToken TransferToken, NetworkSceneID Scene)
         {
             this.ID = ID;
             this.Origin = Origin;
@@ -116,6 +120,8 @@ namespace Wsla
             this.Owner = Owner;
 
             this.TransferToken = TransferToken;
+
+            this.Scene = Scene;
         }
 
         public ref struct PayloadWriter

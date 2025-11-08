@@ -10,7 +10,7 @@ namespace Wsla.Server
         StartMatchMakingRequest Request;
         public ref MatchMakingParameters Parameters => ref Request.Parameters;
         public ref SparseArray<ServerRegion> Regions => ref Request.Regions;
-        public ref NetworkSceneID Scene => ref Request.Scene;
+        public ref SparseArray<NetworkSceneID> Scenes => ref Request.Scenes;
 
         readonly DateTime Timestamp;
         public TimeSpan CalculateAge() => (TimeNow - Timestamp).Duration();

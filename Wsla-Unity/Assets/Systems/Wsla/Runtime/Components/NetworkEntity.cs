@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using Toolbox;
 
 using UnityEngine;
+using UnityEngine.SceneManagement;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -70,6 +72,13 @@ namespace Wsla.Unity
 
         [field: SerializeField]
         public NetworkEntityAuthorityMode Authority { get; internal set; }
+
+        public NetworkScene Scene { get; private set; }
+        public void SetNetworkScene(NetworkScene value)
+        {
+            Scene = value;
+            SceneManager.MoveGameObjectToScene(gameObject, Scene.UnityScene);
+        }
 
         /// <summary>
         /// The default groups that this entity will output data (RPCs) to

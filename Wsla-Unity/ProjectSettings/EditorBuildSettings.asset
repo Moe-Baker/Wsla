@@ -9,8 +9,17 @@ EditorBuildSettings:
     path: Assets/Systems/Wsla-Sample/Objects/Main Menu/Main Menu.unity
     guid: ed2011ff05a2f384481e6831b6c04882
   - enabled: 1
-    path: Assets/Systems/Wsla-Sample/Objects/Level/Level.unity
+    path: Assets/Systems/Wsla-Sample/Objects/Level/Level 1.unity
     guid: f0400f4b5f556dd41bf04cc99118c4b7
+  - enabled: 1
+    path: Assets/Systems/Wsla-Sample/Objects/Level/Level 2.unity
+    guid: 403b332798208184fb01040c441bd579
+  - enabled: 1
+    path: Assets/Systems/Wsla-Sample/Objects/Level/Additive 1/Additive 1.unity
+    guid: b78086f95fd1ee94db7e9887bbf0b668
+  - enabled: 1
+    path: Assets/Systems/Wsla-Sample/Objects/Level/Additive 1/Additive 2.unity
+    guid: 1591e2064ff7b5a41998a276498cc879
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

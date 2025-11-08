@@ -122,6 +122,7 @@ public partial class Level : NetworkBehaviour
         var ticket = Network.Room.Entities.Spawn()
             .SetPrefab(PlayerPrefab)
             .SetAuthority(NetworkEntityAuthorityMode.Explicit)
+            .SetScene(Network.Entity.Scene)
             .Ticket();
 
         //Set Position

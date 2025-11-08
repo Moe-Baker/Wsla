@@ -65,7 +65,7 @@ namespace Wsla.Unity
                 Clients.Groups = request.Groups;
 
                 Entities = new EntitiesProperty(this);
-                Scene = new SceneProperty(this);
+                Scenes = new ScenesProperty(this);
                 RPCs = new RpcsProperty(this);
                 Variables = new VariablesProperty(this);
             }
@@ -115,7 +115,7 @@ namespace Wsla.Unity
                 Transport = default;
                 Clients = default;
                 Entities = default;
-                Scene = default;
+                Scenes = default;
                 RPCs = default;
                 Variables = default;
                 Time = default;
@@ -760,27 +760,28 @@ namespace Wsla.Unity
             }
 
             #region Controls
-            public NetworkEntity InstantiatePrefab(GameObject prefab)
-            {
-                if (Room.API.SyncedPrefabs.TryGet(prefab, out var resource) is false)
-                    throw new ArgumentException($"prefab {prefab} not Registered as Sync Prefab");
-
-                return InstantiatePrefab(prefab, resource);
-            }
-            public NetworkEntity InstantiatePrefab(NetworkResourceID resource)
+            public NetworkEntity InstantiatePrefab(NetworkResourceID resource, NetworkScene scene)
             {
                 if (Room.API.SyncedPrefabs.TryGet(resource, out var prefab) is false)
                     throw new ArgumentOutOfRangeException($"resource {resource} not Registered as Sync Prefab");
 
-                return InstantiatePrefab(prefab, resource);
+                return InstantiatePrefab(prefab, resource, scene);
             }
-            NetworkEntity InstantiatePrefab(GameObject prefab, NetworkResourceID resource)
+            public NetworkEntity InstantiatePrefab(GameObject prefab, NetworkScene scene)
+            {
+                if (Room.API.SyncedPrefabs.TryGet(prefab, out var resource) is false)
+                    throw new ArgumentException($"prefab {prefab} not Registered as Sync Prefab");
+
+                return InstantiatePrefab(prefab, resource, scene);
+            }
+            NetworkEntity InstantiatePrefab(GameObject prefab, NetworkResourceID resource, NetworkScene scene)
             {
                 var gameObject = GameObject.Instantiate(prefab).GetComponent<NetworkEntity>();
 
                 if (gameObject.TryGetComponent(out NetworkEntity entity) is false)
                     throw new ArgumentException($"Synced Prefab ({prefab}) Has no NetworkEntity Component Attached");
 
+                entity.SetNetworkScene(scene);
                 entity.SetResource(resource);
                 entity.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
 
@@ -851,7 +852,7 @@ namespace Wsla.Unity
 
             void SpawnPrefabCommandHandler(ref SpawnPrefabEntityCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner, NetworkEntityTransferToken.Zero);
+                var definition = new NetworkEntityDefinition(message.ID, NetworkEntityOrigin.Prefab, message.Resource, message.Authority, message.Owner, NetworkEntityTransferToken.Zero, message.Scene);
 
                 var instance = Assimilate(definition);
 
@@ -941,9 +942,9 @@ namespace Wsla.Unity
 
             internal NetworkEntity SpawnLocal(ref EntitySpawnOptions options)
             {
-                var entity = options.Instance;
+                var entity = options.EntityInstance;
 
-                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, entity.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero);
+                var definition = new NetworkEntityDefinition(options.Token, NetworkEntityOrigin.Prefab, entity.Resource, options.Authority, Room.Clients.Local.ID, NetworkEntityTransferToken.Zero, options.Scene.ID);
 
                 entity.Assign(definition);
                 Register(entity);
@@ -955,22 +956,28 @@ namespace Wsla.Unity
 
             NetworkEntity RetrieveInstance(NetworkEntityDefinition definition)
             {
+                if (NetworkScene.Manager.TryGet(definition.Scene, out var scene) is false)
+                    throw new ArgumentException($"No Network Scene With ID {definition.Scene} Found");
+
                 switch (definition.Origin)
                 {
                     case NetworkEntityOrigin.Prefab:
-                        return InstantiatePrefab(definition.Resource);
+                        return InstantiatePrefab(definition.Resource, scene);
 
                     case NetworkEntityOrigin.Scene:
-                        return FindInScene(definition.Resource);
+                        return FindInScene(scene, definition.Resource);
 
                     default:
                         throw new NotImplementedException();
                 }
+
             }
-            NetworkEntity FindInScene(NetworkResourceID resource)
+            NetworkEntity FindInScene(NetworkScene scene, NetworkResourceID resource)
             {
-                if (Room.Scene.Component.TryGetLocal(resource, out var entity) is false)
-                    throw new ArgumentException($"No Resource {resource} found in Scene {Room.Scene.Component}");
+                if (scene.TryGetLocal(resource, out var entity) is false)
+                    throw new ArgumentException($"No Resource {resource} found in Scene {scene}");
+
+                entity.SetNetworkScene(scene);
 
                 return entity;
             }
@@ -1022,6 +1029,21 @@ namespace Wsla.Unity
 
                 foreach (var (id, entity) in Dictionary)
                     list.Add(entity);
+
+                foreach (var entity in list)
+                    InvokeDespawn(entity);
+            }
+            internal void DespawnScene(NetworkScene scene)
+            {
+                var list = Room.Pools.EntityList.Take();
+
+                foreach (var (id, entity) in Dictionary)
+                {
+                    if (entity.Scene != scene)
+                        continue;
+
+                    list.Add(entity);
+                }
 
                 foreach (var entity in list)
                     InvokeDespawn(entity);
@@ -1221,135 +1243,267 @@ namespace Wsla.Unity
             }
         }
 
-        public SceneProperty Scene { get; private set; }
-        public class SceneProperty
+        public ScenesProperty Scenes { get; private set; }
+        public class ScenesProperty
         {
-            public NetworkSceneID ID { get; private set; }
-            public int BuildIndex => ID.Value;
-
-            public NetworkSceneVersion Version { get; private set; }
-            public bool IsSpawned { get; private set; }
-
-            public NetworkScene Component { get; private set; }
-
-            AsyncOperation Operation;
-
-            public bool IsRegistered => Component != null;
-            public void Register(NetworkScene Component)
+            List<NetworkScene> Collection;
+            public NetworkScene Active => Collection[0];
+            byte CountUnspawnedScenes()
             {
-                this.Component = Component;
+                byte count = 0;
 
-                OnRegister?.Invoke();
+                foreach (var scene in Collection)
+                    if (scene.IsSpawned is false)
+                        count += 1;
+
+                return count;
             }
-            public event Action OnRegister;
-
-            internal UniTask ApplyState(NetworkSceneDefinition definition)
+            public bool TryGet(NetworkSceneID ID, out NetworkScene instance)
             {
-                ID = definition.ID;
-                Version = definition.Version;
-                IsSpawned = definition.IsSpawned;
+                for (int i = 0; i < Collection.Count; i++)
+                {
+                    instance = Collection[i];
 
-                return ChangeProcedure(ID, Version);
+                    if (instance.ID == ID)
+                        return true;
+                }
+
+                instance = default;
+                return false;
+            }
+            public bool Contains(NetworkSceneID ID)
+            {
+                for (int i = 0; i < Collection.Count; i++)
+                {
+                    if (Collection[i].ID == ID)
+                        return true;
+                }
+
+                return false;
             }
 
-            public void Change(NetworkSceneID target)
+            internal async UniTask ApplyState(ClientConnectionResponse response)
+            {
+                for (int i = 0; i < response.Scenes.Length; i++)
+                {
+                    var definition = response.Scenes[i];
+                    var mode = (i == 0) ? LoadSceneMode.Single : LoadSceneMode.Additive;
+
+                    var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode);
+                    Collection.Add(instance);
+                }
+            }
+            internal void RequestSpawn()
+            {
+                var SceneCount = CountUnspawnedScenes();
+                if (SceneCount is 0)
+                {
+                    NetworkLog.Warning($"No Unspawned Network Scenes Found");
+                    return;
+                }
+
+                var writer = Room.Pools.SinglePackerWriter.Take();
+
+                var message = new SpawnSceneRequest();
+                NetworkSerializer.WriteHeader(in message, writer);
+
+                using var ScenesWriter = new SpawnSceneRequest.AuthorizationPayload.SceneWriter(writer, SceneCount);
+                foreach (var scene in Collection)
+                {
+                    if (scene.IsSpawned)
+                        continue;
+
+                    using var EntryWriter = ScenesWriter.Write(scene.ID, (byte)scene.Locals.Length);
+
+                    foreach (var entity in scene.Locals)
+                    {
+                        if (entity.Authority is NetworkEntityAuthorityMode.Explicit)
+                        {
+                            NetworkLog.Warning($"Network Entity ({entity.gameObject}) in Scene ({entity.gameObject.scene.name}) Has an {entity.Authority} Authority, Scene Objects Can Only have {NetworkEntityAuthorityMode.Authoritative} & {NetworkEntityAuthorityMode.Transferable} Authority, Switching");
+                            entity.Authority = NetworkEntityAuthorityMode.Authoritative;
+                        }
+
+                        EntryWriter.Write(entity.Authority);
+                    }
+                }
+
+                Room.Transport.SendWriter(writer);
+            }
+            internal void SpawnAll()
+            {
+                //Locally Spawn All Remote Spawned Scenes 
+                foreach (var scene in Collection)
+                    if (scene.IsSpawned)
+                        scene.Spawn();
+
+                //Remotely Spawn All UnSpawned Scenes
+                if (Room.Clients.Local.IsMaster && CountUnspawnedScenes() > 0)
+                    RequestSpawn();
+            }
+
+            #region Controls
+            public void Change(SparseArray<NetworkSceneID> targets)
             {
                 if (Room.Clients.Local.IsMaster is false)
                     throw new InvalidOperationException($"Only the Master Client can Change Scenes");
 
-                var request = new ChangeSceneRequest(target);
+                if (targets.Length is 0)
+                    throw new ArgumentException($"Zero Target Scenes Modifications Provided");
+
+                var request = new ChangeSceneRequest(targets);
                 Room.Transport.SendData(in request);
             }
 
+            public void Modify(SparseArray<NetworkSceneID> unload, SparseArray<NetworkSceneID> load)
+            {
+                if (Room.Clients.Local.IsMaster is false)
+                    throw new InvalidOperationException($"Only the Master Client can Change Scenes");
+
+                if (unload.Length is 0 && load.Length is 0)
+                    throw new ArgumentException($"Zero Unload/Load Scenes Modifications Provided");
+
+                //Validate Unload
+                foreach (var entry in unload)
+                {
+                    if (Contains(entry) is false)
+                        throw new ArgumentException($"Can't Unload Scene {entry}, Scene Not Loaded");
+                }
+
+                if (unload.Length == Collection.Count)
+                {
+                    NetworkLog.Warning($"Scene Modification For Unloading All Scenes Are Inefficient, Send A Scene Change Request Instead");
+                    Change(load);
+                }
+                else
+                {
+                    //Validate Load
+                    foreach (var entry in load)
+                    {
+                        if (Contains(entry))
+                            throw new ArgumentException($"Can't Load Scene {entry}, Scene Already Loaded");
+                    }
+
+                    var request = new ModifyScenesRequest(unload, load);
+                    Room.Transport.SendData(in request);
+                }
+            }
+            public void Load(SparseArray<NetworkSceneID> scenes) => Modify(default, scenes);
+            public void Unload(SparseArray<NetworkSceneID> scenes) => Modify(scenes, default);
+            #endregion
+
             async UniTask ChangeCommandHandler(ChangeSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                NetworkLog.Trace($"Changing Scene From (ID: {ID}, Version: {Version}) To (ID: {message.ID}, Version: {message.Version})");
+                NetworkLog.Trace($"Changing Scenes");
 
                 Room.Transport.Listener.Pause();
                 {
+                    //Despawn All Entities
                     Room.Entities.DespawnAll();
 
-                    await ChangeProcedure(message.ID, message.Version);
+                    //Clear Old Scenes
+                    {
+                        foreach (var scene in Collection)
+                            scene.Despawn();
+
+                        Collection.Clear();
+                    }
+
+                    //Load New Scenes
+                    for (int i = 0; i < message.Scenes.Length; i++)
+                    {
+                        var definition = message.Scenes[i];
+                        var mode = (i == 0) ? LoadSceneMode.Single : LoadSceneMode.Additive;
+
+                        var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode);
+                        Collection.Add(instance);
+                    }
 
                     if (Room.Clients.Local.IsMaster)
                         RequestSpawn();
                 }
                 Room.Transport.Listener.Resume();
             }
-
-            public async UniTask ChangeProcedure(NetworkSceneID ID, NetworkSceneVersion Version)
+            async UniTask ModifyCommandHandler(ModifyScenesCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                this.ID = ID;
-                this.Version = Version;
+                NetworkLog.Trace("Modifying Scenes");
 
-                if (IsRegistered)
-                    Component.Despawn();
+                Room.Transport.Listener.Pause();
+                {
+                    //Unload
+                    {
+                        for (int i = 0; i < message.Unload.Length; i++)
+                        {
+                            var id = message.Unload[i];
 
-                Operation = SceneManager.LoadSceneAsync(BuildIndex);
-                await Operation;
+                            if (TryGet(id, out var instance) is false)
+                                throw new InvalidOperationException($"No Scene {id} Found To Unload");
 
-                while (IsRegistered is false)
-                    await UniTask.NextFrame();
+                            Room.Entities.DespawnScene(instance);
+                            Collection.Remove(instance);
+
+                            await NetworkScene.Manager.Unloading.Unload(instance);
+                        }
+                    }
+
+                    //Load
+                    {
+                        for (int i = 0; i < message.Load.Length; i++)
+                        {
+                            var definition = message.Load[i];
+                            var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, LoadSceneMode.Additive);
+                            Collection.Add(instance);
+                        }
+
+                        if (Room.Clients.Local.IsMaster)
+                            RequestSpawn();
+                    }
+                }
+                Room.Transport.Listener.Resume();
             }
-
-            internal void RequestSpawn()
-            {
-                var writer = Room.Pools.SinglePackerWriter.Take();
-
-                var message = new SpawnSceneRequest();
-                NetworkSerializer.WriteHeader(in message, writer);
-
-                Component.WriteRequest(writer);
-
-                Room.Transport.SendWriter(writer);
-            }
-            internal void InvokeSpawn()
-            {
-                Component.Spawn();
-            }
-
-            internal void ApplyState()
-            {
-                if (IsSpawned)
-                    InvokeSpawn();
-                else if (Room.Clients.Local.IsMaster)
-                    RequestSpawn();
-            }
-
             void SpawnSceneCommandHandler(ref SpawnSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
-                var component = Room.Scene.Component;
+                using var ScenesReader = new SpawnSceneCommand.EntityIDPayload.SceneReader(reader);
 
-                using var payload = new SpawnSceneCommand.EntityIDPayload.Reader(reader, (byte)Room.Scene.Component.Locals.Length);
-                for (byte i = 0; i < payload.Count; i++)
+                for (byte x = 0; x < ScenesReader.Count; x++)
                 {
-                    var entity = component.Locals[i];
+                    using var EntryReader = ScenesReader.Read();
 
-                    var id = payload.Read();
-                    var resource = new NetworkResourceID(i);
-                    var authority = component.Locals[i].Authority;
-                    var ownerID = Room.Clients.Master.ID;
+                    if (TryGet(EntryReader.Scene, out var instance) is false)
+                        throw new InvalidOperationException($"No Scene {EntryReader.Scene} Found to Spawn");
 
-                    var transferToken = NetworkEntityTransferToken.Zero;
+                    for (byte y = 0; y < EntryReader.Count; y++)
+                    {
+                        var id = EntryReader.Read();
+                        var entity = instance.Locals[y];
+                        var resource = new NetworkResourceID(y);
+                        var authority = entity.Authority;
+                        var ownerID = Room.Clients.Master.ID;
+                        var transferToken = NetworkEntityTransferToken.Zero;
 
-                    var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID, transferToken);
+                        var definition = new NetworkEntityDefinition(id, NetworkEntityOrigin.Scene, resource, authority, ownerID, transferToken, instance.ID);
+                        entity.Assign(definition);
 
-                    entity.Assign(definition);
-                    Room.Entities.Register(entity);
+                        entity.SetNetworkScene(instance);
+                        Room.Entities.Register(entity);
 
-                    entity.Spawn();
-                    entity.Replicate();
+                        entity.Spawn();
+                        entity.Replicate();
+                    }
+
+                    instance.Spawn();
                 }
-
-                InvokeSpawn();
             }
 
             readonly RoomAPI Room;
-            public SceneProperty(RoomAPI Room)
+            public ScenesProperty(RoomAPI Room)
             {
                 this.Room = Room;
 
+                Collection = new(1);
+
                 Room.Transport.Dispatcher.RegisterAsync<ChangeSceneCommand>(ChangeCommandHandler);
+                Room.Transport.Dispatcher.RegisterAsync<ModifyScenesCommand>(ModifyCommandHandler);
+
                 Room.Transport.Dispatcher.Register<SpawnSceneCommand>(SpawnSceneCommandHandler);
             }
         }
@@ -1365,7 +1519,7 @@ namespace Wsla.Unity
                 Clients.Local.ReadSpawnTokens(reader, message);
 
                 //Sync Scenes
-                await Scene.ApplyState(message.Scene);
+                await Scenes.ApplyState(message);
 
                 var entities = Pools.EntityList.Take();
 
@@ -1386,7 +1540,7 @@ namespace Wsla.Unity
                 }
 
                 //Apply Scene State (Spawn if Spawned, else Request if Master)
-                Scene.ApplyState();
+                Scenes.SpawnAll();
             }
             Transport.Listener.Resume();
         }
@@ -1395,27 +1549,25 @@ namespace Wsla.Unity
     public ref struct EntitySpawnOptions
     {
         internal NetworkEntityID Token;
-        internal NetworkEntity Instance;
         internal NetworkEntityAuthorityMode Authority;
+        internal NetworkScene Scene;
+
+        internal GameObject EntityPrefab;
+        internal NetworkEntity EntityInstance;
 
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;
 
-        public EntitySpawnOptions SetResource(NetworkResourceID resource)
+        public EntitySpawnOptions SetResource(NetworkResourceID value)
         {
-            var instance = Room.Entities.InstantiatePrefab(resource);
-            SetInstance(instance);
+            if (Room.API.SyncedPrefabs.TryGet(value, out EntityPrefab) is false)
+                throw new ArgumentException($"No Synced Prefab Found With ID {value}");
+
             return this;
         }
-        public EntitySpawnOptions SetPrefab(GameObject prefab)
+        public EntitySpawnOptions SetPrefab(GameObject value)
         {
-            var instance = Room.Entities.InstantiatePrefab(prefab);
-            SetInstance(instance);
-            return this;
-        }
-        public EntitySpawnOptions SetInstance(NetworkEntity value)
-        {
-            Instance = value;
+            EntityPrefab = value;
             return this;
         }
 
@@ -1431,6 +1583,22 @@ namespace Wsla.Unity
             return this;
         }
 
+        public EntitySpawnOptions SetScene(NetworkSceneID id)
+        {
+            if (API.Room.Scenes.TryGet(id, out var instance) is false)
+                throw new ArgumentException($"No Scene {id} Loaded");
+
+            return SetScene(instance);
+        }
+        public EntitySpawnOptions SetScene(NetworkScene value)
+        {
+            if (value == null)
+                throw new ArgumentNullException("scene");
+
+            Scene = value;
+            return this;
+        }
+
         bool Validate()
         {
             if (Room.Clients.Local.SpawnAllowance is 0)
@@ -1439,7 +1607,7 @@ namespace Wsla.Unity
                 return false;
             }
 
-            if (Instance == null)
+            if (EntityInstance == null)
             {
                 NetworkLog.Error($"No Entity (Resource/Prefab/Instance) Specified");
                 return false;
@@ -1450,6 +1618,8 @@ namespace Wsla.Unity
 
         public EntitySpawnTicket Ticket()
         {
+            EntityInstance = Room.Entities.InstantiatePrefab(EntityPrefab, Scene);
+
             if (Validate() is false)
                 throw new InvalidOperationException($"Invalid Spawn Options");
 
@@ -1460,11 +1630,12 @@ namespace Wsla.Unity
 
         public NetworkEntity Send() => Ticket().Send();
 
-        internal SpawnPrefabEntityRequest CreateSpawnRequest() => new SpawnPrefabEntityRequest(Token, Instance.Resource, Authority, Room.Scene.Version);
+        internal SpawnPrefabEntityRequest CreateSpawnRequest() => new SpawnPrefabEntityRequest(Token, EntityInstance.Resource, Authority, Scene.Definition);
 
         public static EntitySpawnOptions CreateDefault() => new EntitySpawnOptions()
         {
             Authority = NetworkEntityAuthorityMode.Explicit,
+            Scene = Room.Scenes.Active,
         };
     }
     public ref struct EntitySpawnTicket
@@ -1472,7 +1643,7 @@ namespace Wsla.Unity
         EntitySpawnOptions Options;
         NetDataWriter Stream;
 
-        public NetworkEntity Entity => Options.Instance;
+        public NetworkEntity Entity => Options.EntityInstance;
 
         static NetworkAPI API => NetworkAPI.Instance;
         static RoomAPI Room => API.Room;

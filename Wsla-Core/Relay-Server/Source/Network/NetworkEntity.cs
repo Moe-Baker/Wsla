@@ -1,8 +1,4 @@
-﻿using LiteNetLib.Utils;
-
-using System;
-
-using Wsla.Serialization;
+﻿using System;
 
 namespace Wsla.Server
 {
@@ -30,7 +26,9 @@ namespace Wsla.Server
 
         public NetworkEntityTransferToken TransferToken { get; internal set; }
 
-        public NetworkEntityDefinition Definition => new(ID, Origin, Resource, Authority, Owner.ID, TransferToken);
+        public NetworkScene Scene { get; private set; }
+
+        public NetworkEntityDefinition Definition => new(ID, Origin, Resource, Authority, Owner.ID, TransferToken, Scene.ID);
 
         #region Remote Buffer
         internal RemoteSyncBufferCollection RpcBuffer;
@@ -46,7 +44,7 @@ namespace Wsla.Server
         public override string ToString() => $"(ID: {ID})";
 
         readonly Room Room;
-        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority)
+        public NetworkEntity(Room Room, NetworkEntityID ID, NetworkEntityOrigin Origin, NetworkResourceID Resource, NetworkClient Owner, NetworkEntityAuthorityMode Authority, NetworkScene Scene)
         {
             this.Room = Room;
             this.ID = ID;
@@ -57,6 +55,8 @@ namespace Wsla.Server
             this.Owner = Owner;
 
             this.Authority = Authority;
+
+            this.Scene = Scene;
 
             RpcBuffer = new(Room);
             VariableBuffer = new(Room);

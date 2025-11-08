@@ -141,7 +141,7 @@ namespace Wsla
     {
         public FixedString<FS20> Name;
         public byte Capacity;
-        public NetworkSceneID Scene;
+        public SparseArray<NetworkSceneID> Scenes;
         public FixedString<FS20> Password;
         public RoomPrivacy Privacy;
         public RoomLockPolicy Lock;
@@ -151,18 +151,18 @@ namespace Wsla
         {
             context.Select(ref Name);
             context.Select(ref Capacity);
-            context.Select(ref Scene);
+            context.Select(ref Scenes);
             context.Select(ref Password);
             context.Select(ref Privacy);
             context.Select(ref Lock);
             context.Select(ref Shutdown);
         }
 
-        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, NetworkSceneID Scene, FixedString<FS20> Password, RoomPrivacy Privacy, RoomLockPolicy Lock, RoomShutdownPolicy Shutdown)
+        public CreateRoomParameters(FixedString<FS20> Name, byte Capacity, SparseArray<NetworkSceneID> Scenes, FixedString<FS20> Password, RoomPrivacy Privacy, RoomLockPolicy Lock, RoomShutdownPolicy Shutdown)
         {
             this.Name = Name;
             this.Capacity = Capacity;
-            this.Scene = Scene;
+            this.Scenes = Scenes;
             this.Password = Password;
             this.Privacy = Privacy;
             this.Lock = Lock;

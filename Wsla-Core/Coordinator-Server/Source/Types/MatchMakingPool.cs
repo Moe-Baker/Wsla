@@ -289,12 +289,12 @@ namespace Wsla.Server
         public CreateRoomParameters CalculateRoomParameters()
         {
             var Capacity = Pool.Backfill ? Pool.Configuration.Capacity.Max : Count;
-            var Scene = GetOldestTicket().Scene;
+            var Scenes = GetOldestTicket().Scenes;
             var Privacy = Pool.Backfill ? RoomPrivacy.Public : RoomPrivacy.Private;
             var Lock = Pool.Backfill ? RoomLockPolicy.None : RoomLockPolicy.AfterFill;
             var Shutdown = Pool.Configuration.ShutdownPolicy;
 
-            return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scene, Password: default, Privacy, Lock, Shutdown);
+            return new CreateRoomParameters(Pool.Configuration.Name, Capacity, Scenes, Password: default, Privacy, Lock, Shutdown);
         }
 
         public void AcceptAll(RoomConnectionInfo info)

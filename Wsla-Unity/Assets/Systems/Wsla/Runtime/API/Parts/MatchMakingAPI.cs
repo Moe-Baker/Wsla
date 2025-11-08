@@ -70,7 +70,7 @@ namespace Wsla.Unity
             return response.Value;
         }
 
-        public MatchMakingTicket FindMatch(FixedString<FS20> pool, NetworkSceneID scene, SparseArray<ServerRegion> regions, MatchMakingParameters parameters = default, CancellationToken cancellation = default)
+        public MatchMakingTicket FindMatch(FixedString<FS20> pool, SparseArray<NetworkSceneID> scene, SparseArray<ServerRegion> regions, MatchMakingParameters parameters = default, CancellationToken cancellation = default)
         {
             return new MatchMakingTicket(pool, regions, scene, parameters, cancellation);
         }
@@ -80,7 +80,7 @@ namespace Wsla.Unity
     {
         readonly SparseArray<ServerRegion> Regions;
         readonly FixedString<FS20> PoolName;
-        readonly NetworkSceneID Scene;
+        readonly SparseArray<NetworkSceneID> Scene;
         readonly MatchMakingParameters Parameters;
 
         MessagingClient Client;
@@ -167,7 +167,7 @@ namespace Wsla.Unity
             Operation.TrySetResult(WslaError.From(WslaErrorCode.TransportFailure));
         }
 
-        public MatchMakingTicket(FixedString<FS20> PoolName, SparseArray<ServerRegion> Regions, NetworkSceneID Scene, MatchMakingParameters Parameters, CancellationToken CancellationToken)
+        public MatchMakingTicket(FixedString<FS20> PoolName, SparseArray<ServerRegion> Regions, SparseArray<NetworkSceneID> Scene, MatchMakingParameters Parameters, CancellationToken CancellationToken)
         {
             this.Regions = Regions;
             this.PoolName = PoolName;

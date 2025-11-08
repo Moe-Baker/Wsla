@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 
 using Wsla.Serialization;
 
 namespace Wsla
 {
+    #region Client Connection
     public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
         public FixedString<FS20> Username;
@@ -45,7 +44,7 @@ namespace Wsla
         public byte SpawnTokens;
         public ushort Entities;
 
-        public NetworkSceneDefinition Scene;
+        public SparseArray<NetworkSceneState> Scenes;
 
         public override string ToString() => $"(ClientID: {LocalID})";
 
@@ -60,10 +59,10 @@ namespace Wsla
             context.Select(ref SpawnTokens);
             context.Select(ref Entities);
 
-            context.Select(ref Scene);
+            context.Select(ref Scenes);
         }
 
-        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, RoomTimeResponse TimeResponse, byte Clients, byte SpawnTokens, ushort Entities, NetworkSceneDefinition Scene)
+        public ClientConnectionResponse(NetworkClientID LocalID, NetworkClientID MasterID, RoomTimeResponse TimeResponse, byte Clients, byte SpawnTokens, ushort Entities, SparseArray<NetworkSceneState> Scenes)
         {
             this.LocalID = LocalID;
             this.MasterID = MasterID;
@@ -74,7 +73,7 @@ namespace Wsla
             this.SpawnTokens = SpawnTokens;
             this.Entities = Entities;
 
-            this.Scene = Scene;
+            this.Scenes = Scenes;
         }
 
         public static class SpawnTokenPayload
@@ -124,7 +123,9 @@ namespace Wsla
             }
         }
     }
+    #endregion
 
+    #region Client Connected/Disconnected
     public struct ClientConnectMessage : IAutoNetworkSerialization
     {
         public NetworkClientDefinition Client;
@@ -220,7 +221,9 @@ namespace Wsla
             }
         }
     }
+    #endregion
 
+    #region Spawn Prefab
     [NetworkBlittable]
     public struct SpawnPrefabEntityRequest
     {
@@ -229,9 +232,9 @@ namespace Wsla
 
         public NetworkEntityAuthorityMode Authority;
 
-        public NetworkSceneVersion Scene;
+        public NetworkSceneDefinition Scene;
 
-        public SpawnPrefabEntityRequest(NetworkEntityID SpawnToken, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkSceneVersion Scene)
+        public SpawnPrefabEntityRequest(NetworkEntityID SpawnToken, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkSceneDefinition Scene)
         {
             this.SpawnToken = SpawnToken;
 
@@ -352,6 +355,8 @@ namespace Wsla
         public NetworkEntityAuthorityMode Authority;
         public NetworkClientID Owner;
 
+        public NetworkSceneID Scene;
+
         public void Select(ref AutoSerializationContext context)
         {
             context.Select(ref ID);
@@ -360,149 +365,22 @@ namespace Wsla
             context.Select(ref Authority);
             if (Authority is not NetworkEntityAuthorityMode.Authoritative)
                 context.Select(ref Owner);
+
+            context.Select(ref Scene);
         }
 
-        public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner)
+        public SpawnPrefabEntityCommand(NetworkEntityID ID, NetworkResourceID Resource, NetworkEntityAuthorityMode Authority, NetworkClientID Owner, NetworkSceneID Scene)
         {
             this.ID = ID;
             this.Resource = Resource;
             this.Authority = Authority;
             this.Owner = Owner;
+            this.Scene = Scene;
         }
     }
+    #endregion
 
-    [NetworkBlittable]
-    public struct SpawnSceneRequest
-    {
-        public class AuthorizationPayload
-        {
-            public ref struct Writer
-            {
-                readonly INetworkStream Stream;
-                readonly byte Capacity;
-
-                byte Counter;
-
-                public void Write(NetworkEntityAuthorityMode ID)
-                {
-                    Counter += 1;
-
-                    NetworkSerializer.WriteValue(ID, Stream);
-                }
-
-                public void Dispose()
-                {
-                    if (Capacity != Counter)
-                        throw new InvalidOperationException($"Not Enough Entities Written, Expected {Capacity}, Got {Counter}");
-                }
-
-                public Writer(INetworkStream Stream, byte Capacity)
-                {
-                    this.Stream = Stream;
-                    this.Capacity = Capacity;
-                    Counter = 0;
-
-                    NetworkSerializer.WriteValue(Capacity, Stream);
-                }
-            }
-            public ref struct Reader
-            {
-                readonly INetworkStream Stream;
-                public byte Count { get; }
-
-                byte Index;
-
-                public NetworkEntityAuthorityMode Read()
-                {
-                    Index += 1;
-                    return NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(Stream);
-                }
-
-                public void Dispose()
-                {
-                    if (Count != Index)
-                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Didn't Read All Data, Read {Index}, Total: {Count}");
-
-                    if (Stream.Available > 0)
-                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Still Contains {Stream.Available} Bytes After Reading All ({Count}) Entities");
-                }
-
-                public Reader(INetworkStream Stream)
-                {
-                    this.Stream = Stream;
-                    Count = NetworkSerializer.ReadValue<byte>(Stream);
-
-                    Index = default;
-                }
-            }
-        }
-    }
-
-    [NetworkBlittable]
-    public struct SpawnSceneCommand
-    {
-        public class EntityIDPayload
-        {
-            public ref struct Writer
-            {
-                readonly INetworkStream Stream;
-                readonly byte Capacity;
-
-                byte Counter;
-
-                public void Write(NetworkEntityID ID)
-                {
-                    Counter += 1;
-
-                    NetworkSerializer.WriteValue(ID, Stream);
-                }
-
-                public void Dispose()
-                {
-                    if (Capacity != Counter)
-                        throw new InvalidOperationException($"Not Enough Entities Written, Expected {Capacity}, Got {Counter}");
-                }
-
-                public Writer(INetworkStream Stream, byte Capacity)
-                {
-                    this.Stream = Stream;
-                    this.Capacity = Capacity;
-                    Counter = 0;
-                }
-            }
-            public ref struct Reader
-            {
-                readonly INetworkStream Stream;
-                public byte Count { get; }
-
-                byte Index;
-
-                public NetworkEntityID Read()
-                {
-                    Index += 1;
-                    return NetworkSerializer.ReadValue<NetworkEntityID>(Stream);
-                }
-
-                public void Dispose()
-                {
-                    if (Count != Index)
-                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Didn't Read All Data, Read {Index}, Total: {Count}");
-
-                    if (Stream.Available > 0)
-                        throw new InvalidOperationException($"({typeof(Reader).FullName}) Still Contains {Stream.Available} Bytes After Reading All ({Count}) Entities");
-                }
-
-                public Reader(INetworkStream Stream, byte Count)
-                {
-                    this.Stream = Stream;
-                    this.Count = Count;
-
-                    Index = default;
-                }
-            }
-        }
-    }
-
+    #region Despawn Entity
     [NetworkBlittable]
     public struct DespawnEntityRequest
     {
@@ -523,31 +401,250 @@ namespace Wsla
             this.ID = ID;
         }
     }
+    #endregion
 
+    #region Spawn Scene
     [NetworkBlittable]
-    public struct ChangeSceneRequest
+    public struct SpawnSceneRequest
     {
-        public NetworkSceneID Scene;
-
-        public ChangeSceneRequest(NetworkSceneID Scene)
+        public class AuthorizationPayload
         {
-            this.Scene = Scene;
+            public ref struct SceneWriter
+            {
+                public byte Count { get; }
+
+                public EntryWriter Write(NetworkSceneID ID, byte Entries)
+                {
+                    NetworkSerializer.WriteValue(ID, Stream);
+                    return new EntryWriter(Stream, Entries);
+                }
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public SceneWriter(INetworkStream Stream, byte Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Stream.WriteByte(Count);
+                }
+            }
+            public ref struct SceneReader
+            {
+                public byte Count { get; }
+
+                public EntryReader Read()
+                {
+                    NetworkSerializer.ReadValue(Stream, out NetworkSceneID id);
+                    return new EntryReader(Stream, id);
+                }
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public SceneReader(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+
+                    Count = Stream.ReadByte();
+                }
+            }
+
+            public ref struct EntryWriter
+            {
+                public byte Count { get; }
+
+                public void Write(NetworkEntityAuthorityMode entry) => NetworkSerializer.WriteValue(entry, Stream);
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public EntryWriter(INetworkStream Stream, byte Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Stream.WriteByte(Count);
+                }
+            }
+            public ref struct EntryReader
+            {
+                public NetworkSceneID Scene { get; }
+                public byte Count { get; }
+
+                public NetworkEntityAuthorityMode Read() => NetworkSerializer.ReadValue<NetworkEntityAuthorityMode>(Stream);
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public EntryReader(INetworkStream Stream, NetworkSceneID Scene)
+                {
+                    this.Stream = Stream;
+                    this.Scene = Scene;
+
+                    Count = Stream.ReadByte();
+                }
+            }
         }
     }
 
     [NetworkBlittable]
-    public struct ChangeSceneCommand
+    public struct SpawnSceneCommand
     {
-        public NetworkSceneID ID;
-        public NetworkSceneVersion Version;
-
-        public ChangeSceneCommand(NetworkSceneID ID, NetworkSceneVersion Version)
+        public class EntityIDPayload
         {
-            this.ID = ID;
-            this.Version = Version;
+            public ref struct SceneWriter
+            {
+                public byte Count { get; }
+
+                public EntryWriter Write(NetworkSceneID ID, byte Entries)
+                {
+                    NetworkSerializer.WriteValue(ID, Stream);
+                    return new EntryWriter(Stream, Entries);
+                }
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public SceneWriter(INetworkStream Stream, byte Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Stream.WriteByte(Count);
+                }
+            }
+            public ref struct SceneReader
+            {
+                public byte Count { get; }
+
+                public EntryReader Read()
+                {
+                    NetworkSerializer.ReadValue(Stream, out NetworkSceneID id);
+                    return new EntryReader(Stream, id);
+                }
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public SceneReader(INetworkStream Stream)
+                {
+                    this.Stream = Stream;
+
+                    Count = Stream.ReadByte();
+                }
+            }
+
+            public ref struct EntryWriter
+            {
+                public byte Count { get; }
+
+                public void Write(NetworkEntityID entry) => NetworkSerializer.WriteValue(entry, Stream);
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public EntryWriter(INetworkStream Stream, byte Count)
+                {
+                    this.Stream = Stream;
+                    this.Count = Count;
+
+                    Stream.WriteByte(Count);
+                }
+            }
+            public ref struct EntryReader
+            {
+                public NetworkSceneID Scene { get; }
+                public byte Count { get; }
+
+                public NetworkEntityID Read() => NetworkSerializer.ReadValue<NetworkEntityID>(Stream);
+
+                public void Dispose() { }
+
+                readonly INetworkStream Stream;
+                public EntryReader(INetworkStream Stream, NetworkSceneID Scene)
+                {
+                    this.Stream = Stream;
+                    this.Scene = Scene;
+
+                    Count = Stream.ReadByte();
+                }
+            }
+        }
+    }
+    #endregion
+
+    #region Change Scene
+    public struct ChangeSceneRequest : IAutoNetworkSerialization
+    {
+        public SparseArray<NetworkSceneID> Scenes;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Scenes);
+        }
+
+        public ChangeSceneRequest(SparseArray<NetworkSceneID> Scenes)
+        {
+            this.Scenes = Scenes;
         }
     }
 
+    public struct ChangeSceneCommand : IAutoNetworkSerialization
+    {
+        public SparseArray<NetworkSceneDefinition> Scenes;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Scenes);
+        }
+
+        public ChangeSceneCommand(SparseArray<NetworkSceneDefinition> Scenes)
+        {
+            this.Scenes = Scenes;
+        }
+    }
+    #endregion
+
+    #region Modify Scene
+    public struct ModifyScenesRequest : IAutoNetworkSerialization
+    {
+        public SparseArray<NetworkSceneID> Unload;
+        public SparseArray<NetworkSceneID> Load;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Unload);
+            context.Select(ref Load);
+        }
+
+        public ModifyScenesRequest(SparseArray<NetworkSceneID> Unload, SparseArray<NetworkSceneID> Load)
+        {
+            this.Unload = Unload;
+            this.Load = Load;
+        }
+    }
+    public struct ModifyScenesCommand : IAutoNetworkSerialization
+    {
+        public SparseArray<NetworkSceneID> Unload;
+        public SparseArray<NetworkSceneDefinition> Load;
+
+        public void Select(ref AutoSerializationContext context)
+        {
+            context.Select(ref Unload);
+            context.Select(ref Load);
+        }
+
+        public ModifyScenesCommand(SparseArray<NetworkSceneID> Unload, SparseArray<NetworkSceneDefinition> Load)
+        {
+            this.Unload = Unload;
+            this.Load = Load;
+        }
+    }
+    #endregion
+
+    #region Entity Ownership
     [NetworkBlittable]
     public struct TakeEntityOwnershipRequest
     {
@@ -576,6 +673,7 @@ namespace Wsla
             this.Token = Token;
         }
     }
+    #endregion
 
     public enum EntityDisconnectBehaviour : byte
     {
@@ -590,6 +688,7 @@ namespace Wsla
         Transfer,
     }
 
+    #region Ping/Pong
     [NetworkBlittable]
     public struct NetworkPingMessage
     {
@@ -614,7 +713,9 @@ namespace Wsla
 
         public static NetworkPongMessage From(NetworkPingMessage ping) => new NetworkPongMessage(ping.Time);
     }
+    #endregion
 
+    #region Time
     [NetworkBlittable]
     public struct RoomTimeRequest
     {
@@ -637,7 +738,9 @@ namespace Wsla
             this.RoomTime = RoomTime;
         }
     }
+    #endregion
 
+    #region Group
     [NetworkBlittable]
     public struct ChangeGroupsRequest
     {
@@ -648,4 +751,5 @@ namespace Wsla
             this.Groups = Groups;
         }
     }
+    #endregion
 }
