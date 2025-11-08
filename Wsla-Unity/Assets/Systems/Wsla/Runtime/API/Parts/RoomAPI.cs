@@ -1261,24 +1261,20 @@ namespace Wsla.Unity
                 Room.Transport.SendData(in request);
             }
 
-            void ChangeCommandHandler(ref ChangeSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
+            async UniTask ChangeCommandHandler(ChangeSceneCommand message, NetPacketReader reader, byte channel, DeliveryMethod delivery)
             {
                 NetworkLog.Trace($"Changing Scene From (ID: {ID}, Version: {Version}) To (ID: {message.ID}, Version: {message.Version})");
 
-                Procedure(message).Forget();
-                async UniTask Procedure(ChangeSceneCommand message)
+                Room.Transport.Listener.Pause();
                 {
-                    Room.Transport.Listener.Pause();
-                    {
-                        Room.Entities.DespawnAll();
+                    Room.Entities.DespawnAll();
 
-                        await ChangeProcedure(message.ID, message.Version);
+                    await ChangeProcedure(message.ID, message.Version);
 
-                        if (Room.Clients.Local.IsMaster)
-                            RequestSpawn();
-                    }
-                    Room.Transport.Listener.Resume();
+                    if (Room.Clients.Local.IsMaster)
+                        RequestSpawn();
                 }
+                Room.Transport.Listener.Resume();
             }
 
             public async UniTask ChangeProcedure(NetworkSceneID ID, NetworkSceneVersion Version)
@@ -1353,7 +1349,7 @@ namespace Wsla.Unity
             {
                 this.Room = Room;
 
-                Room.Transport.Dispatcher.Register<ChangeSceneCommand>(ChangeCommandHandler);
+                Room.Transport.Dispatcher.RegisterAsync<ChangeSceneCommand>(ChangeCommandHandler);
                 Room.Transport.Dispatcher.Register<SpawnSceneCommand>(SpawnSceneCommandHandler);
             }
         }
