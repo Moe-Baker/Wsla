@@ -190,11 +190,6 @@ namespace Wsla.Server
                     }
                 }
 
-                public static bool TryReserveRoom(NetworkVersion gameVersion, ApplicationID application, Span<ServerRegion> regions, int vacancy, out Room room)
-                {
-                    var filter = new RoomQueryFilter(gameVersion, application, regions, vacancy);
-                    return TryReserveRoom(in filter, out room);
-                }
                 public static bool TryReserveRoom(in RoomQueryFilter filter, out Room room)
                 {
                     lock (Servers)
@@ -203,7 +198,7 @@ namespace Wsla.Server
                         {
                             var server = Servers[i];
 
-                            if (filter.CheckRegion(server.Region) is false)
+                            if (filter.CheckRelay(server) is false)
                                 continue;
 
                             if (server.TryReserveRoom(in filter, out room))
@@ -245,16 +240,16 @@ namespace Wsla.Server
                     }
                 }
 
-                public static void QueryRooms(NetworkVersion gameVersion, ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
+                public static void QueryRooms(in RoomQueryFilter filter, List<RoomListEntryInfo> list)
                 {
                     lock (Servers)
                     {
                         foreach (var server in Servers)
                         {
-                            if (regions.Contains(server.Region) is false)
+                            if (filter.CheckRelay(server) is false)
                                 continue;
 
-                            server.QueryRooms(gameVersion, application, list);
+                            server.QueryRooms(in filter, list);
                         }
                     }
                 }
@@ -557,9 +552,10 @@ namespace Wsla.Server
                 if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
                     return BadRequest();
 
+                var filter = new RoomQueryFilter(request.GameVersion, applicationID, request.Regions, 1);
                 var list = new List<RoomListEntryInfo>();
 
-                CoordinatorServer.Matchmaking.Browser.QueryRooms(request.GameVersion, applicationID, request.Regions, list);
+                CoordinatorServer.Matchmaking.Browser.QueryRooms(in filter, list);
 
                 return Ok(list);
             }
@@ -575,7 +571,8 @@ namespace Wsla.Server
 
                 //Try Find Existing Room
                 {
-                    if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(request.GameVersion, applicationID, request.Regions, 1, out var room))
+                    var filter = new RoomQueryFilter(request.GameVersion, applicationID, request.Regions, 1);
+                    if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(filter, out var room))
                     {
                         var info = room.GetConnectionInfo();
 

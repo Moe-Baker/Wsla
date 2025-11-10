@@ -103,6 +103,7 @@ namespace Wsla.Server
         public NetworkVersion GameVersion { get; }
 
         public ApplicationID Application { get; }
+        public MatchMakingPool Pool { get; }
 
         public Span<ServerRegion> Regions { get; }
         public bool CheckRegion(ServerRegion target)
@@ -118,25 +119,51 @@ namespace Wsla.Server
 
         public int Vacancy { get; }
 
-        public MatchMakingPool Pool { get; }
+        public bool CheckRelay(RelayServer server)
+        {
+            if (CheckRegion(server.Region) is false)
+                return false;
+
+            return true;
+        }
+        public bool CheckRoom(Room room)
+        {
+            if (room.Privacy is RoomPrivacy.Private)
+                return false;
+
+            if (room.GameVersion != GameVersion)
+                return false;
+
+            if (room.Application != Application)
+                return false;
+
+            if (room.Pool != Pool)
+                return false;
+
+            if (room.CheckVacancy() < Vacancy)
+                return false;
+
+            return true;
+        }
 
         public RoomQueryFilter(NetworkVersion GameVersion, ApplicationID Application, Span<ServerRegion> Regions, int Vacancy)
         {
             this.GameVersion = GameVersion;
 
             this.Application = Application;
+            Pool = default;
+
             this.Regions = Regions;
             this.Vacancy = Vacancy;
 
-            Pool = default;
         }
         public RoomQueryFilter(NetworkVersion GameVersion, MatchMakingPool Pool, Span<ServerRegion> Regions, int Vacancy)
         {
             this.GameVersion = GameVersion;
 
             Application = Pool.Application.ID;
-
             this.Pool = Pool;
+
             this.Regions = Regions;
             this.Vacancy = Vacancy;
         }

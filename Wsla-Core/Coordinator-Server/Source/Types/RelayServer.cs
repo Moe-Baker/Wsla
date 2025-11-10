@@ -75,19 +75,13 @@ namespace Wsla.Server
             }
         }
 
-        public void QueryRooms(NetworkVersion gameVersion, ApplicationID application, List<RoomListEntryInfo> list)
+        public void QueryRooms(in RoomQueryFilter filter, List<RoomListEntryInfo> list)
         {
             lock (Rooms)
             {
                 foreach (var (id, room) in Rooms)
                 {
-                    if (room.Privacy is RoomPrivacy.Private)
-                        continue;
-
-                    if (room.GameVersion != gameVersion)
-                        continue;
-
-                    if (room.Application != application)
+                    if (filter.CheckRoom(room) is false)
                         continue;
 
                     var connection = new RoomConnectionInfo(Address, room.Port);
@@ -102,6 +96,25 @@ namespace Wsla.Server
                 }
             }
         }
+        public bool TryReserveRoom(in RoomQueryFilter filter, out Room target)
+        {
+            lock (Rooms)
+            {
+                foreach (var (id, room) in Rooms)
+                {
+                    if (filter.CheckRoom(room) is false)
+                        continue;
+
+                    room.MakeJoinReservation(filter.Vacancy);
+
+                    target = room;
+                    return true;
+                }
+            }
+
+            target = default;
+            return false;
+        }
 
         public void ListRooms(List<RelayRoomAdminInfo> list)
         {
@@ -115,38 +128,6 @@ namespace Wsla.Server
                     list.Add(registration);
                 }
             }
-        }
-
-        public bool TryReserveRoom(in RoomQueryFilter filter, out Room target)
-        {
-            lock (Rooms)
-            {
-                foreach (var (id, room) in Rooms)
-                {
-                    if (room.GameVersion != filter.GameVersion)
-                        continue;
-
-                    if (room.Application != filter.Application)
-                        continue;
-
-                    if (room.Pool != filter.Pool)
-                        continue;
-
-                    if (room.Privacy is RoomPrivacy.Private)
-                        continue;
-
-                    if (room.CheckVacancy() < filter.Vacancy)
-                        continue;
-
-                    room.MakeJoinReservation(filter.Vacancy);
-
-                    target = room;
-                    return true;
-                }
-            }
-
-            target = default;
-            return false;
         }
 
         public void Dispose() { }
