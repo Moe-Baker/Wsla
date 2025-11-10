@@ -7,6 +7,9 @@ namespace Wsla
 {
     public struct CreateRoomRequest : IAutoNetworkSerialization
     {
+        public NetworkVersion ApiVersion;
+        public NetworkVersion GameVersion;
+
         public FixedString<FS20> Application;
 
         public SparseArray<ServerRegion> Regions;
@@ -15,13 +18,19 @@ namespace Wsla
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref ApiVersion);
+            context.Select(ref GameVersion);
+
             context.Select(ref Application);
             context.Select(ref Regions);
             context.Select(ref Parameters);
         }
 
-        public CreateRoomRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
+        public CreateRoomRequest(NetworkVersion GameVersion, FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions, CreateRoomParameters Parameters)
         {
+            this.ApiVersion = Constants.ApiVersion;
+            this.GameVersion = GameVersion;
+
             this.Application = ApplicationName;
             this.Parameters = Parameters;
             this.Regions = Regions;
@@ -30,19 +39,25 @@ namespace Wsla
 
     public struct CreateRoomCommand : IAutoNetworkSerialization
     {
+        public NetworkVersion GameVersion;
+
         public ApplicationID ApplicationID;
         public Guid RoomID;
         public CreateRoomParameters Parameters;
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref GameVersion);
+
             context.Select(ref ApplicationID);
             context.Select(ref RoomID);
             context.Select(ref Parameters);
         }
 
-        public CreateRoomCommand(ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters Parameters)
+        public CreateRoomCommand(NetworkVersion GameVersion, ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters Parameters)
         {
+            this.GameVersion = GameVersion;
+
             this.ApplicationID = ApplicationID;
             this.RoomID = RoomID;
             this.Parameters = Parameters;
@@ -100,14 +115,22 @@ namespace Wsla
         }
     }
 
-    public struct QueryRoomsRequest
+    public struct QueryRoomsRequest : IAutoNetworkSerialization
     {
+        public NetworkVersion GameVersion;
         public FixedString<FS20> Application;
-
         public SparseArray<ServerRegion> Regions;
 
-        public QueryRoomsRequest(FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
+        public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref GameVersion);
+            context.Select(ref Application);
+            context.Select(ref Regions);
+        }
+
+        public QueryRoomsRequest(NetworkVersion GameVersion, FixedString<FS20> ApplicationName, SparseArray<ServerRegion> Regions)
+        {
+            this.GameVersion = GameVersion;
             this.Application = ApplicationName;
             this.Regions = Regions;
         }
@@ -148,6 +171,9 @@ namespace Wsla
 
     public struct FindRoomRequest : IAutoNetworkSerialization
     {
+        public NetworkVersion ApiVersion;
+        public NetworkVersion GameVersion;
+
         public FixedString<FS20> Application;
 
         public SparseArray<ServerRegion> Regions;
@@ -156,13 +182,19 @@ namespace Wsla
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref ApiVersion);
+            context.Select(ref GameVersion);
+
             context.Select(ref Application);
             context.Select(ref Regions);
             context.Select(ref CreateRoom);
         }
 
-        public FindRoomRequest(FixedString<FS20> Application, SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
+        public FindRoomRequest(NetworkVersion GameVersion, FixedString<FS20> Application, SparseArray<ServerRegion> Regions, CreateRoomParameters? CreateRoom)
         {
+            this.ApiVersion = Constants.ApiVersion;
+            this.GameVersion = GameVersion;
+
             this.Application = Application;
             this.Regions = Regions;
             this.CreateRoom = CreateRoom;

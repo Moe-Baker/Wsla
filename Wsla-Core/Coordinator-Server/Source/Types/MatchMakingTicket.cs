@@ -8,6 +8,7 @@ namespace Wsla.Server
         public readonly MatchMakingPool Pool;
 
         StartMatchMakingRequest Request;
+        public ref NetworkVersion GameVersion => ref Request.GameVersion;
         public ref MatchMakingParameters Parameters => ref Request.Parameters;
         public ref SparseArray<ServerRegion> Regions => ref Request.Regions;
         public ref SparseArray<NetworkSceneID> Scenes => ref Request.Scenes;

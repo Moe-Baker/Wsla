@@ -122,8 +122,7 @@ namespace Wsla.Server
 
                 var Regions = SparseArray.Clone(batch.Regions);
 
-                var response = await CoordinatorServer.Matchmaking.CreateRoom(Application.ID, Regions, parameters);
-
+                var response = await CoordinatorServer.Matchmaking.CreateRoom(batch.GameVersion, Application.ID, Regions, parameters);
                 if (response.IsError)
                 {
                     batch.FailAll();
@@ -213,6 +212,8 @@ namespace Wsla.Server
         public MatchMakingPool Pool;
         public TimeSpan Age;
 
+        public NetworkVersion GameVersion;
+
         public List<MatchMakingPoolTicketEntry> Entries { get; }
         public MatchMakingTicket this[int index] => Entries[index].Ticket;
         public byte Count => (byte)Entries.Count;
@@ -224,6 +225,7 @@ namespace Wsla.Server
         {
             var ticket = entry.Ticket;
 
+            GameVersion = ticket.GameVersion;
             Pool = ticket.Pool;
             Age = ticket.CalculateAge();
 
@@ -245,6 +247,9 @@ namespace Wsla.Server
             if (IsFull) return false;
 
             var ticket = entry.Ticket;
+
+            if (ticket.GameVersion != GameVersion)
+                return false;
 
             if (CheckAllowRegion(ticket.Regions) is false)
                 return false;

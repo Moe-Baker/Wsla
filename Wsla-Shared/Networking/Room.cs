@@ -108,6 +108,7 @@ namespace Wsla
 
     public struct RoomMatchmakerEntryData : IAutoNetworkSerialization
     {
+        public NetworkVersion GameVersion;
         public ApplicationID Application;
         public Guid ID;
         public ushort Port;
@@ -117,6 +118,7 @@ namespace Wsla
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref GameVersion);
             context.Select(ref Application);
 
             context.Select(ref ID);
@@ -126,8 +128,9 @@ namespace Wsla
             context.Select(ref State);
         }
 
-        public RoomMatchmakerEntryData(ApplicationID Application, Guid ID, ushort Port, RoomPrivacy Privacy, RoomStateInfo State)
+        public RoomMatchmakerEntryData(NetworkVersion GameVersion, ApplicationID Application, Guid ID, ushort Port, RoomPrivacy Privacy, RoomStateInfo State)
         {
+            this.GameVersion = GameVersion;
             this.Application = Application;
             this.ID = ID;
             this.Port = Port;

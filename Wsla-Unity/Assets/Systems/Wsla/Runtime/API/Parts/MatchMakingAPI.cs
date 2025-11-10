@@ -26,7 +26,7 @@ namespace Wsla.Unity
 
         public Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
         {
-            var request = new CreateRoomRequest(API.ApplicationID.Value, regions, parameters);
+            var request = new CreateRoomRequest(API.GameVersion.Value, API.ApplicationID.Value, regions, parameters);
             return CreateRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> CreateRoom(CreateRoomRequest request)
@@ -43,7 +43,7 @@ namespace Wsla.Unity
 
         public Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(SparseArray<ServerRegion> regions, CreateRoomParameters? create = default)
         {
-            var request = new FindRoomRequest(API.ApplicationID.Value, regions, create);
+            var request = new FindRoomRequest(API.GameVersion.Value, API.ApplicationID.Value, regions, create);
             return FindRoom(request);
         }
         public async Task<WslaResponse<RoomConnectionInfo, WslaError>> FindRoom(FindRoomRequest request)
@@ -60,7 +60,7 @@ namespace Wsla.Unity
 
         public async Task<WslaResponse<List<RoomListEntryInfo>, WslaError>> ListRooms(SparseArray<ServerRegion> regions)
         {
-            var request = new QueryRoomsRequest(API.ApplicationID.Value, regions);
+            var request = new QueryRoomsRequest(API.GameVersion.Value, API.ApplicationID.Value, regions);
 
             var response = await API.REST.POST<QueryRoomsRequest, List<RoomListEntryInfo>>(Constants.RestRoutes.Service.QueryRooms, request);
 
@@ -126,7 +126,7 @@ namespace Wsla.Unity
 
             //Send Request
             {
-                var request = new StartMatchMakingRequest(API.ApplicationID.Value, PoolName, Regions, Scene, Parameters);
+                var request = new StartMatchMakingRequest(API.GameVersion.Value, API.ApplicationID.Value, PoolName, Regions, Scene, Parameters);
                 await Client.SendMessageAsync(request);
             }
 

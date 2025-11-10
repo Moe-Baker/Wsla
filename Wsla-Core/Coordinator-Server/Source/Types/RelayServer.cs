@@ -27,14 +27,14 @@ namespace Wsla.Server
 
         public RelayServerAdminInfo GetRegistration() => new RelayServerAdminInfo(ID, Info, Occupancy);
 
-        public Room CreateRoom(ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
+        public Room CreateRoom(NetworkVersion gameVersion, ApplicationID application, Guid id, ushort port, CreateRoomParameters parameters, int reservations)
         {
             lock (Rooms)
             {
                 if (Rooms.ContainsKey(id))
                     throw new Exception($"Room with ID {id} Already Registered");
 
-                var room = new Room(this, application, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
+                var room = new Room(this, gameVersion, application, port, parameters.Name, parameters.Capacity, 0, parameters.Privacy);
                 Rooms.Add(id, room);
 
                 room.MakeJoinReservation(reservations);
@@ -75,13 +75,16 @@ namespace Wsla.Server
             }
         }
 
-        public void QueryRooms(ApplicationID application, List<RoomListEntryInfo> list)
+        public void QueryRooms(NetworkVersion gameVersion, ApplicationID application, List<RoomListEntryInfo> list)
         {
             lock (Rooms)
             {
                 foreach (var (id, room) in Rooms)
                 {
                     if (room.Privacy is RoomPrivacy.Private)
+                        continue;
+
+                    if (room.GameVersion != gameVersion)
                         continue;
 
                     if (room.Application != application)
@@ -120,6 +123,9 @@ namespace Wsla.Server
             {
                 foreach (var (id, room) in Rooms)
                 {
+                    if (room.GameVersion != filter.GameVersion)
+                        continue;
+
                     if (room.Application != filter.Application)
                         continue;
 

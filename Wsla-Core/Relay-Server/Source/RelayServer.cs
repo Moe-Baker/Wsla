@@ -161,7 +161,7 @@ namespace Wsla.Server
 
             public static Room CreateRoom(CreateRoomCommand command)
             {
-                var instance = new Room(command.ApplicationID, command.RoomID, command.Parameters);
+                var instance = new Room(command.GameVersion, command.ApplicationID, command.RoomID, command.Parameters);
 
                 instance.Start(ThreadDispatcher);
 
@@ -423,7 +423,7 @@ namespace Wsla.Server
                     foreach (var room in Rooms)
                     {
                         var state = room.Properties.ReadState();
-                        var data = new RoomMatchmakerEntryData(room.ApplicationID, room.RoomID, room.Transport.Port, room.Properties.Privacy, state);
+                        var data = new RoomMatchmakerEntryData(room.GameVersion, room.ApplicationID, room.RoomID, room.Transport.Port, room.Properties.Privacy, state);
                         list.Add(data);
                     }
                 }

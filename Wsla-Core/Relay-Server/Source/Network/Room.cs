@@ -12,6 +12,7 @@ namespace Wsla.Server
 {
     public class Room : IDisposable
     {
+        public NetworkVersion GameVersion { get; }
         public ApplicationID ApplicationID { get; }
         public Guid RoomID { get; }
 
@@ -384,6 +385,23 @@ namespace Wsla.Server
                 }
 
                 NetworkLog.Info($"Connection Request from {request}");
+
+                //Check Versions
+                {
+                    if (request.ApiVersion != Constants.ApiVersion)
+                    {
+                        NetworkLog.Warning($"Room {Room}, Client API Version Mismatch, Expected ({Constants.ApiVersion}) Got ({request.ApiVersion}), Connection Request Rejected");
+                        RejectConnection(connection, WslaErrorCode.ApiVersionMismatch);
+                        return;
+                    }
+
+                    if (request.GameVersion != Room.GameVersion)
+                    {
+                        NetworkLog.Warning($"Room {Room}, Client Game Version Mismatch, Expected ({Room.GameVersion}) Got ({request.GameVersion}), Connection Request Rejected");
+                        RejectConnection(connection, WslaErrorCode.GameVersionMismatch);
+                        return;
+                    }
+                }
 
                 //Check Password
                 if (Room.Properties.CheckPassword(in request.Password) is false)
@@ -1444,8 +1462,9 @@ namespace Wsla.Server
             Entities.Dispose();
         }
 
-        public Room(ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters parameters)
+        public Room(NetworkVersion GameVersion, ApplicationID ApplicationID, Guid RoomID, CreateRoomParameters parameters)
         {
+            this.GameVersion = GameVersion;
             this.RoomID = RoomID;
             this.ApplicationID = ApplicationID;
 

@@ -7,6 +7,9 @@ namespace Wsla
     #region Client Connection
     public struct ClientConnectionRequest : IAutoNetworkSerialization
     {
+        public NetworkVersion ApiVersion;
+        public NetworkVersion GameVersion;
+
         public FixedString<FS20> Username;
         public FixedString<FS20> Password;
 
@@ -18,14 +21,20 @@ namespace Wsla
 
         public void Select(ref AutoSerializationContext context)
         {
+            context.Select(ref ApiVersion);
+            context.Select(ref GameVersion);
+
             context.Select(ref Username);
             context.Select(ref Password);
             context.Select(ref Groups);
             context.Select(ref TimeRequest);
         }
 
-        public ClientConnectionRequest(FixedString<FS20> Username, FixedString<FS20> Password, NetworkGroupCollection Groups)
+        public ClientConnectionRequest(NetworkVersion GameVersion, FixedString<FS20> Username, FixedString<FS20> Password, NetworkGroupCollection Groups)
         {
+            this.ApiVersion = Constants.ApiVersion;
+            this.GameVersion = GameVersion;
+
             this.Username = Username;
             this.Password = Password;
             this.Groups = Groups;

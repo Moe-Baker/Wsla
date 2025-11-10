@@ -79,5 +79,7 @@ namespace Wsla
         InvalidRequest = 20,
         InternalError = 21,
         Timeout = 22,
+        ApiVersionMismatch = 23,
+        GameVersionMismatch = 24,
     }
 }

@@ -190,9 +190,9 @@ namespace Wsla.Server
                     }
                 }
 
-                public static bool TryReserveRoom(ApplicationID application, Span<ServerRegion> regions, int vacancy, out Room room)
+                public static bool TryReserveRoom(NetworkVersion gameVersion, ApplicationID application, Span<ServerRegion> regions, int vacancy, out Room room)
                 {
-                    var filter = new RoomQueryFilter(application, regions, vacancy);
+                    var filter = new RoomQueryFilter(gameVersion, application, regions, vacancy);
                     return TryReserveRoom(in filter, out room);
                 }
                 public static bool TryReserveRoom(in RoomQueryFilter filter, out Room room)
@@ -245,7 +245,7 @@ namespace Wsla.Server
                     }
                 }
 
-                public static void QueryRooms(ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
+                public static void QueryRooms(NetworkVersion gameVersion, ApplicationID application, SparseArray<ServerRegion> regions, List<RoomListEntryInfo> list)
                 {
                     lock (Servers)
                     {
@@ -254,7 +254,7 @@ namespace Wsla.Server
                             if (regions.Contains(server.Region) is false)
                                 continue;
 
-                            server.QueryRooms(application, list);
+                            server.QueryRooms(gameVersion, application, list);
                         }
                     }
                 }
@@ -338,6 +338,12 @@ namespace Wsla.Server
 
                 public static void Register(MessagingPeer peer, StartMatchMakingRequest request)
                 {
+                    if (request.APIVersion != Constants.ApiVersion)
+                    {
+                        Fail(peer, WslaErrorCode.ApiVersionMismatch);
+                        return;
+                    }
+
                     if (TryGetPool(request.Application, request.Pool, out var pool) is false)
                     {
                         Fail(peer, WslaErrorCode.InvalidRequest);
@@ -352,7 +358,7 @@ namespace Wsla.Server
 
                     if (pool.Backfill)
                     {
-                        var query = new RoomQueryFilter(pool, request.Regions, 1);
+                        var query = new RoomQueryFilter(request.GameVersion, pool, request.Regions, 1);
 
                         if (Browser.TryReserveRoom(in query, out var room))
                         {
@@ -452,7 +458,7 @@ namespace Wsla.Server
             }
 
             static TaskCompletionQueue<Guid, CreateRoomConfirmation> RoomCreationQueue;
-            public static async Task<WslaResponse<Room, WslaError>> CreateRoom(ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
+            public static async Task<WslaResponse<Room, WslaError>> CreateRoom(NetworkVersion gameVersion, ApplicationID applicationID, SparseArray<ServerRegion> regions, CreateRoomParameters parameters)
             {
                 //Find Region
                 if (Browser.TryFindFreeServer(regions, out var server) is false)
@@ -464,7 +470,7 @@ namespace Wsla.Server
 
                 //Forward Request to Relay
                 {
-                    var request = new CreateRoomCommand(applicationID, roomID, parameters);
+                    var request = new CreateRoomCommand(gameVersion, applicationID, roomID, parameters);
                     server.MessagingPeer.SendMessage(request);
                 }
 
@@ -480,7 +486,7 @@ namespace Wsla.Server
                     return WslaError.From(WslaErrorCode.InternalError);
                 }
 
-                return server.CreateRoom(applicationID, roomID, Confirmation.Port, parameters, 1);
+                return server.CreateRoom(gameVersion, applicationID, roomID, Confirmation.Port, parameters, 1);
             }
         }
     }
@@ -529,10 +535,13 @@ namespace Wsla.Server
             [HttpPost(Constants.RestRoutes.Service.CreateRoom)]
             public async Task<ActionResult> CreateRoom(CreateRoomRequest message)
             {
+                if (message.ApiVersion != Constants.ApiVersion)
+                    return BadRequest();
+
                 if (CoordinatorServer.Configuration.TryGetApplicationID(message.Application, out var applicationID) is false)
                     return BadRequest();
 
-                var response = await CoordinatorServer.Matchmaking.CreateRoom(applicationID, message.Regions, message.Parameters);
+                var response = await CoordinatorServer.Matchmaking.CreateRoom(message.GameVersion, applicationID, message.Regions, message.Parameters);
 
                 if (response.IsError)
                     return BadRequest();
@@ -550,7 +559,7 @@ namespace Wsla.Server
 
                 var list = new List<RoomListEntryInfo>();
 
-                CoordinatorServer.Matchmaking.Browser.QueryRooms(applicationID, request.Regions, list);
+                CoordinatorServer.Matchmaking.Browser.QueryRooms(request.GameVersion, applicationID, request.Regions, list);
 
                 return Ok(list);
             }
@@ -558,12 +567,15 @@ namespace Wsla.Server
             [HttpPost(Constants.RestRoutes.Service.FindRoom)]
             public async Task<ActionResult> FindRoom(FindRoomRequest request)
             {
+                if (request.ApiVersion != Constants.ApiVersion)
+                    return BadRequest();
+
                 if (CoordinatorServer.Configuration.TryGetApplicationID(request.Application, out var applicationID) is false)
                     return BadRequest();
 
                 //Try Find Existing Room
                 {
-                    if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(applicationID, request.Regions, 1, out var room))
+                    if (CoordinatorServer.Matchmaking.Browser.TryReserveRoom(request.GameVersion, applicationID, request.Regions, 1, out var room))
                     {
                         var info = room.GetConnectionInfo();
 
@@ -574,7 +586,7 @@ namespace Wsla.Server
                 //Try Create Room
                 if (request.CreateRoom.HasValue)
                 {
-                    var create = new CreateRoomRequest(request.Application, request.Regions, request.CreateRoom.Value);
+                    var create = new CreateRoomRequest(request.GameVersion, request.Application, request.Regions, request.CreateRoom.Value);
 
                     return await CreateRoom(create);
                 }

@@ -6,6 +6,7 @@ namespace Wsla.Server
     {
         public RelayServer Server { get; }
 
+        public NetworkVersion GameVersion { get; }
         public ApplicationID Application { get; }
 
         public ushort Port { get; }
@@ -73,8 +74,9 @@ namespace Wsla.Server
             }
         }
 
-        public Room(RelayServer Server, ApplicationID Application, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
+        public Room(RelayServer Server, NetworkVersion GameVersion, ApplicationID Application, ushort Port, FixedString<FS20> Name, byte Capacity, byte Occupancy, RoomPrivacy Privacy)
         {
+            this.GameVersion = GameVersion;
             this.Application = Application;
             this.Server = Server;
             this.Port = Port;
@@ -92,12 +94,14 @@ namespace Wsla.Server
         {
             var state = data.State;
 
-            return new Room(server, data.Application, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
+            return new Room(server, data.GameVersion, data.Application, data.Port, state.Name, state.Capacity, state.Occupancy, data.Privacy);
         }
     }
 
     public ref struct RoomQueryFilter
     {
+        public NetworkVersion GameVersion { get; }
+
         public ApplicationID Application { get; }
 
         public Span<ServerRegion> Regions { get; }
@@ -116,16 +120,20 @@ namespace Wsla.Server
 
         public MatchMakingPool Pool { get; }
 
-        public RoomQueryFilter(ApplicationID Application, Span<ServerRegion> Regions, int Vacancy)
+        public RoomQueryFilter(NetworkVersion GameVersion, ApplicationID Application, Span<ServerRegion> Regions, int Vacancy)
         {
+            this.GameVersion = GameVersion;
+
             this.Application = Application;
             this.Regions = Regions;
             this.Vacancy = Vacancy;
 
             Pool = default;
         }
-        public RoomQueryFilter(MatchMakingPool Pool, Span<ServerRegion> Regions, int Vacancy)
+        public RoomQueryFilter(NetworkVersion GameVersion, MatchMakingPool Pool, Span<ServerRegion> Regions, int Vacancy)
         {
+            this.GameVersion = GameVersion;
+
             Application = Pool.Application.ID;
 
             this.Pool = Pool;
