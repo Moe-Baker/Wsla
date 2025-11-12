@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="../Wsla-Core/Coordinator-Server/Coordinator-Server.csproj" />
+  <Project Path="../Wsla-Core/Relay-Server/Relay-Server.csproj" />
+  <Project Path="Coordinator-Plugin-Sample/Coordinator-Plugin-Sample.csproj" />
+  <Project Path="Relay-Plugin-Sample/Relay-Plugin-Sample.csproj" />
+</Solution>

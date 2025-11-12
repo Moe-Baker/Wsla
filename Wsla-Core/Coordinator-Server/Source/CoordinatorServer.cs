@@ -492,7 +492,7 @@ namespace Wsla.Server
 
         public Task Invoke(HttpContext context)
         {
-            NetworkLog.Error($"Hit Middle Ware {context.Request.Path}");
+            NetworkLog.Info($"Hit Middle Ware {context.Request.Path}");
 
             return Next(context);
         }

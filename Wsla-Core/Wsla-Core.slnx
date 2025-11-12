@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="Control-Panel/Control-Panel.csproj" />
+  <Project Path="Coordinator-Server/Coordinator-Server.csproj" />
+  <Project Path="Network-Generator/Network-Generator.csproj" />
+  <Project Path="Playground/Playground.csproj" />
+  <Project Path="Relay-Server/Relay-Server.csproj" />
+  <Project Path="Shared-Global/Shared-Global.csproj" />
+  <Project Path="Shared-Server/Shared-Server.csproj" />
+  <Project Path="Shared-Web/Shared-Web.csproj" />
+  <Project Path="Unit-Tests/Unit-Tests.csproj" />
+  <Project Path="Unity-Client/Unity-Client.csproj" />
+</Solution>
