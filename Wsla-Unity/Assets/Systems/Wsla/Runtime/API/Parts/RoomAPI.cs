@@ -1282,14 +1282,19 @@ namespace Wsla.Unity
                 return false;
             }
 
+            SceneLoadingController SceneLoadHandler => Room.API.SceneLoadController;
+
             internal async UniTask ApplyState(ClientConnectionResponse response)
             {
+                SceneLoadHandler?.StartLoading(response.Scenes.Length);
+
                 for (int i = 0; i < response.Scenes.Length; i++)
                 {
                     var definition = response.Scenes[i];
                     var mode = (i == 0) ? LoadSceneMode.Single : LoadSceneMode.Additive;
 
-                    var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode);
+                    var progress = SceneLoadHandler?.RetrieveSurrogate();
+                    var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode, progress);
                     Collection.Add(instance);
                 }
             }
@@ -1397,6 +1402,8 @@ namespace Wsla.Unity
 
                 Room.Transport.Listener.Pause();
                 {
+                    SceneLoadHandler?.StartLoading(message.Scenes.Length);
+
                     //Despawn All Entities
                     Room.Entities.DespawnAll();
 
@@ -1414,7 +1421,8 @@ namespace Wsla.Unity
                         var definition = message.Scenes[i];
                         var mode = (i == 0) ? LoadSceneMode.Single : LoadSceneMode.Additive;
 
-                        var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode);
+                        var progress = SceneLoadHandler?.RetrieveSurrogate();
+                        var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode, progress);
                         Collection.Add(instance);
                     }
 
@@ -1429,6 +1437,8 @@ namespace Wsla.Unity
 
                 Room.Transport.Listener.Pause();
                 {
+                    SceneLoadHandler?.StartLoading(message.Load.Length + message.Unload.Length);
+
                     //Unload
                     {
                         for (int i = 0; i < message.Unload.Length; i++)
@@ -1441,7 +1451,8 @@ namespace Wsla.Unity
                             Room.Entities.DespawnScene(instance);
                             Collection.Remove(instance);
 
-                            await NetworkScene.Manager.Unloading.Unload(instance);
+                            var progress = SceneLoadHandler?.RetrieveSurrogate();
+                            await NetworkScene.Manager.Unloading.Unload(instance, progress);
                         }
                     }
 
@@ -1450,13 +1461,16 @@ namespace Wsla.Unity
                         for (int i = 0; i < message.Load.Length; i++)
                         {
                             var definition = message.Load[i];
-                            var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, LoadSceneMode.Additive);
+                            var progress = SceneLoadHandler?.RetrieveSurrogate();
+                            var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, LoadSceneMode.Additive, progress);
                             Collection.Add(instance);
                         }
 
                         if (Room.Clients.Local.IsMaster)
                             RequestSpawn();
                     }
+
+                    if (message.Load.Length is 0) SceneLoadHandler?.EndLoading();
                 }
                 Room.Transport.Listener.Resume();
             }
@@ -1492,6 +1506,8 @@ namespace Wsla.Unity
 
                     instance.Spawn();
                 }
+
+                SceneLoadHandler?.EndLoading();
             }
 
             readonly RoomAPI Room;
@@ -1716,4 +1732,5 @@ namespace Wsla.Unity
             NetworkSerializer.WriteHeader(in request, Stream);
         }
     }
+
 }

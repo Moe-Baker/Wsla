@@ -58,6 +58,24 @@ public class MainMenu : MonoBehaviour
         FindRoomButton.onClick.AddListener(() => PerformOperation(FindRoomAction));
         JoinRoomButton.onClick.AddListener(() => PerformOperation(JoinRoomAction));
         FindMatchButton.onClick.AddListener(() => PerformOperation(FindMatchAction));
+
+        NetworkAPI.RegisterSceneLoadHandler<CustomSceneLoadHandler>();
+    }
+
+    class CustomSceneLoadHandler : ISceneLoadingHandler
+    {
+        public void StartLoading()
+        {
+            NetworkLog.Info("Started Scene Loading");
+        }
+        public void ReportProgress(float value)
+        {
+            NetworkLog.Info($"Scene Loading Progress: {value}");
+        }
+        public void EndLoading()
+        {
+            NetworkLog.Info("Ended Scene Loading");
+        }
     }
 
     CreateRoomParameters GetCreateRoomParameters()

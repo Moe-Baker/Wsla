@@ -1,7 +1,5 @@
 using Cysharp.Threading.Tasks;
 
-using LiteNetLib.Utils;
-
 using System;
 using System.Collections.Generic;
 
@@ -176,12 +174,13 @@ namespace Wsla.Unity
                     NetworkLog.Warning($"No Loading Entry Found For Network Scene ({scene}), Network Scenes Can Only Be Loaded Via Network Methods");
                 }
 
-                public static async UniTask<NetworkScene> Load(NetworkSceneID ID, NetworkSceneVersion Version, LoadSceneMode mode)
+                public static async UniTask<NetworkScene> Load(NetworkSceneID ID, NetworkSceneVersion Version, LoadSceneMode mode, IProgress<float> progress)
                 {
                     var entry = new Entry(ID);
                     Entries.Add(entry);
 
-                    await SceneManager.LoadSceneAsync(ID.Value, mode).ToUniTask();
+                    await SceneManager.LoadSceneAsync(ID.Value, mode).ToUniTask(progress: progress);
+                    progress?.Report(1f);
 
                     var scene = await entry.Operation.Task;
 
@@ -199,9 +198,10 @@ namespace Wsla.Unity
             }
             public static class Unloading
             {
-                public static async UniTask Unload(NetworkScene scene)
+                public static async UniTask Unload(NetworkScene scene, IProgress<float> progress)
                 {
-                    await SceneManager.UnloadSceneAsync(scene.UnityScene).ToUniTask();
+                    await SceneManager.UnloadSceneAsync(scene.UnityScene).ToUniTask(progress);
+                    progress?.Report(1f);
                 }
             }
 
