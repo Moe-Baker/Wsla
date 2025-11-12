@@ -15,6 +15,12 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+#if UNITY_ADDRESSABLE
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceProviders;
+#endif
+
 namespace Wsla.Unity
 {
     public class NetworkScene : MonoBehaviour
@@ -22,7 +28,7 @@ namespace Wsla.Unity
         public NetworkSceneID ID { get; private set; }
         public NetworkSceneVersion Version { get; private set; }
 
-        public int BuildIndex => ID.Value;
+        public int BuildIndex => ID.Index;
         public Scene UnityScene => gameObject.scene;
 
         public NetworkSceneDefinition Definition => new(ID, Version);
@@ -80,8 +86,6 @@ namespace Wsla.Unity
 
         void Awake()
         {
-            ID = new NetworkSceneID((byte)UnityScene.buildIndex);
-
             Manager.Register(this);
         }
         void OnDestroy()
@@ -104,6 +108,17 @@ namespace Wsla.Unity
 
                 var roots = scene.GetRootGameObjects();
 
+                //Ensure No Existing Network Scene
+                foreach (var root in roots)
+                {
+                    if (root.TryGetComponent(out NetworkScene existing) is false)
+                        continue;
+
+                    NetworkLog.Warning($"Pre-Existing Network Scene Found In Scene {scene.name}, This is Fine if This Scene is an Addresssable Scene, Otherwise, Remove the Network Scene Component");
+                    return;
+                }
+
+                //Collect All Network Entity
                 foreach (var root in roots)
                 {
                     root.GetComponentsInChildren(true, Cache.Temp);
@@ -143,56 +158,86 @@ namespace Wsla.Unity
 
             public static class Loading
             {
-                static List<Entry> Entries;
-                struct Entry
+                static UniTaskCompletionSource<NetworkScene> Entry;
+                static UniTaskCompletionSource<NetworkScene> RegisterEntry()
                 {
-                    public NetworkSceneID ID { get; }
-                    public UniTaskCompletionSource<NetworkScene> Operation { get; }
-
-                    public Entry(NetworkSceneID ID) : this(ID, new()) { }
-                    public Entry(NetworkSceneID ID, UniTaskCompletionSource<NetworkScene> Operation)
-                    {
-                        this.ID = ID;
-                        this.Operation = Operation;
-                    }
+                    Entry = new();
+                    return Entry;
                 }
-
                 static void CompleteEntry(NetworkScene scene)
                 {
-                    for (int i = 0; i < Entries.Count; i++)
+                    if (Entry == null)
                     {
-                        var entry = Entries[i];
-
-                        if (entry.ID != scene.ID)
-                            continue;
-
-                        entry.Operation.TrySetResult(scene);
-                        Entries.RemoveAt(i);
+                        NetworkLog.Warning($"No Loading Entry Found For Network Scene ({scene}), Network Scenes Can Only Be Loaded Via Network Methods");
                         return;
                     }
 
-                    NetworkLog.Warning($"No Loading Entry Found For Network Scene ({scene}), Network Scenes Can Only Be Loaded Via Network Methods");
+                    Entry.TrySetResult(scene);
+                    Entry = null;
                 }
 
-                public static async UniTask<NetworkScene> Load(NetworkSceneID ID, NetworkSceneVersion Version, LoadSceneMode mode, IProgress<float> progress)
+                public static async UniTask<NetworkScene> Load(NetworkSceneID id, NetworkSceneVersion version, LoadSceneMode mode, IProgress<float> progress)
                 {
-                    var entry = new Entry(ID);
-                    Entries.Add(entry);
+                    var entry = RegisterEntry();
 
-                    await SceneManager.LoadSceneAsync(ID.Value, mode).ToUniTask(progress: progress);
+                    switch (id.Source)
+                    {
+                        case NetworkSceneSource.Build:
+                            await LoadFromBuild(id, version, mode, progress);
+                            break;
+
+                        case NetworkSceneSource.Addressable:
+                            await LoadFromAddressable(id, version, mode, progress);
+                            break;
+                    }
+
                     progress?.Report(1f);
 
-                    var scene = await entry.Operation.Task;
+                    var scene = await entry.Task;
 
-                    scene.Version = Version;
+                    scene.ID = id;
+                    scene.Version = version;
 
                     return scene;
                 }
 
+                static async UniTask LoadFromBuild(NetworkSceneID id, NetworkSceneVersion version, LoadSceneMode mode, IProgress<float> progress)
+                {
+                    await SceneManager.LoadSceneAsync(id.Index, mode).ToUniTask(progress: progress);
+                }
+
+                static async UniTask LoadFromAddressable(NetworkSceneID id, NetworkSceneVersion version, LoadSceneMode mode, IProgress<float> progress)
+                {
+#if UNITY_ADDRESSABLE
+                    if (API.AddressableScenes.TryGetReference(id, out var reference) is false)
+                        throw new ArgumentException($"No Addressable Scene With ID: {id} Found");
+
+                    var handle = Addressables.LoadSceneAsync(reference.RuntimeKey, mode, SceneReleaseMode.ReleaseSceneWhenSceneUnloaded);
+
+                    while (true)
+                    {
+                        switch (handle.Status)
+                        {
+                            case AsyncOperationStatus.None:
+                                progress?.Report(handle.PercentComplete);
+                                break;
+
+                            case AsyncOperationStatus.Succeeded:
+                                return;
+
+                            case AsyncOperationStatus.Failed:
+                                throw handle.OperationException;
+                        }
+
+                        await UniTask.NextFrame();
+                    }
+#else
+                    throw new InvalidOperationException($"Addressable Network Scene Load Requested But Addressable Package Not Installed");
+#endif
+                }
+
                 static Loading()
                 {
-                    Entries = new(1);
-
                     OnRegister += CompleteEntry;
                 }
             }
@@ -203,20 +248,6 @@ namespace Wsla.Unity
                     await SceneManager.UnloadSceneAsync(scene.UnityScene).ToUniTask(progress);
                     progress?.Report(1f);
                 }
-            }
-
-            public static bool TryGet(NetworkSceneID ID, out NetworkScene instance)
-            {
-                for (int i = 0; i < List.Count; i++)
-                {
-                    instance = List[i];
-
-                    if (instance.ID == ID)
-                        return true;
-                }
-
-                instance = default;
-                return false;
             }
 
             internal static void Register(NetworkScene scene)

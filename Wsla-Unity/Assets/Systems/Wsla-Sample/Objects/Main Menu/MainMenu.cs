@@ -82,7 +82,7 @@ public class MainMenu : MonoBehaviour
     {
         var Name = "SAMPLE-ROOM-NAME";
         var Capacity = (byte)3;
-        var Scenes = SparseArray.From(NetworkSceneID.From(1), NetworkSceneID.From(3), NetworkSceneID.From(4));
+        var Scenes = SparseArray.From(NetworkSceneID.FromBuild(1), NetworkSceneID.FromBuild(3), NetworkSceneID.FromBuild(4));
         var Password = new FixedString<FS20>();
         var Privacy = RoomPrivacy.Public;
         var Lock = RoomLockPolicy.AfterFill;
@@ -152,7 +152,7 @@ public class MainMenu : MonoBehaviour
             .Add("Honor", Honor);
 
         var pool = new FixedString<FS20>("mini-games");
-        var Scenes = SparseArray.From(NetworkSceneID.From(1), NetworkSceneID.From(3), NetworkSceneID.From(4));
+        var Scenes = SparseArray.From(NetworkSceneID.FromBuild(1), NetworkSceneID.FromBuild(3), NetworkSceneID.FromBuild(4));
         var regions = SparseArray.From(ServerRegion.EU, ServerRegion.USA, ServerRegion.Asia);
 
         var response = await NetworkAPI.MatchMaking.FindMatch(pool, Scenes, regions, parameters: parameters).Operate();

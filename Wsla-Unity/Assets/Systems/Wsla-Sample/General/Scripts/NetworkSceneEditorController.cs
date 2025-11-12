@@ -1,33 +1,44 @@
-using UnityEngine;
+using System;
 using System.Collections.Generic;
+
 using Toolbox;
-using Wsla.Unity;
+
+using UnityEngine;
+
 using Wsla;
+using Wsla.Unity;
 
 public class NetworkSceneEditorController : MonoBehaviour
 {
     [SerializeField]
-    List<byte> Load;
+    List<NetworkSceneData> Load;
     SparseArray<NetworkSceneID> GetLoadArray()
     {
         var array = SparseArray.Allocate<NetworkSceneID>(Load.Count);
 
         for (int i = 0; i < Load.Count; i++)
-            array[i] = new NetworkSceneID(Load[i]);
+            array[i] = new NetworkSceneID(Load[i].ID, Load[i].Source);
 
         return array;
     }
 
     [SerializeField]
-    List<byte> Unload;
+    List<NetworkSceneData> Unload;
     SparseArray<NetworkSceneID> GetUnloadArray()
     {
         var array = SparseArray.Allocate<NetworkSceneID>(Unload.Count);
 
         for (int i = 0; i < Unload.Count; i++)
-            array[i] = new NetworkSceneID(Unload[i]);
+            array[i] = new NetworkSceneID(Unload[i].ID, Unload[i].Source);
 
         return array;
+    }
+
+    [Serializable]
+    public struct NetworkSceneData
+    {
+        public byte ID;
+        public NetworkSceneSource Source;
     }
 
     static NetworkAPI API => NetworkAPI.Instance;

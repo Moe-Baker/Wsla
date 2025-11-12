@@ -8,11 +8,8 @@ namespace Wsla
     [NetworkBlittable]
     public struct NetworkSceneID : IEquatable<NetworkSceneID>
     {
-        public byte Value { get; private set; }
-
-        public const byte MinValue = byte.MinValue;
-        public const byte MaxValue = byte.MaxValue - 1;
-        public const byte NoneValue = byte.MaxValue;
+        public byte Index { get; private set; }
+        public NetworkSceneSource Source { get; private set; }
 
         public override bool Equals(object obj)
         {
@@ -23,26 +20,29 @@ namespace Wsla
         }
         public bool Equals(NetworkSceneID other)
         {
-            return Value == other.Value;
+            return (Index == other.Index) && (other.Source == Source);
         }
 
-        public override int GetHashCode() => Value;
+        public override int GetHashCode() => HashCode.Combine(Index, Source);
 
-        public override string ToString() => Value.ToString();
+        public override string ToString() => $"[{Index} | {Source}]";
 
-        public NetworkSceneID(byte value)
+        public NetworkSceneID(byte Index, NetworkSceneSource Source)
         {
-            this.Value = value;
+            this.Index = Index;
+            this.Source = Source;
         }
-
-        public static NetworkSceneID Min { get; } = new(MinValue);
-        public static NetworkSceneID Max { get; } = new(MaxValue);
-        public static NetworkSceneID None { get; } = new(NoneValue);
 
         public static bool operator ==(NetworkSceneID left, NetworkSceneID right) => left.Equals(right);
         public static bool operator !=(NetworkSceneID left, NetworkSceneID right) => !left.Equals(right);
 
-        public static NetworkSceneID From(int index) => new NetworkSceneID((byte)index);
+        public static NetworkSceneID FromBuild(int index) => new NetworkSceneID((byte)index, NetworkSceneSource.Build);
+        public static NetworkSceneID FromAddressable(int index) => new NetworkSceneID((byte)index, NetworkSceneSource.Addressable);
+    }
+
+    public enum NetworkSceneSource : byte
+    {
+        Build, Addressable
     }
 
     [Serializable]

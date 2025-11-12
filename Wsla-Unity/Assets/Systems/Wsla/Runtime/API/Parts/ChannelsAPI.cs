@@ -1,6 +1,8 @@
 using System;
 
 using UnityEngine;
+using UnityEngine.UIElements;
+
 using Toolbox;
 
 #if UNITY_EDITOR
@@ -46,23 +48,10 @@ namespace Wsla.Unity
         [CustomPropertyDrawer(typeof(ChannelsAPI))]
         class Drawer : PropertyDrawer
         {
-            void Init(SerializedProperty property, out SerializedProperty names)
+            public override VisualElement CreatePropertyGUI(SerializedProperty property)
             {
-                names = property.FindBackingFieldRelative(nameof(ChannelsAPI.Names));
-            }
-
-            public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
-            {
-                Init(property, out var names);
-
-                return EditorGUI.GetPropertyHeight(names, label, true);
-            }
-
-            public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
-            {
-                Init(property, out var names);
-
-                EditorGUI.PropertyField(rect, names, label, true);
+                var Scenes = property.FindBackingFieldRelative(nameof(ChannelsAPI.Names));
+                return new UnityEditor.UIElements.PropertyField(Scenes, property.displayName);
             }
         }
 #endif

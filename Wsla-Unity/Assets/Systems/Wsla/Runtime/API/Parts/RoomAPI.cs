@@ -956,7 +956,7 @@ namespace Wsla.Unity
 
             NetworkEntity RetrieveInstance(NetworkEntityDefinition definition)
             {
-                if (NetworkScene.Manager.TryGet(definition.Scene, out var scene) is false)
+                if (Room.Scenes.TryGet(definition.Scene, out var scene) is false)
                     throw new ArgumentException($"No Network Scene With ID {definition.Scene} Found");
 
                 switch (definition.Origin)
@@ -1297,6 +1297,8 @@ namespace Wsla.Unity
                     var instance = await NetworkScene.Manager.Loading.Load(definition.ID, definition.Version, mode, progress);
                     Collection.Add(instance);
                 }
+
+                SceneLoadHandler?.EndLoading();
             }
             internal void RequestSpawn()
             {
@@ -1732,5 +1734,4 @@ namespace Wsla.Unity
             NetworkSerializer.WriteHeader(in request, Stream);
         }
     }
-
 }

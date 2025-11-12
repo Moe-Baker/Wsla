@@ -49,6 +49,11 @@ namespace Wsla.Unity
         [field: SerializeField]
         public SyncedAssetsAPI SyncedAssets { get; private set; }
 
+#if UNITY_ADDRESSABLE
+        [field: SerializeField]
+        public SyncedAddressableScenesAPI AddressableScenes { get; private set; }
+#endif
+
         [field: SerializeField]
         public RoomAPI Room { get; private set; }
 
@@ -81,6 +86,11 @@ namespace Wsla.Unity
             Channels.Set(this);
             SyncedPrefabs.Set(this);
             SyncedAssets.Set(this);
+
+#if UNITY_ADDRESSABLE
+            AddressableScenes.Set(this);
+#endif
+
             Room.Set(this);
         }
 
