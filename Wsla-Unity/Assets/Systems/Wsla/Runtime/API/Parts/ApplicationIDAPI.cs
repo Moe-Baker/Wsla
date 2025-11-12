@@ -12,7 +12,7 @@ namespace Wsla.Unity
     partial class NetworkAPI
     {
         [Serializable]
-        public struct ApplicationIDProperty
+        public class ApplicationIDProperty
         {
             [field: SerializeField]
             public bool Override { get; private set; }
@@ -24,14 +24,12 @@ namespace Wsla.Unity
 
             public FixedString<FS20> Value { get; private set; }
 
-            internal ApplicationIDProperty Initialize()
+            internal void Initialize()
             {
                 if (Override)
                     Value = Manual;
                 else
                     Value = EnsureLength(Application.productName);
-
-                return this;
             }
 
             static string EnsureLength(string value)

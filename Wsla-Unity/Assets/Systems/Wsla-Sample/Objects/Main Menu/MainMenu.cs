@@ -1,6 +1,6 @@
-using Cysharp.Threading.Tasks;
-
 using System;
+
+using Cysharp.Threading.Tasks;
 
 using TMPro;
 
@@ -39,7 +39,18 @@ public class MainMenu : MonoBehaviour
 
         CanvasGroup.interactable = false;
         {
-            await NetworkAPI.Prepare();
+            while (true)
+            {
+                var response = await NetworkAPI.Prepare();
+                if (response.IsError)
+                {
+                    NetworkLog.Error($"Network API Initialization Error: {response.Error}");
+                    await UniTask.Delay(TimeSpan.FromSeconds(2f));
+                    continue;
+                }
+
+                break;
+            }
         }
         CanvasGroup.interactable = true;
 

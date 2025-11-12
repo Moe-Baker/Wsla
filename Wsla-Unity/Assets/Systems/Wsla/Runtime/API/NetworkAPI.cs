@@ -71,8 +71,8 @@ namespace Wsla.Unity
 
             NetworkLog.Handler = LogHandler;
 
-            GameVersion = GameVersion.Initialize();
-            ApplicationID = ApplicationID.Initialize();
+            GameVersion.Initialize();
+            ApplicationID.Initialize();
 
             REST.Set(this);
             MatchMaking.Set(this);
@@ -91,33 +91,34 @@ namespace Wsla.Unity
         }
 
         public bool IsPrepared { get; private set; }
-        public async Task Prepare()
+        public async Task<WslaResponse<WslaError>> Prepare()
         {
             if (IsPrepared)
-                return;
+                return true;
 
             IsPrepared = true;
 
-            try
+            //Preare Address
             {
-                CoordinatorAddress = await CoordinatorAddress.Prepare();
-
-                //Update Regions
+                var response = await CoordinatorAddress.Prepare();
+                if (response.IsError)
                 {
-                    var response = await MatchMaking.UpdateRegions();
-
-                    if (response.IsError)
-                    {
-                        IsPrepared = false;
-                        return;
-                    }
+                    IsPrepared = false;
+                    return response.Error;
                 }
             }
-            catch (Exception)
+
+            //Update Regions
             {
-                IsPrepared = false;
-                throw;
+                var response = await MatchMaking.UpdateRegions();
+                if (response.IsError)
+                {
+                    IsPrepared = false;
+                    return response.Error;
+                }
             }
+
+            return true;
         }
 
         protected override void Dispose()

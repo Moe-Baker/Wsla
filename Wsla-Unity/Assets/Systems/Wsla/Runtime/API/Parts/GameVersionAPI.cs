@@ -1,6 +1,7 @@
 using System;
 
 using UnityEngine;
+
 using Toolbox;
 
 #if UNITY_EDITOR
@@ -12,7 +13,7 @@ namespace Wsla.Unity
     partial class NetworkAPI
     {
         [Serializable]
-        public struct GameVersionProperty
+        public class GameVersionProperty
         {
             [field: SerializeField]
             public bool Override { get; private set; }
