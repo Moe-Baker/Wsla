@@ -6,7 +6,7 @@
 		<Nullable>disable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>9.0</LangVersion>
-		<DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+		<DefineConstants>$(DefineConstants);UNITY_EDITOR;UNITY_ADDRESSABLE</DefineConstants>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -24,6 +24,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Reference Include="Unity.Addressables">
+		  <HintPath>Dependencies\Unity.Addressables.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.Addressables.Editor">
+		  <HintPath>Dependencies\Unity.Addressables.Editor.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.ResourceManager">
+		  <HintPath>Dependencies\Unity.ResourceManager.dll</HintPath>
+		</Reference>
 		<Reference Include="Unity.TextMeshPro">
 			<HintPath>..\..\Wsla-Unity\Library\ScriptAssemblies\Unity.TextMeshPro.dll</HintPath>
 		</Reference>
