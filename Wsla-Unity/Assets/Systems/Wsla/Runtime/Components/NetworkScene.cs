@@ -206,13 +206,14 @@ namespace Wsla.Unity
                     await SceneManager.LoadSceneAsync(id.Index, mode).ToUniTask(progress: progress);
                 }
 
+#pragma warning disable CS1998 //Method only runs synchronyously for exceptional path
                 static async UniTask LoadFromAddressable(NetworkSceneID id, NetworkSceneVersion version, LoadSceneMode mode, IProgress<float> progress)
                 {
 #if UNITY_ADDRESSABLE
                     if (API.AddressableScenes.TryGetReference(id, out var reference) is false)
                         throw new ArgumentException($"No Addressable Scene With ID: {id} Found");
 
-                    var handle = Addressables.LoadSceneAsync(reference.RuntimeKey, mode, SceneReleaseMode.ReleaseSceneWhenSceneUnloaded);
+                    var handle = reference.LoadSceneAsync(mode);
 
                     while (true)
                     {
@@ -235,6 +236,7 @@ namespace Wsla.Unity
                     throw new InvalidOperationException($"Addressable Network Scene Load Requested But Addressable Package Not Installed");
 #endif
                 }
+#pragma warning restore CS1998
 
                 static Loading()
                 {

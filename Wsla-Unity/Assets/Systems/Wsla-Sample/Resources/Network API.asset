@@ -45,14 +45,9 @@ MonoBehaviour:
     - {fileID: 11400000, guid: cb1b50513cb644448936a5c2ab4a5ad8, type: 2}
     - {fileID: 11400000, guid: 6ed63e79bb16dfe45abd79f2b8df556d, type: 2}
   <AddressableScenes>k__BackingField:
-    <Scenes>k__BackingField:
-    - m_AssetGUID: cc9fc7017dd143a4da755aab849e2601
+    List:
+      m_AssetGUID: 58ff66999c53e6c44a359d1356de393d
       m_SubObjectName: 
       m_SubObjectType: 
       m_SubObjectGUID: 
       m_EditorAssetChanged: 0
-    - m_AssetGUID: fcc784c5a60a248418284c02a6ad2498
-      m_SubObjectName: 
-      m_SubObjectType: 
-      m_SubObjectGUID: 
-      m_EditorAssetChanged: 1

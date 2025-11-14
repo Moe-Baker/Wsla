@@ -118,6 +118,18 @@ namespace Wsla.Unity
                 }
             }
 
+#if UNITY_ADDRESSABLE
+            //Prepare Addressables
+            {
+                var response = await AddressableScenes.Prepare();
+                if (response.IsError)
+                {
+                    IsPrepared = false;
+                    return response.Error;
+                }
+            }
+#endif
+
             //Update Regions
             {
                 var response = await MatchMaking.UpdateRegions();

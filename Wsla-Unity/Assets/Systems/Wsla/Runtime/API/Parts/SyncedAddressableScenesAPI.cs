@@ -1,27 +1,69 @@
 #if UNITY_ADDRESSABLE
 using System;
 
-using UnityEngine;
-using UnityEngine.UIElements;
+using Cysharp.Threading.Tasks;
 
 using Toolbox;
 
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 
+using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UIElements;
 
 namespace Wsla.Unity
 {
     [Serializable]
     public class SyncedAddressableScenesAPI : NetworkAPI.Property
     {
-        [field: SerializeField]
+        [SerializeField]
+        AssetReferenceT<SyncedAddressableSceneList> List;
+        AsyncOperationHandle<SyncedAddressableSceneList> Handle;
+        public bool Assigned { get; private set; }
+
         public AddressableNetworkSceneReference[] Scenes { get; private set; }
+        bool IsPrepared => Scenes is not null;
+
+        public override void Set(NetworkAPI value)
+        {
+            base.Set(value);
+            Scenes = null;
+        }
+
+        internal async UniTask<WslaResponse<WslaError>> Prepare()
+        {
+            if (IsPrepared) return true;
+
+            Assigned = List.RuntimeKeyIsValid();
+            if (Assigned is false)
+            {
+                Scenes = Array.Empty<AddressableNetworkSceneReference>();
+                return true;
+            }
+
+            try
+            {
+                Handle = List.LoadAssetAsync();
+                await Handle.ToUniTask();
+
+                Scenes = Handle.Result.Scenes;
+
+                API.OnDispose += Handle.Release;
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return WslaError.From(ex);
+            }
+        }
+
         public object[] GetAllAddressableKeys()
         {
+            if (Assigned is false)
+                throw new InvalidOperationException($"No Addresssable Scene List Was Assigned");
+
             var keys = new object[Scenes.Length];
 
             for (int i = 0; i < keys.Length; i++)
@@ -39,6 +81,13 @@ namespace Wsla.Unity
         }
         public bool TryGetID(AddressableNetworkSceneReference reference, out NetworkSceneID id)
         {
+            if (Assigned is false)
+            {
+                NetworkLog.Error($"Attempting to Reference Addressable Scene {reference}, But No Addresssable Scene List Was Assigned");
+                id = default;
+                return false;
+            }
+
             for (byte i = 0; i < Scenes.Length; i++)
             {
                 if (reference == Scenes[i])
@@ -54,6 +103,13 @@ namespace Wsla.Unity
 
         public bool TryGetReference(NetworkSceneID id, out AssetReference reference)
         {
+            if (Assigned is false)
+            {
+                NetworkLog.Error($"Attempting to Reference Addressable Scene {id}, But No Addresssable Scene List Was Assigned");
+                reference = default;
+                return false;
+            }
+
             if (Scenes.IsValidIndex(id.Index) is false)
             {
                 reference = default;
@@ -70,6 +126,9 @@ namespace Wsla.Unity
         /// </summary>
         public AsyncOperationHandle DownloadAllAddressables()
         {
+            if (Assigned is false)
+                throw new InvalidOperationException($"No Addresssable Scene List Was Assigned");
+
             var keys = GetAllAddressableKeys();
             return Addressables.DownloadDependenciesAsync(keys, Addressables.MergeMode.Union);
         }
@@ -80,67 +139,11 @@ namespace Wsla.Unity
         {
             public override VisualElement CreatePropertyGUI(SerializedProperty property)
             {
-                var Scenes = property.FindBackingFieldRelative(nameof(SyncedAddressableScenesAPI.Scenes));
+                var Scenes = property.FindPropertyRelative(nameof(SyncedAddressableScenesAPI.List));
                 return new UnityEditor.UIElements.PropertyField(Scenes, property.displayName);
             }
         }
 #endif
-    }
-
-    //Provided by JamesFrowenDev
-    //https://discussions.unity.com/t/something-like-assetreferencet-sceneasset/773034/9
-    [Serializable]
-    public class AddressableNetworkSceneReference : AssetReference, IEquatable<AddressableNetworkSceneReference>
-    {
-        /// <summary>
-        /// Construct a new AssetReference object.
-        /// </summary>
-        /// <param name="guid">The guid of the asset.</param>
-        public AddressableNetworkSceneReference(string guid) : base(guid) { }
-
-        public override bool Equals(object obj)
-        {
-            if (obj is AddressableNetworkSceneReference other)
-                return Equals(other);
-
-            return false;
-        }
-        public bool Equals(AddressableNetworkSceneReference other)
-        {
-            return (this.AssetGUID == other.AssetGUID);
-        }
-
-        /// <inheritdoc/>
-        public override bool ValidateAsset(UnityEngine.Object obj)
-        {
-#if UNITY_EDITOR
-            var type = obj.GetType();
-            return typeof(UnityEditor.SceneAsset).IsAssignableFrom(type);
-#else
-        return false;
-#endif
-
-        }
-        /// <inheritdoc/>
-        public override bool ValidateAsset(string path)
-        {
-#if UNITY_EDITOR
-            var type = UnityEditor.AssetDatabase.GetMainAssetTypeAtPath(path);
-            return typeof(UnityEditor.SceneAsset).IsAssignableFrom(type);
-#else
-        return false;
-#endif
-        }
-
-#if UNITY_EDITOR
-        /// <summary>
-        /// Type-specific override of parent editorAsset.  Used by the editor to represent the asset referenced.
-        /// </summary>
-        public new UnityEditor.SceneAsset editorAsset => (UnityEditor.SceneAsset)base.editorAsset;
-#endif
-
-        public static bool operator ==(AddressableNetworkSceneReference a, AddressableNetworkSceneReference b) => a.Equals(b);
-        public static bool operator !=(AddressableNetworkSceneReference a, AddressableNetworkSceneReference b) => !a.Equals(b);
     }
 }
 #endif

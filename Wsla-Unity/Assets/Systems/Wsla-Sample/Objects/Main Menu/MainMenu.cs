@@ -82,7 +82,7 @@ public class MainMenu : MonoBehaviour
     {
         var Name = "SAMPLE-ROOM-NAME";
         var Capacity = (byte)3;
-        var Scenes = SparseArray.From(NetworkSceneID.FromBuild(1), NetworkSceneID.FromBuild(3), NetworkSceneID.FromBuild(4));
+        var Scenes = SparseArray.From(NetworkSceneID.FromBuild(1), NetworkSceneID.FromAddressable(0), NetworkSceneID.FromAddressable(1));
         var Password = new FixedString<FS20>();
         var Privacy = RoomPrivacy.Public;
         var Lock = RoomLockPolicy.AfterFill;
