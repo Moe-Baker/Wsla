@@ -10,6 +10,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 namespace Wsla.Unity
@@ -134,6 +135,26 @@ namespace Wsla.Unity
         }
 
 #if UNITY_EDITOR
+        public bool IsRegistered(Scene scene) => IsRegistered(scene.path);
+        public bool IsRegistered(string path)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<SceneAsset>(path);
+            return IsRegistered(asset);
+        }
+        public bool IsRegistered(SceneAsset asset)
+        {
+            if (List.editorAsset == null)
+                return false;
+
+            var list = List.editorAsset.Scenes;
+
+            foreach (var entry in list)
+                if (entry.editorAsset == asset)
+                    return true;
+
+            return false;
+        }
+
         [CustomPropertyDrawer(typeof(SyncedAddressableScenesAPI))]
         class Drawer : PropertyDrawer
         {

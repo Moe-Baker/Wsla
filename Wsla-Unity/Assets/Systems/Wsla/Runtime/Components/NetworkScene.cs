@@ -16,9 +16,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 #if UNITY_ADDRESSABLE
-using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.ResourceManagement.ResourceProviders;
 #endif
 
 namespace Wsla.Unity
@@ -50,7 +48,6 @@ namespace Wsla.Unity
         }
 
         static NetworkAPI API => NetworkAPI.Instance;
-        static RoomAPI Room => API.Room;
 
         #region Spawn
         public bool IsSpawned { get; private set; }
@@ -114,7 +111,9 @@ namespace Wsla.Unity
                     if (root.TryGetComponent(out NetworkScene existing) is false)
                         continue;
 
-                    NetworkLog.Warning($"Pre-Existing Network Scene Found In Scene {scene.name}, This is Fine if This Scene is an Addresssable Scene, Otherwise, Remove the Network Scene Component");
+                    if (API.AddressableScenes.IsRegistered(scene) is false)
+                        NetworkLog.Error($"Pre-Existing Network Scene Already Found In Scene ({scene.path}), Remove the Network Scene Component, It Will Be Added As Required");
+
                     return;
                 }
 
