@@ -1,8 +1,8 @@
-using LiteNetLib;
-using LiteNetLib.Utils;
-
 using System;
 using System.Collections.Generic;
+
+using LiteNetLib;
+using LiteNetLib.Utils;
 
 using Wsla.Serialization;
 
@@ -105,7 +105,7 @@ namespace Wsla.Unity
             return BinarySource.From(stream);
         }
 
-        static SinglePacketWriter SourceWriterPool = SinglePacketWriter.Create(512);
+        static SingleInstancePool<NetDataWriter> SourceWriterPool = new(new NetDataWriter(true, 512), x => x.SetPosition(0));
 
         internal override void Invoke(ref BinarySource reader, RpcInfo info)
         {

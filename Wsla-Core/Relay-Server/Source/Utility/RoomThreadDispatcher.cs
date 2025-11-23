@@ -1,9 +1,9 @@
-﻿using LiteNetLib.Utils;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+
+using LiteNetLib.Utils;
 
 namespace Wsla.Server
 {
@@ -29,14 +29,17 @@ namespace Wsla.Server
             public struct PoolsProperty
             {
                 public SingleInstancePool<NetDataWriter> SinglePackerWriter { get; init; }
-                public GenericPool<NetDataWriter> MultiPackerWriter { get; init; }
+                public ObjectPool<NetDataWriter> MultiPackerWriter { get; init; }
                 public SingleInstancePool<List<NetworkEntity>> EntityList { get; init; }
                 public SingleInstancePool<List<NetworkScene>> SceneList { get; init; }
 
                 public static PoolsProperty Create() => new PoolsProperty()
                 {
                     SinglePackerWriter = new(new(true, 2048), x => x.SetPosition(0)),
-                    MultiPackerWriter = new(() => new NetDataWriter(true, 128), x => x.SetPosition(0)),
+                    MultiPackerWriter = new(() => new NetDataWriter(true, 128))
+                    {
+                        Reset = x => x.SetPosition(0),
+                    },
                     EntityList = new(new(100), x => x.Clear()),
                     SceneList = new(new(3), x => x.Clear()),
                 };

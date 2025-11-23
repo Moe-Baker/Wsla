@@ -180,7 +180,7 @@ namespace Wsla.Server
             //Create New Batch
             if (MatchMakingRule.Validator.ValidateCreate(entry.Ticket))
             {
-                var batch = BatchPool.Rent();
+                var batch = BatchPool.Take();
                 batch.Assign(entry);
                 Batches.Add(batch);
                 return true;

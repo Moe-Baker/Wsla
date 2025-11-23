@@ -87,7 +87,7 @@ namespace Wsla.Server
                 }
                 else
                 {
-                    var writer = Room.Pools.MultiPackerWriter.Retrieve();
+                    var writer = Room.Pools.MultiPackerWriter.Take();
                     payload = new Payload(writer);
                 }
             }

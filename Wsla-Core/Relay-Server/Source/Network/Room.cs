@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -139,6 +140,8 @@ namespace Wsla.Server
 
             public EventBasedNetListener Listener { get; }
 
+            public TimeSpan Timeout { get; }
+
             public DispatcherProperty Dispatcher { get; }
             public class DispatcherProperty
             {
@@ -266,9 +269,14 @@ namespace Wsla.Server
             {
                 Room = reference;
 
+                Timeout = TimeSpan.FromSeconds(10);
+
                 Listener = new EventBasedNetListener();
 
-                Manager = new NetManager(Listener);
+                Manager = new NetManager(Listener)
+                {
+                    DisconnectTimeout = (int)Timeout.TotalMilliseconds,
+                };
                 Manager.DisconnectTimeout = (int)Constants.Timeout.TotalMilliseconds;
                 Manager.ChannelsCount = Constants.ChannelCount;
                 Manager.IPv6Enabled = false;
@@ -313,7 +321,7 @@ namespace Wsla.Server
         public ClientsProperty Clients { get; private set; }
         public class ClientsProperty : IDisposable
         {
-            IncrementingKeyGenerator<NetworkClientID> IDGenerator;
+            RollingKeyGenerator<NetworkClientID> IDGenerator;
 
             public ExpandArray<NetworkClient> Collection { get; }
             public byte Count => (byte)Collection.Count;
@@ -651,7 +659,7 @@ namespace Wsla.Server
             {
                 this.Room = room;
 
-                IDGenerator = new IncrementingKeyGenerator<NetworkClientID>(NetworkClientID.Min, NetworkClientID.Max, 10, TimeSpan.FromSeconds(15), NetworkClientID.Increment);
+                IDGenerator = new(NetworkClientID.Min, NetworkClientID.Max, 10, Transport.Timeout, NetworkClientID.Increment);
 
                 const int Capacity = 10;
 
@@ -667,7 +675,7 @@ namespace Wsla.Server
         public EntitiesProperty Entities;
         public class EntitiesProperty : IDisposable
         {
-            internal IncrementingKeyGenerator<NetworkEntityID> IDGenerator;
+            internal RollingKeyGenerator<NetworkEntityID> IDGenerator;
 
             public Dictionary<NetworkEntityID, NetworkEntity> Dictionary { get; }
             public ushort Count => (ushort)Dictionary.Count;
@@ -908,7 +916,7 @@ namespace Wsla.Server
 
                 //Create ID Generator
                 {
-                    IDGenerator = new(NetworkEntityID.Min, NetworkEntityID.Max, 40, TimeSpan.FromSeconds(10), NetworkEntityID.Increment);
+                    IDGenerator = new(NetworkEntityID.Min, NetworkEntityID.Max, 40, Transport.Timeout, NetworkEntityID.Increment);
                 }
 
                 Dictionary = new Dictionary<NetworkEntityID, NetworkEntity>(40);
