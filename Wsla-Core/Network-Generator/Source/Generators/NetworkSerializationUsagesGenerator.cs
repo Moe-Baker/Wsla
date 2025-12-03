@@ -1,12 +1,12 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Wsla.Generator
 {
@@ -50,7 +50,7 @@ namespace Wsla.Generator
                     if (arguments[i].TypeKind is TypeKind.TypeParameter)
                         continue;
 
-                    if (arguments[i] is INamedTypeSymbol named && named.IsOpenGenericType())
+                    if (arguments[i].IsOpenGenericType())
                         continue;
 
                     yield return arguments[i];

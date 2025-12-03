@@ -1,10 +1,10 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-
-using System;
+﻿using System;
 using System.IO;
 using System.Threading;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Wsla.Generator
 {
@@ -74,6 +74,19 @@ namespace Wsla.Generator
         public static bool ImplementsInterface(this ITypeSymbol type, INamedTypeSymbol target)
         {
             return type.AllInterfaces.Contains(target);
+        }
+
+        public static bool IsOpenGenericType(this ITypeSymbol type)
+        {
+            if (type.TypeKind is TypeKind.TypeParameter)
+                return true;
+
+            if (type is INamedTypeSymbol named)
+                return IsOpenGenericType(named);
+            else if (type is IArrayTypeSymbol array)
+                return IsOpenGenericType(array.ElementType);
+
+            return false;
         }
 
         public static bool IsOpenGenericType(this INamedTypeSymbol type)
