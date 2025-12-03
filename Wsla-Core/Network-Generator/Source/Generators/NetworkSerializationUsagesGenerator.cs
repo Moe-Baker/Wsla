@@ -30,7 +30,10 @@ namespace Wsla.Generator
 
         static bool IsInvocationSyntax(SyntaxNode node, CancellationToken token)
         {
-            return (node is InvocationExpressionSyntax invocation) && (invocation.ArgumentList.Arguments.Count > 0);
+            if (node is InvocationExpressionSyntax invocation && invocation.HasArgumentsOrTypeParameters())
+                return true;
+
+            return false;
         }
         static IMethodSymbol GetInvocationMethodDefinition(GeneratorSyntaxContext context, CancellationToken token)
         {

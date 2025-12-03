@@ -131,5 +131,36 @@ namespace Wsla.Generator
         {
             return Diagnostic.Create(descriptor, location, arguments);
         }
+
+        public static bool HasArgumentsOrTypeParameters(this InvocationExpressionSyntax invocation)
+        {
+            if (invocation.ArgumentList.Arguments.Count > 0)
+                return true;
+
+            if (TryGetInvocationExpressionGenericName(invocation, out var generic))
+                return generic.TypeArgumentList.Arguments.Count > 0;
+
+            return false;
+        }
+        static bool TryGetInvocationExpressionGenericName(InvocationExpressionSyntax invocation, out GenericNameSyntax name)
+        {
+            if (invocation.Expression is GenericNameSyntax)
+            {
+                name = invocation.Expression as GenericNameSyntax;
+                return true;
+            }
+
+            if (invocation.Expression is MemberAccessExpressionSyntax MemberAccess)
+            {
+                if (MemberAccess.Name is GenericNameSyntax)
+                {
+                    name = MemberAccess.Name as GenericNameSyntax;
+                    return true;
+                }
+            }
+
+            name = default;
+            return false;
+        }
     }
 }
