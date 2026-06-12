@@ -112,7 +112,7 @@ namespace Wsla.Serialization
                 {
                     get
                     {
-#if WSLA_UNITY && UNITY_ANDROID || true
+#if WSLA_UNITY && UNITY_ANDROID
                         return Environment.Is64BitOperatingSystem;
 #else
                         return false;
