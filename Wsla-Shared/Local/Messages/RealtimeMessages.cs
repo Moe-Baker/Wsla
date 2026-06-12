@@ -154,25 +154,29 @@ namespace Wsla
     {
         public NetworkClientID ClientID;
 
-        NetworkClientID? MasterID;
+        NetworkClientID MasterID;
 
-        public bool IsMasterClientChange() => MasterID.HasValue;
+        public bool IsMasterClientChange() => MasterID != NetworkClientID.None;
         public bool IsMasterClientChange(out NetworkClientID id)
         {
-            if (MasterID.HasValue is false)
+            if (IsMasterClientChange() is false)
             {
                 id = default;
                 return false;
             }
 
-            id = MasterID.Value;
+            id = MasterID;
             return true;
         }
 
         public ClientDisconnectMessage(NetworkClientID ClientID, NetworkClientID? MasterID)
         {
             this.ClientID = ClientID;
-            this.MasterID = MasterID;
+
+            if (MasterID.HasValue)
+                this.MasterID = MasterID.Value;
+            else
+                this.MasterID = NetworkClientID.None;
         }
 
         public struct EntityHandlingPayload : IAutoNetworkSerialization
