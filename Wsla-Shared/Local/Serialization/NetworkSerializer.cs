@@ -113,7 +113,7 @@ namespace Wsla.Serialization
                     get
                     {
 #if WSLA_UNITY && UNITY_ANDROID
-                        return Environment.Is64BitOperatingSystem;
+                        return Environment.Is64BitOperatingSystem is false;
 #else
                         return false;
 #endif
@@ -136,8 +136,7 @@ namespace Wsla.Serialization
                         }
                         else
                         {
-                            ref var reference = ref Unsafe.AsRef<TValue>(destination);
-                            reference = value;
+                            Unsafe.WriteUnaligned(destination, value);
                         }
                     }
                 }
@@ -157,7 +156,7 @@ namespace Wsla.Serialization
                         }
                         else
                         {
-                            value = Unsafe.AsRef<TValue>(source);
+                            value = Unsafe.ReadUnaligned<TValue>(source);
                         }
                     }
                 }
